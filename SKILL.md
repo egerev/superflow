@@ -68,29 +68,33 @@ Before brainstorming, launch parallel research agents to gather external context
 
 ### Step 3: Multi-Expert Brainstorming
 
-Run brainstorming with THREE expert lenses (all in the same conversation, not separate agents), informed by research:
+**Format:** Freeflow conversation with product focus. No rigid checklist — adapt to the task context. But ensure sufficient depth before moving to design.
 
-**Product Expert lens:**
-- "Users of similar apps (Mint, YNAB, Copilot Money) typically expect X — should we include that?"
-- "This feature solves problem A, but I notice problem B is related — addressing both would be more impactful"
-- "From a UX perspective, the simplest flow would be..."
-- Challenge: "Do users actually need X, or is Y the real problem?"
+**Product vision focus (most important):**
+- Understand the WHY and FOR WHOM before the WHAT and HOW
+- Pull the user's vision: what does "done" look like? What experience do they want?
+- Ask for references: apps, screenshots, examples, competitors — anything that shows intent
+- Understand scope ambition: personal tool vs service for others? MVP vs long-term?
 
-**Architecture Expert lens:**
-- "The current data model already supports X, so we can leverage that"
-- "There's a performance opportunity here: by doing X, we avoid Y"
-- "This could be implemented as Z, which would also unlock future features A, B"
+**Rhythm: questions → proposals → questions**
+Don't just ask. After gathering enough context (3-5 questions), make concrete product proposals based on what you've heard + research findings. Let the user react — "yes / no / interesting but..." — this generates new requirements you wouldn't have found by asking.
 
-**Domain Expert lens (for the specific domain — finance, crypto, etc.):**
-- "In financial apps, best practice for X is Y"
-- "Edge case to consider: multi-currency households typically face Z"
-- "Regulatory/compliance consideration: W"
+Example cycle:
+1. Ask 3-4 questions to understand the vision
+2. Present 2-3 product ideas/suggestions based on answers + research
+3. User reacts → new requirements emerge
+4. Ask 1-2 follow-up questions on the new requirements
+5. Repeat until the picture is clear
 
-### How to ask questions:
-- One question at a time
-- Prefer multiple choice
-- BUT: combine each question with a proactive suggestion or insight
-- Example: "Где чаще смотришь аналитику — бот или веб? Кстати, в Copilot Money и Monarch они решили это через deeplinks из бота прямо в конкретный график — может быть интересно для нас тоже."
+**Depth calibration:** The number of cycles depends on task complexity. A simple feature may need 1 cycle (5 min). A major system overhaul may need 3-4 cycles (20 min). The sign that you're done: you can describe back to the user what they want to build, and they say "yes, exactly."
+
+**Three expert lenses** (weave into the freeflow, not separate blocks):
+
+- **Product lens:** "Users of similar apps typically expect X — should we include that?" / "From a UX perspective, the simplest flow would be..."
+- **Architecture lens:** "The current data model already supports X, so we can leverage that" / "This could be implemented as Z, which would also unlock future features"
+- **Domain lens:** "In [domain] apps, best practice for X is Y" / "Edge case to consider: [domain-specific insight]"
+
+**One question at a time.** Combine questions with insights when natural, but don't overload.
 
 ### Step 4: Approaches + Recommendation
 
