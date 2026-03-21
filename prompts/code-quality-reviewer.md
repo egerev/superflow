@@ -59,34 +59,12 @@ Every finding must have:
 ### Verdict: APPROVE | REQUEST_CHANGES
 ```
 
-## Codex Parallel Review
+## Parallel Review Focus Split
 
-When dispatching to Codex in parallel, use this invocation:
+When dispatching two parallel review agents, give each a different focus:
 
-```bash
-codex --approval-mode full-auto --quiet \
-  -p "$(cat <<'PROMPT'
-You are reviewing code changes for quality.
+**Agent A — Correctness focus:**
+Add to the base prompt: "Focus your review on: correctness (logic errors, off-by-one, null/undefined), edge cases (what inputs break this?), error handling (are errors caught and helpful?), and security (injection, auth, data exposure)."
 
-## Diff
-$(git diff BASE_SHA..HEAD_SHA)
-
-## What was implemented
-[Summary]
-
-## Review for:
-1. Bugs, logic errors, null safety
-2. Edge cases and failure modes
-3. Performance (N+1, O(n^2), unnecessary queries)
-4. Security (injection, auth, data exposure)
-5. Test coverage and test quality
-
-Be specific — file:line references. Only flag issues that would cause real problems.
-
-### Critical (must fix)
-### Important (should fix)
-### Minor
-### Verdict: APPROVE | REQUEST_CHANGES
-PROMPT
-)" 2>&1
-```
+**Agent B — Architecture focus:**
+Add to the base prompt: "Focus your review on: performance (O(n^2), N+1 queries, memory leaks), pattern compliance (does this follow project conventions?), test quality (do tests verify behavior or mock behavior?), and maintainability (will this be clear in 6 months?)."

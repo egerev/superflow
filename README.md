@@ -20,7 +20,7 @@ Most AI coding workflows are either too hands-on (you babysit every step) or too
 
 **Phase 1 — You talk, agent listens and proposes.** Freeflow product conversation with research, expert lenses, and proactive suggestions. The agent doesn't just ask questions — it proposes ideas, challenges assumptions, and brings best practices from the domain. This phase takes time, and that's intentional.
 
-**Phase 2 — You say "go", agent executes autonomously.** Zero interaction until done. The agent creates a PR per sprint using git worktrees for isolation, uses parallel subagents for implementation, runs dual-provider reviews (Claude + Codex), enforces test-first development, requires verification evidence before any completion claim, and does product acceptance testing. You get a report with ready-to-merge PRs at the end.
+**Phase 2 — You say "go", agent executes autonomously.** Zero interaction until done. The agent creates a PR per sprint using git worktrees for isolation, uses parallel subagents for implementation, runs parallel reviews with split focus, enforces test-first development, requires verification evidence before any completion claim, and does product acceptance testing. You get a report with ready-to-merge PRs at the end.
 
 ## What a Session Looks Like
 
@@ -31,7 +31,7 @@ Agent: [silently reads codebase, launches research agents]
 Agent: [asks about your vision, proposes ideas from competitor analysis]
 Agent: [presents 2-3 approaches, recommends one]
 Agent: [presents design section by section]
-Agent: [writes spec, reviews with Claude + Codex in parallel, fixes issues]
+Agent: [writes spec, reviews with parallel agents, fixes issues]
 Agent: [writes implementation plan with bite-sized steps, reviews, fixes]
 Agent: "Plan ready — 4 sprints, 28 steps, ~4 PRs. Go?"
 
@@ -60,9 +60,9 @@ Agent: "Done. 4 PRs ready:
 | 4 | Approaches + recommendation | **Yes — choice** |
 | 5 | Design presentation | **Yes — discussion** |
 | 6 | Write spec document | No |
-| 7 | Spec review (Claude + Codex parallel) | No |
+| 7 | Spec review (parallel agents) | No |
 | 8 | Write implementation plan (bite-sized steps) | No |
-| 9 | Plan review (Claude + Codex parallel) | No |
+| 9 | Plan review (parallel agents) | No |
 | 10 | Your approval to start | **Yes — "go"** |
 
 4 interactive steps, 6 autonomous. Your involvement is one continuous conversation (steps 3-5) plus one "go" (step 10).
@@ -86,9 +86,9 @@ For each Sprint:
 +-- Run baseline tests (verify clean starting state)
 +-- Implement tasks (maximum parallel agents, TDD cycle)
 |   +-- Per task: write failing test -> verify fail -> implement -> verify pass
-|   +-- Spec review -> code quality review (Claude + Codex)
+|   +-- Spec review -> code quality review (parallel agents)
 |   +-- Verify: run tests, paste output as evidence
-+-- Product Acceptance Review (Claude + Codex parallel)
++-- Product Acceptance Review (parallel agents)
 |   +-- Verify implementation matches spec intent
 +-- Run full test suite, push, create PR
 +-- Clean up worktree
@@ -102,7 +102,7 @@ For each Sprint:
 - **Test-first development** — write failing test, verify failure, implement, verify pass. Never skip steps
 - **Verification discipline** — no completion claims without actual test output as evidence
 - **Max parallelism** — 5 agents if 5 tasks are independent. Never serialize independent work
-- **Dual-provider reviews** — Claude + Codex review in parallel. Different models catch different bugs
+- **Parallel split-focus reviews** — two independent agents review in parallel with different focus areas
 - **Product acceptance** — after code review passes, product agents verify the implementation matches the *intent* of the spec
 - **Systematic debugging** — when tests fail, investigate root cause before attempting fixes
 - **Never stops** — accumulates issues and reports at the end. Never asks "should I continue?"
@@ -110,7 +110,7 @@ For each Sprint:
 ## 6 Rules
 
 1. **NEVER pause** during autonomous execution
-2. **ALWAYS use Codex** for reviews (parallel with Claude)
+2. **ALWAYS use parallel reviews** with split focus for complex tasks
 3. **PR per sprint** — smaller PRs, easier to review
 4. **Maximum parallelism** — use all available agents
 5. **Proactive product thinking** — propose ideas, don't just ask questions
@@ -122,12 +122,11 @@ superflow uses the user's default model for planning and review (where critical 
 
 | Phase | Task | Model | Reasoning |
 |-------|------|-------|-----------|
-| Phase 1 | Brainstorming, spec, plan | Opus (recommended) | ultrathink for deep reasoning |
-| Phase 1 | Codex product ideas | Codex default | Parallel brainstorming partner |
+| Phase 1 | Brainstorming, spec, plan | Default (Opus recommended) | ultrathink for deep reasoning |
+| Phase 1 | Independent product expert | Background agent | Parallel brainstorming partner |
 | Phase 2 | Implementation agents | Sonnet | Standard — plan is detailed enough |
-| Phase 2 | Code quality review | Opus (recommended) | ultrathink for critical analysis |
-| Phase 2 | Product acceptance | Opus (recommended) | ultrathink for intent verification |
-| Phase 2 | Codex reviews | Codex default | xhigh reasoning by default |
+| Phase 2 | Code quality review | Default (Opus recommended) | ultrathink for critical analysis |
+| Phase 2 | Product acceptance | Default (Opus recommended) | ultrathink for intent verification |
 
 **Reasoning depth:** superflow uses `ultrathink` in prompts for spec review, plan review, and product acceptance — triggering extended thinking regardless of user's default reasoning effort setting. Implementation agents use standard reasoning since the plan is already detailed.
 
@@ -145,8 +144,6 @@ claude --dangerously-skip-permissions
 
 **Reasoning effort:** Set to `high` or `max` via `/effort` in Claude Code. superflow adds `ultrathink` to critical prompts on top of this.
 
-**Codex:** Runs with `--full-auto` by default (sandboxed to workspace).
-
 ## Safety Warning
 
 superflow runs in fully autonomous mode during Phase 2 — it creates branches, writes code, commits, and pushes without asking. **Run it in an isolated environment:**
@@ -156,7 +153,7 @@ superflow runs in fully autonomous mode during Phase 2 — it creates branches, 
 - **Disposable branch** — always works on feature branches, never commits to main directly
 - **Review before merge** — PRs are created but never auto-merged; you review and merge manually
 
-`--dangerously-skip-permissions` disables all safety prompts. `--full-auto` gives Codex write access to your workspace. Only use these in environments you're comfortable with.
+`--dangerously-skip-permissions` disables all safety prompts. Only use it in environments you're comfortable with.
 
 ## Install
 
@@ -174,9 +171,7 @@ cp superflow/prompts/*.md ~/.claude/skills/superflow/prompts/
 ## Requirements
 
 - **Claude Code CLI** — the host environment
-- **Codex CLI** (optional but recommended) — `npm install -g @openai/codex` + `OPENAI_API_KEY` env var. Enables dual-provider reviews. Without it, reviews are Claude-only
 - **GitHub CLI** (`gh`) — for PR creation
-- **macOS users**: `brew install coreutils` — provides `gtimeout` for Codex timeout management
 
 ## Files
 
@@ -185,8 +180,8 @@ cp superflow/prompts/*.md ~/.claude/skills/superflow/prompts/
 | `SKILL.md` | Main skill definition — orchestrator loaded by Claude Code |
 | `prompts/implementer.md` | Implementation agent template with TDD enforcement |
 | `prompts/spec-reviewer.md` | Spec compliance reviewer with calibration rules |
-| `prompts/code-quality-reviewer.md` | Code quality reviewer with anti-noise rules + Codex template |
-| `prompts/product-reviewer.md` | Product acceptance reviewer + Codex template |
+| `prompts/code-quality-reviewer.md` | Code quality reviewer with anti-noise rules + parallel focus split |
+| `prompts/product-reviewer.md` | Product acceptance reviewer + parallel focus split |
 | `prompts/testing-guidelines.md` | Testing anti-patterns and best practices reference |
 
 ## Relationship with Superpowers
@@ -200,13 +195,12 @@ superflow is built on top of [Superpowers](https://github.com/obra/superpowers) 
 - Git worktrees for isolation
 - Bite-sized task decomposition (2-5 min per step)
 - Subagent context isolation
-- Two-stage review pipeline (spec → code quality)
 - Implementer status codes and prompt patterns
 
 ### What superflow adds
 - **Two-phase architecture** — collaborative discovery, then fully autonomous execution
 - **Context drift prevention** — checkpoint re-reads, self-check questions, sprint checklists
-- **Dual-model reviews** — Claude + Codex in parallel ("two models catch more bugs than one")
+- **Parallel split-focus reviews** — two independent agents with different review lenses
 - **Product Acceptance Review** — 3rd review stage verifying spec *intent*, not just code quality
 - **PR per sprint** — smaller, reviewable, independently deployable PRs
 - **Best practices research** — parallel research agents before brainstorming
@@ -227,7 +221,7 @@ Built during a real session: analytics engine for a family finance tracker. 16 t
 |------|--------------|
 | Never pause | User had to ask 3 times to stop confirming |
 | PR per sprint | 20-commit PR was too big to review |
-| Always use Codex | Rule existed but wasn't enforced — Codex was never invoked |
+| Always use parallel reviews | Single reviewer missed issues that a second pair of eyes would catch |
 | Proactive thinking | Brainstorming was one-sided — only questions, no proposals |
 | Product acceptance | Code passed technical review but missed product intent |
 | Verification evidence | Agent claimed "tests pass" without running them |

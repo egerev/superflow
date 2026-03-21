@@ -1,6 +1,6 @@
 ---
 name: superflow
-description: "Use when user says 'superflow', 'суперфлоу', or asks for full dev workflow. Two phases: (1) collaborative Product Discovery with multi-expert brainstorming, (2) fully autonomous execution with PR-per-sprint, git worktrees, Codex reviews, max parallelism, and verification discipline."
+description: "Use when user says 'superflow', 'суперфлоу', or asks for full dev workflow. Two phases: (1) collaborative Product Discovery with multi-expert brainstorming, (2) fully autonomous execution with PR-per-sprint, git worktrees, parallel reviews, max parallelism, and verification discipline."
 ---
 
 # SuperFlow — Product-to-Production Workflow
@@ -36,7 +36,7 @@ The #1 failure mode: skill loads at start, agent "forgets" it after 30+ messages
 **Self-check questions at phase transitions:**
 - "Am I following the SuperFlow process, or my own improvised version?"
 - "Did I use git worktrees for this sprint?" (if no → stop, create one)
-- "Did I run Codex in parallel for reviews?" (if no and available → do it now)
+- "Did I run parallel review agents?" (if no → do it now)
 - "Did I verify test output before claiming done?" (if no → run tests now)
 - "Am I about to pause and ask the user something?" (if yes → DON'T, just execute)
 - "Did I run Product Acceptance Review?" (if no → DO IT NOW, before creating PR)
@@ -47,7 +47,7 @@ SPRINT COMPLETION CHECKLIST:
 [ ] Tests pass with evidence (actual output pasted)
 [ ] Lint clean
 [ ] TypeCheck clean
-[ ] Product Acceptance Review launched (Claude + Codex)
+[ ] Product Acceptance Review launched (parallel agents)
 [ ] Product Acceptance APPROVED
 [ ] Only then → create PR
 ```
@@ -81,8 +81,8 @@ Use `ultrathink` keyword in prompts for tasks requiring deep reasoning. This tri
 ### Rule 1: NEVER pause during autonomous execution
 After user says "go" / "ok" / "давай" on the approved plan — ZERO stops, ZERO questions, ZERO "should I continue?". Execute all sprints, create all PRs, report when fully done.
 
-### Rule 2: Use Codex for all reviews (default ON)
-At startup, detect Codex: `which codex && codex --version`. If available — use it for ALL parallel reviews without exception. If unavailable — fall back to Claude-only silently. Codex is the default, not a bonus. Two models catch more bugs than one.
+### Rule 2: Parallel reviews with independent agents
+Dispatch TWO independent review agents in parallel for every review stage. Each agent gets a different review focus (see prompt templates). Two independent reviewers catch more bugs than one — regardless of provider.
 
 ### Rule 3: PR per sprint
 Each sprint/logical chunk = separate git branch + PR. Never accumulate 20 commits in one PR. Smaller PRs are easier to review, safer to merge, and can be deployed independently.
@@ -117,7 +117,7 @@ Agents rationalize skipping quality steps. Recognize and reject these:
 | "I'll test after" | Tests passing immediately prove nothing about your code. |
 | "Skip review, it's trivial" | Trivial changes break production. Review anyway. |
 | "One big PR is fine" | 20-commit PRs don't get reviewed. Split into sprints. |
-| "Codex isn't needed" | If available, use it. Different models catch different bugs. |
+| "One reviewer is enough" | Two independent reviewers catch more bugs. Always use parallel review. |
 | "Let me ask the user" | After plan approval, execute silently. |
 | "This task is too hard" | Escalate with BLOCKED, don't silently produce bad work. |
 | "Tests are green so it works" | Green tests prove tests pass, not that the feature works. Verify behavior. |
@@ -170,15 +170,16 @@ Before brainstorming, launch parallel research agents to gather external context
 
 **This is NOT optional.** Even for seemingly simple features, 5 minutes of research prevents hours of reinventing.
 
-### Step 2.5: Codex as Product Expert (parallel with brainstorming)
+### Step 2.5: Independent Product Expert (parallel with brainstorming)
 
-After research completes and before/during brainstorming, dispatch Codex with the gathered context to generate product ideas independently:
+After research completes and before/during brainstorming, dispatch a background Agent with the gathered context to generate product ideas independently:
 
-```bash
-gtimeout 300 codex exec --full-auto "You are a Product Expert. Given this context about [project description] and [research findings], propose 3-5 concrete product improvements or features. For each: what it is, why it matters for the user, and how it could work. Be specific and creative — suggest things the user might not have thought of." 2>&1
+```
+Dispatch a background Agent with prompt:
+"You are a Product Expert. Given this context about [project description] and [research findings], propose 3-5 concrete product improvements or features. For each: what it is, why it matters for the user, and how it could work. Be specific and creative — suggest things the user might not have thought of."
 ```
 
-Run this IN PARALLEL with the Claude brainstorming conversation. Two different AI models produce different ideas — synthesize the best from both.
+Run this IN PARALLEL with the main brainstorming conversation. An independent agent produces different ideas because it has no conversational anchoring bias — synthesize the best from both.
 
 ### Step 3: Multi-Expert Brainstorming
 
@@ -221,13 +222,13 @@ Present design section by section. Scale depth to complexity.
 
 Write spec to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
 
-### Step 7: Spec Review (Claude + Codex PARALLEL)
+### Step 7: Spec Review (parallel agents)
 
-Launch BOTH in parallel. Use prompt template from `prompts/spec-reviewer.md`.
+Launch TWO independent review agents in parallel. Use prompt template from `prompts/spec-reviewer.md`. Give each agent a different review focus — one checks completeness/consistency, the other checks scope/YAGNI.
 
 **Calibration:** Only flag issues that would cause real problems during planning or implementation. Check: Completeness, Consistency, Clarity, Scope, YAGNI. Do NOT flag style or formatting issues in specs.
 
-Fix issues from both reviewers. Re-review if NEEDS_REVISION.
+Fix issues from both review agents. Re-review if NEEDS_REVISION.
 
 ### Step 8: Implementation Plan
 
@@ -250,9 +251,9 @@ A medium feature plan should have 20-30+ steps, NOT 5-10 large tasks. If a step 
 **Each task has:** files, steps, code, tests, commit message
 **Tasks within a sprint can be parallelized where independent**
 
-### Step 9: Plan Review (Claude + Codex PARALLEL)
+### Step 9: Plan Review (parallel agents)
 
-Same pattern as spec review. Both must APPROVE.
+Same pattern as spec review. Both agents must APPROVE.
 
 ### Step 10: User Approval
 
@@ -290,7 +291,7 @@ For each Sprint N:
 |
 +-- 4. After all tasks in sprint: PRODUCT ACCEPTANCE REVIEW
 |      +-- Run full test suite — paste output as evidence
-|      +-- Launch Product Acceptance (Claude + Codex PARALLEL)
+|      +-- Launch Product Acceptance (parallel agents)
 |      |      (see prompts/product-reviewer.md)
 |      +-- Fix any product issues found (auto, no user interaction)
 |      +-- Run tests AGAIN after fixes — verify still green
@@ -338,8 +339,8 @@ git worktree remove .worktrees/sprint-N
 
 **Review optimization:**
 - For simple tasks (1-2 files, <50 lines changed): spec review only, skip code quality review
-- For medium tasks (2-5 files): spec review + Claude code quality (skip Codex)
-- For complex tasks (5+ files, new architecture): full review cycle (spec + Claude + Codex + product)
+- For medium tasks (2-5 files): spec review + single code quality agent
+- For complex tasks (5+ files, new architecture): full review cycle (spec + 2 parallel code quality agents + product)
 - Product review: only for user-facing changes (UI, bot responses, API behavior)
 
 ### Systematic Debugging
@@ -355,17 +356,16 @@ When a test fails during execution, follow this protocol — never do "try rando
 
 If unfixable after 2 targeted attempts, mark as BLOCKED with diagnostic evidence and continue.
 
-### Codex for Code Quality Review
+### Parallel Code Quality Review
 
-MANDATORY for complex tasks. Launch in parallel with Claude reviewer.
+MANDATORY for complex tasks. Launch TWO independent review agents in parallel.
 Use prompt template from `prompts/code-quality-reviewer.md`.
 
-```bash
-# macOS (requires `brew install coreutils`):
-gtimeout 300 codex exec --full-auto "PROMPT_CONTENT" 2>&1
-# Linux:
-timeout 300 codex exec --full-auto "PROMPT_CONTENT" 2>&1
-```
+Give each agent a different focus:
+- **Agent A (correctness focus):** logic errors, edge cases, error handling, security
+- **Agent B (architecture focus):** performance, pattern compliance, test quality, maintainability
+
+Two agents with different lenses catch more issues than one agent checking everything.
 
 ### Product Acceptance Review (MANDATORY per sprint — DO NOT SKIP)
 
@@ -373,15 +373,15 @@ After all tasks pass code review, run Product Acceptance. This is the **most imp
 
 **This step is NON-NEGOTIABLE.** Do not rationalize skipping it ("tests pass so it's fine", "sprint is simple enough"). Every sprint gets a product acceptance review before PR creation.
 
-Launch Claude + Codex product reviewers IN PARALLEL using `prompts/product-reviewer.md`.
+Launch TWO independent product review agents IN PARALLEL using `prompts/product-reviewer.md`.
 
 **Steps:**
 1. After all sprint tasks complete and tests pass
-2. Launch Claude Agent with product-reviewer prompt (background)
-3. Launch Codex with product-reviewer prompt (background, use gtimeout on macOS)
+2. Launch Agent A with product-reviewer prompt — focus on spec-to-implementation fit (background)
+3. Launch Agent B with product-reviewer prompt — focus on user scenarios and edge cases (background)
 4. Wait for both to complete
 5. Merge results — if EITHER says NEEDS_FIXES → fix autonomously → re-review
-6. Only create PR after BOTH accept (or Codex unavailable → Claude-only acceptance is sufficient)
+6. Only create PR after BOTH accept
 
 ### PR Creation Pattern
 
@@ -403,7 +403,7 @@ PR body format:
 
 ### Verification Evidence
 - Test suite: X/Y passing (full output reviewed)
-- Product acceptance: ACCEPTED by Claude + Codex
+- Product acceptance: ACCEPTED by parallel review agents
 
 ### Dependencies
 - Depends on: PR #NNN (Sprint N-1) — merge that first
@@ -446,44 +446,33 @@ When ALL sprints are done, report to user:
 
 ---
 
-## Codex Integration Rules
+## Parallel Review Strategy
 
-### When Codex is MANDATORY
-- Spec review (parallel with Claude)
-- Plan review (parallel with Claude)
-- Code quality review for complex tasks (parallel with Claude)
+The core principle: **two independent reviewers catch more bugs than one.** This works because each reviewer brings a different focus, reducing blind spots.
 
-### When Codex is OPTIONAL
-- Implementation of isolated tasks (alternative to Claude subagent)
-- Quick checks (lint, type-check output analysis)
+### How it works
+- Dispatch TWO Agent tool calls in parallel (`run_in_background: true`)
+- Each agent gets the same base prompt but a **different review focus**
+- Merge findings from both agents before proceeding
 
-### Codex Invocation Pattern
+### Review focus split
 
-Always via Bash tool. On macOS, use `gtimeout` (from `brew install coreutils`) instead of `timeout`:
-```bash
-# macOS:
-gtimeout 300 codex exec --full-auto "PROMPT" 2>&1
-# Linux:
-timeout 300 codex exec --full-auto "PROMPT" 2>&1
-```
+**Spec review:**
+- Agent A: completeness + consistency (are all requirements implemented?)
+- Agent B: scope + YAGNI (is anything extra or over-engineered?)
 
-Key rules:
-- Self-contained prompt (Codex can't ask questions)
-- Include ALL context (file paths, project conventions, constraints)
-- Always `git diff` after Codex implementations to verify scope
-- Timeout: On macOS use `gtimeout 300 codex ...` (from coreutils); on Linux use `timeout 300 codex ...`
+**Code quality review:**
+- Agent A: correctness, edge cases, error handling, security
+- Agent B: performance, pattern compliance, test quality, maintainability
 
-### Codex Detection at Startup
+**Product acceptance review:**
+- Agent A: spec-to-implementation fit, data correctness
+- Agent B: user scenarios, edge cases, error UX
 
-At the very beginning of the session (Step 1), run:
-```bash
-which codex 2>/dev/null && codex --version 2>/dev/null
-```
-
-If codex is found -> set `CODEX_AVAILABLE=true` and use for all parallel reviews.
-If codex is NOT found -> set `CODEX_AVAILABLE=false`, skip silently, use Claude-only.
-
-**Never fail or warn the user about missing Codex.** It's a bonus, not a requirement.
+### When to use parallel review
+- Complex tasks (5+ files, new architecture): always parallel
+- Medium tasks (2-5 files): single reviewer is sufficient
+- Simple tasks (1-2 files): spec review only
 
 ---
 
@@ -493,7 +482,7 @@ If codex is NOT found -> set `CODEX_AVAILABLE=false`, skip silently, use Claude-
 2. **Claiming done without test output** — Paste evidence or it didn't happen
 3. **Skipping the "verify fail" step in TDD** — A test that never failed proves nothing
 4. **One giant PR** — Always PR per sprint
-5. **Skipping Codex reviews** — Always try Codex first if available
+5. **Single reviewer for complex tasks** — Always use parallel review agents for complex work
 6. **2 agents when 5 could run** — Maximize parallelism
 7. **Only asking questions, no suggestions** — Always propose ideas alongside questions
 8. **Committing directly to main** — Always feature branches
@@ -528,6 +517,6 @@ SuperFlow OVERRIDES these superpowers behaviors:
 - Brainstorming: adds proactive product suggestions (not just questions)
 - Plan execution: PR per sprint (not one PR for everything)
 - Plan granularity: 2-5 minute steps, 20-30+ per feature (not 5-10 big tasks)
-- Review: mandatory Codex parallel review (not Claude-only)
+- Review: mandatory parallel review with split focus (not single-pass)
 - Completion: requires verification evidence (not self-reported status)
 - Pacing: zero pauses after plan approval (not "check with user between tasks")

@@ -2,6 +2,15 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [2.0.0] - 2026-03-21
+
+### Changed
+- **BREAKING: Remove Codex CLI dependency** — replaced all Codex-specific invocations with provider-agnostic parallel Agent dispatch. The skill now works with Claude Code alone, no OpenAI API key or Codex CLI required
+- **Parallel review strategy** — instead of "Claude + Codex" dual-provider pattern, use two independent Claude agents with split review focus (correctness vs architecture, spec-fit vs user-scenarios). Two reviewers with different lenses catch more bugs than one, regardless of provider
+- Removed `coreutils`/`gtimeout` macOS requirement (was only needed for Codex timeout)
+- Updated all prompt templates: replaced Codex invocation blocks with parallel focus split instructions
+- Simplified requirements: only Claude Code CLI + GitHub CLI needed
+
 ## [1.2.0] - 2026-03-21
 
 ### Added
