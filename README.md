@@ -4,6 +4,16 @@
 
 Combines collaborative product discovery with fully autonomous execution — you discuss what to build, then the agent builds it end-to-end without stopping.
 
+## When to Use
+
+superflow is designed for **medium-to-large product features** — the kind of work that takes multiple files, needs a plan, and benefits from autonomous execution. Think: new subsystem, major feature, architectural refactor.
+
+**Good fit:** "Add a financial inbox with transfer matching, category review, and mini app integration" — needs research, design, 5 sprints, 20+ tasks.
+
+**Not a good fit:** Quick bug fix, rename a variable, add a config option. For small tasks, just use Claude Code directly — superflow's discovery phase would be overkill.
+
+**The payoff:** You invest 15-20 minutes in collaborative discovery, then walk away while the agent executes for hours. Come back to ready-to-merge PRs.
+
 ## The Idea
 
 Most AI coding workflows are either too hands-on (you babysit every step) or too hands-off (agent builds the wrong thing). superflow splits the work into two phases:
