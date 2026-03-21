@@ -106,6 +106,20 @@ For each Sprint:
 5. **Proactive product thinking** — propose ideas, don't just ask questions
 6. **No claims without evidence** — verification output required for every completion
 
+## Model Strategy
+
+superflow uses the user's default model for planning and review (where critical thinking matters), and lighter models for mechanical execution:
+
+| Phase | Task | Model | Why |
+|-------|------|-------|-----|
+| Phase 1 | Brainstorming, spec, plan | User's default | Needs deep reasoning |
+| Phase 2 | Implementation agents | `sonnet` | Plan is detailed enough, speed matters |
+| Phase 2 | Code quality review | User's default | Needs critical analysis |
+| Phase 2 | Product acceptance | User's default | Needs intent understanding |
+| Phase 2 | Codex reviews | Codex default (gpt-5.4) | Different model = different bugs caught |
+
+This balances cost and speed: save on mechanical coding, invest in thinking.
+
 ## Safety Warning
 
 superflow runs in fully autonomous mode during Phase 2 — it creates branches, writes code, commits, and pushes without asking. **Run it in an isolated environment:**
@@ -172,8 +186,13 @@ superflow is built on top of [Superpowers](https://github.com/obra/superpowers) 
 - **Proactive product thinking** — agent proposes ideas, doesn't just ask questions
 - **Zero-pause autonomous execution** — never stops after plan approval
 
-### Key philosophy difference
-Superpowers is a **composable toolkit** of 14 independent skills with human-in-the-loop at every stage. superflow is a **monolithic autonomous workflow** that uses Superpowers patterns as building blocks but wraps them in a rigid two-phase pipeline where the human is involved only in Phase 1 (discovery) and completely excluded from Phase 2 (execution).
+### How they relate
+
+Think of Superpowers as a well-stocked workbench — 14 specialized tools that you pick up and use as needed. Each tool is excellent at its job, and you decide when and how to use them.
+
+superflow is a CNC machine built from those same tools. It takes the best patterns from Superpowers — TDD, debugging, verification, worktrees — and wires them into a single automated pipeline. You load the material (your idea) and set the program (approve the plan), then it runs the full production cycle autonomously.
+
+Both are valuable for different situations. Superpowers gives you flexibility and control at every step. superflow gives you end-to-end automation when you know what you want and trust the process to deliver it.
 
 ## Origin
 
