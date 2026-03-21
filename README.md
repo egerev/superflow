@@ -136,7 +136,7 @@ cp superflow/prompts/*.md ~/.claude/skills/superflow/prompts/
 
 ## Acknowledgements
 
-SuperFlow is built on top of [Superpowers](https://github.com/anthropics/claude-code/tree/main/plugins/superpowers) — the official Claude Code skill framework by Anthropic. Many core patterns come directly from Superpowers:
+SuperFlow is built on top of [Superpowers](https://github.com/obra/superpowers) — a community-built Claude Code skill framework ([info](https://claude.com/plugins/superpowers)). Many core patterns come directly from Superpowers:
 
 - **Brainstorming flow** (question-driven design exploration)
 - **Subagent-driven development** (fresh agent per task + review stages)
