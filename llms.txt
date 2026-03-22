@@ -1,0 +1,62 @@
+# Superflow
+
+> A Claude Code skill that orchestrates a full dev workflow: onboarding, product discovery, autonomous execution with PR-per-sprint, and merge. Hybrid project — markdown prompts + Python companion CLI (supervisor).
+
+## Overview
+
+Superflow is a 4-phase development workflow skill for Claude Code:
+
+- **Phase 0 (Onboarding):** Analyzes codebase with 4 parallel Opus agents, generates health report, creates/audits llms.txt and CLAUDE.md, sets up permissions
+- **Phase 1 (Product Discovery):** 12-step interactive brainstorming with dual-model spec/plan review, JTBD user stories, approval gates
+- **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — git worktrees, TDD, subagent implementers, dual-model PAR (Peer Architecture Review), one PR per sprint
+- **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification and documentation update
+
+Version: v2.1.2 (2026-03-23). MIT License.
+
+## File Structure
+
+- [SKILL.md](SKILL.md): Entry point — startup checklist, provider detection, phase routing (75 lines)
+- [superflow-enforcement.md](superflow-enforcement.md): 8 hard rules that survive context compaction — deployed to ~/.claude/rules/ (54 lines)
+- [README.md](README.md): Installation, usage, supervisor docs, file table, permissions setup (165 lines)
+
+## Phase References
+
+- [references/phase0-onboarding.md](references/phase0-onboarding.md): First-run onboarding — 10 steps, marker detection, 4 parallel analysis agents, health report, llms.txt/CLAUDE.md audit (276 lines)
+- [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — 12 steps, brainstorm STOP GATE, product summary APPROVAL, spec/plan with dual-model review (132 lines)
+- [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — 11 steps, worktree, TDD, implementer dispatch, PAR gate, push+PR (89 lines)
+- [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, CI handling, post-merge report (87 lines)
+
+## Agent Prompts
+
+- [prompts/implementer.md](prompts/implementer.md): TDD-driven code implementation agent — Red-Green-Refactor cycle, test evidence required (81 lines)
+- [prompts/spec-reviewer.md](prompts/spec-reviewer.md): Spec compliance reviewer — verifies implementation matches specification (55 lines)
+- [prompts/code-quality-reviewer.md](prompts/code-quality-reviewer.md): Code quality reviewer — correctness, security, maintainability, OWASP (77 lines)
+- [prompts/product-reviewer.md](prompts/product-reviewer.md): Product acceptance reviewer — user perspective, UX gaps, edge cases (72 lines)
+- [prompts/llms-txt-writer.md](prompts/llms-txt-writer.md): llms.txt generation/audit prompt — llmstxt.org standard, verified entries only (156 lines)
+- [prompts/claude-md-writer.md](prompts/claude-md-writer.md): CLAUDE.md generation/audit prompt — verified paths and commands (150 lines)
+- [prompts/testing-guidelines.md](prompts/testing-guidelines.md): Testing reference — TDD cycle, coverage expectations, included in implementer context (68 lines)
+
+## Supervisor System
+
+The supervisor is a Python CLI that orchestrates autonomous multi-sprint execution outside of Claude Code's context window.
+
+- [bin/superflow-supervisor](bin/superflow-supervisor): CLI entry point — argparse-based with run/status/resume/reset commands (132 lines)
+- [lib/supervisor.py](lib/supervisor.py): Core supervisor — worktree lifecycle, prompt building, sprint execution with retry, run loop, completion report generation (650 lines)
+- [lib/queue.py](lib/queue.py): Sprint queue — JSON-based queue with DAG dependency resolution, atomic saves, status tracking (115 lines)
+- [lib/checkpoint.py](lib/checkpoint.py): Checkpoint system — save/load sprint execution state for crash recovery (36 lines)
+- [lib/parallel.py](lib/parallel.py): Parallel execution — ThreadPoolExecutor-based concurrent sprint execution with queue locking (39 lines)
+- [lib/replanner.py](lib/replanner.py): Adaptive replanner — analyzes completed sprints, adjusts remaining plans via Claude subprocess (196 lines)
+- [lib/notifications.py](lib/notifications.py): Notifications — Telegram Bot API integration with stdout fallback, typed event methods (132 lines)
+- [templates/supervisor-sprint-prompt.md](templates/supervisor-sprint-prompt.md): Sprint execution prompt template with placeholders for sprint plan, CLAUDE.md, llms.txt
+- [templates/replan-prompt.md](templates/replan-prompt.md): Replanner prompt template with placeholders for completed/remaining sprints
+
+## Key Concepts
+
+- **Dual-model review:** Every spec, plan, and PR is reviewed by two models (Claude + secondary provider like Codex/Gemini). If no secondary provider available, two Claude agents with split focus (Technical + Product)
+- **PAR (Peer Architecture Review):** Mandatory gate before every PR push — two reviewers must both return ACCEPTED, evidence written to `.par-evidence.json`
+- **Compaction resilience:** Enforcement rules live in `~/.claude/rules/` (auto-loaded by Claude Code), phase docs are re-read from disk at boundaries
+- **Markers:** `<!-- updated-by-superflow:YYYY-MM-DD -->` in generated files — used to detect whether Phase 0 has run
+- **Sprint queue:** JSON file defining sprints with DAG dependencies, processed by the supervisor CLI
+- **Checkpoints:** Per-sprint JSON files storing execution state, enabling crash recovery via `resume` command
+
+<!-- updated-by-superflow:2026-03-23 -->

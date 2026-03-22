@@ -14,6 +14,31 @@ Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase m
 
 Durable rules live in `.claude/rules/superflow-enforcement.md` (survives compaction).
 
+This is a hybrid project: markdown prompts + Python companion CLI (supervisor).
+
+## Architecture
+
+```
+superflow/
+  SKILL.md              — Skill entry point, startup checklist
+  superflow-enforcement.md — Durable rules for ~/.claude/rules/
+  bin/
+    superflow-supervisor — Python CLI for autonomous sprint orchestration
+  lib/
+    supervisor.py        — Core: worktree lifecycle, execution, run loop, completion report
+    queue.py             — Sprint queue with DAG dependency resolution
+    checkpoint.py        — Checkpoint save/load for crash recovery
+    parallel.py          — Parallel execution via ThreadPoolExecutor
+    replanner.py         — Adaptive replanner (adjusts remaining sprints)
+    notifications.py     — Telegram/stdout notifications
+  templates/
+    supervisor-sprint-prompt.md — Sprint execution prompt template
+    replan-prompt.md     — Replanner prompt template
+  prompts/               — Agent prompt templates (7 prompts)
+  references/            — Phase documentation (phases 0-3)
+  tests/                 — Unit and integration tests (140+ tests)
+```
+
 ## Startup Checklist
 
 1. Read `.claude/rules/superflow-enforcement.md`
@@ -54,5 +79,7 @@ fi
 - Prompts: `prompts/implementer.md`, `prompts/spec-reviewer.md`, `prompts/code-quality-reviewer.md`, `prompts/product-reviewer.md`
 - Documentation: `prompts/llms-txt-writer.md`, `prompts/claude-md-writer.md`
 - Testing: `prompts/testing-guidelines.md`
+- Supervisor: `bin/superflow-supervisor`, `lib/supervisor.py`, `lib/queue.py`, `lib/checkpoint.py`, `lib/parallel.py`, `lib/replanner.py`, `lib/notifications.py`
+- Templates: `templates/supervisor-sprint-prompt.md`, `templates/replan-prompt.md`
 
 Re-read phase docs at every phase/sprint boundary (compaction erases skill content).

@@ -101,6 +101,42 @@ docker run -it --rm -v $(pwd):/workspace -w /workspace node:22 bash
 - **GitHub CLI** (`gh`)
 - **macOS**: `brew install coreutils` for `gtimeout`
 
+## Supervisor
+
+The Supervisor is a Python companion CLI that orchestrates autonomous multi-sprint execution. It manages a sprint queue with DAG-based dependency resolution, creates isolated git worktrees per sprint, invokes Claude Code for each sprint, handles retries and failure recovery, and generates completion reports. Supports parallel execution of independent sprints and adaptive replanning between sprints.
+
+### Quick Start
+
+```bash
+./bin/superflow-supervisor run --queue path/to/sprint-queue.json
+```
+
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `run --queue Q` | Execute the full sprint queue |
+| `status --queue Q` | Show current queue status table |
+| `resume --queue Q` | Resume after crash (detects PRs, resets stale sprints) |
+| `reset --queue Q --sprint N` | Reset sprint N to pending |
+
+Options: `--parallel N` (max concurrent sprints), `--timeout S` (seconds per sprint), `--plan FILE` (enable replanning), `--no-replan`, `--telegram-token`, `--telegram-chat`.
+
+### Example: Overnight Run with Telegram
+
+```bash
+export TELEGRAM_BOT_TOKEN="your-bot-token"
+export TELEGRAM_CHAT_ID="your-chat-id"
+
+./bin/superflow-supervisor run \
+  --queue sprint-queue.json \
+  --plan plans/feature-plan.md \
+  --parallel 2 \
+  --timeout 3600
+```
+
+You will receive Telegram notifications for sprint starts, completions, failures, and the final completion report.
+
 ## Files
 
 | File | Purpose |
@@ -111,7 +147,16 @@ docker run -it --rm -v $(pwd):/workspace -w /workspace node:22 bash
 | `references/phase2-execution.md` | Sprint execution (autonomous) |
 | `references/phase3-merge.md` | Merge flow (user-initiated) |
 | `prompts/*.md` | Agent templates (implementer, reviewers, doc writers) |
+| `templates/*.md` | Supervisor prompt templates (sprint execution, replanning) |
 | `superflow-enforcement.md` | Durable rules (copy to `~/.claude/rules/`) |
+| `bin/superflow-supervisor` | Supervisor CLI entry point |
+| `lib/supervisor.py` | Core supervisor: worktree lifecycle, sprint execution, run loop |
+| `lib/queue.py` | Sprint queue with DAG-based dependency resolution |
+| `lib/checkpoint.py` | Checkpoint save/load for crash recovery |
+| `lib/parallel.py` | Parallel sprint execution via ThreadPoolExecutor |
+| `lib/replanner.py` | Adaptive replanner (adjusts remaining sprints after completion) |
+| `lib/notifications.py` | Telegram/stdout notification system |
+| `tests/` | Unit and integration tests (140+ tests) |
 
 ## Origin
 
