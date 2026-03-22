@@ -23,6 +23,7 @@ B. Run it — confirm it FAILS for the right reason (not import/syntax error)
 C. Write MINIMAL code to pass
 D. Run it — confirm it PASSES
 E. Repeat
+Wrote code before the test? Delete it. Start fresh from the test. No exceptions.
 
 ## Workflow
 1. If anything unclear — ask now, don't guess
@@ -32,7 +33,9 @@ E. Repeat
 5. Commit
 
 ## When Stuck
-STOP and report BLOCKED or NEEDS_CONTEXT with what you tried.
+- 1-2 failed fixes: re-analyze, form new hypothesis, try again
+- 3+ failed fixes: STOP — this is likely an architectural problem, not a bug. Report BLOCKED with evidence and suggest the approach may need rethinking.
+- Unknown: report NEEDS_CONTEXT with what you tried
 
 ## Report Format
 - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT

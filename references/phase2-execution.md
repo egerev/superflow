@@ -8,7 +8,9 @@ Each sprint runs in a fresh isolated session (`claude -p` or Agent with `isolati
 1. **Re-read** this file (`references/phase2-execution.md`)
 2. **Worktree**: `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`
 3. **Baseline tests** in worktree
-4. **Dispatch implementers** via Agent tool (`mode: bypassPermissions`, `model: sonnet` for mechanical tasks). Use `prompts/implementer.md`. Maximize parallel agents for independent tasks.
+4. **Dispatch implementers** via Agent tool (`mode: bypassPermissions`, `model: sonnet` for mechanical tasks). Use `prompts/implementer.md`.
+   - **Parallelize** when tasks are independent (different files, no shared state, no dependencies)
+   - **Sequentialize** when tasks share files, state, or depend on each other's output
 5. **Review chain**: spec reviewer (background) > code quality reviewer (background) > verify tests
 6. **Full test suite** with pasted output
 7. **PAR** (see `~/.claude/rules/superflow-enforcement.md` for algorithm): Claude reviewer + secondary provider, both receive SPEC. Write `.par-evidence.json` after ACCEPTED.
@@ -33,8 +35,15 @@ Record: `{"provider":"split-focus",...}`
 3. Targeted fix, verify with specific test then full suite
 4. 2 failed attempts = BLOCKED with evidence, continue
 
+## Handling NEEDS_FIXES from PAR
+- Verify each finding against the codebase before implementing (reviewer may lack context)
+- Push back with technical reasoning if finding is incorrect
+- Fix confirmed issues one at a time, test each
+- Re-run PAR after fixes
+
 ## Failure Handling
-- Test/build failure: debug, fix, or note in PR and continue
+- Test/build failure: investigate root cause first (read errors, check recent changes, trace data flow). No guessing.
+- 3+ failed fix attempts on same issue: likely architectural problem — report BLOCKED, suggest rethinking approach
 - Agent blocked: re-dispatch with more context. 2 fails = implement manually
 - Never stop to ask the user. Accumulate issues, report at end.
 
