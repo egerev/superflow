@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import signal
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -10,6 +11,22 @@ from datetime import datetime, timezone
 from lib.checkpoint import save_checkpoint
 
 logger = logging.getLogger(__name__)
+
+# Global shutdown flag — set by signal handler
+_shutdown_requested = False
+
+
+def _signal_handler(signum, frame):
+    """Handle SIGTERM/SIGINT by setting the shutdown flag."""
+    global _shutdown_requested
+    _shutdown_requested = True
+    logger.info("Shutdown requested (signal %d). Will stop after current sprint.", signum)
+
+
+def install_signal_handlers():
+    """Install signal handlers for graceful shutdown."""
+    signal.signal(signal.SIGTERM, _signal_handler)
+    signal.signal(signal.SIGINT, _signal_handler)
 
 
 def create_worktree(sprint: dict, repo_root: str) -> str:
@@ -422,9 +439,12 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
     """Main supervisor run loop.
 
     Loads the queue, runs preflight, then executes sprints sequentially.
+    Checks _shutdown_requested after each sprint for graceful shutdown.
     """
+    global _shutdown_requested
     from lib.queue import SprintQueue
 
+    install_signal_handlers()
     queue = SprintQueue.load(queue_path)
 
     if repo_root is None:
@@ -444,6 +464,11 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
 
     # Main loop
     while not queue.is_done():
+        if _shutdown_requested:
+            print("Shutdown requested. Saving state and exiting.")
+            queue.save(queue_path)
+            break
+
         runnable = queue.next_runnable(max_parallel=1)  # Sequential for now
         if not runnable:
             queue.skip_blocked_sprints()
@@ -457,4 +482,58 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
             )
             queue.save(queue_path)
 
+            if _shutdown_requested:
+                print("Shutdown requested after sprint. Saving state and exiting.")
+                queue.save(queue_path)
+                break
+
     print_summary(queue)
+
+
+def resume(queue_path, repo_root):
+    """Resume execution after a crash.
+
+    Finds in_progress sprints and either marks them completed (if PR exists)
+    or resets them to pending.
+    Returns the updated queue.
+    """
+    from lib.queue import SprintQueue
+
+    queue = SprintQueue.load(queue_path)
+
+    for sprint in queue.sprints:
+        if sprint["status"] != "in_progress":
+            continue
+
+        sid = sprint["id"]
+        branch = sprint["branch"]
+        wt_path = os.path.join(repo_root, ".worktrees", f"sprint-{sid}")
+        has_worktree = os.path.isdir(wt_path)
+
+        # Check if a PR exists for this branch
+        try:
+            result = subprocess.run(
+                ["gh", "pr", "list", "--head", branch, "--json", "url",
+                 "--limit", "1"],
+                capture_output=True, text=True, cwd=repo_root,
+            )
+            pr_output = result.stdout.strip()
+            has_pr = bool(pr_output and pr_output != "[]")
+        except Exception:
+            has_pr = False
+
+        if has_worktree and has_pr:
+            # Extract PR URL
+            try:
+                pr_data = json.loads(pr_output)
+                pr_url = pr_data[0]["url"] if pr_data else ""
+            except (json.JSONDecodeError, IndexError, KeyError):
+                pr_url = pr_output.split("\t")[0] if pr_output else ""
+            queue.mark_completed(sid, pr_url)
+            logger.info("Sprint %d: found PR, marked completed", sid)
+        else:
+            sprint["status"] = "pending"
+            logger.info("Sprint %d: no PR found, reset to pending", sid)
+
+    queue.save(queue_path)
+    return queue
