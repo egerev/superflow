@@ -1,0 +1,7 @@
+.worktrees/
+.par-evidence.json
+.DS_Store
+*.swp
+docs/superflow/checkpoints/
+__pycache__/
+*.pyc
