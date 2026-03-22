@@ -68,6 +68,24 @@ Add to your `~/.claude/settings.json` to reduce permission prompts:
 }
 ```
 
+### Autonomous Execution (recommended)
+
+Phase 2 runs autonomously — dozens of tool calls without human approval. For uninterrupted execution:
+
+```bash
+claude --dangerously-skip-permissions
+```
+
+**Safety:** Run inside an isolated environment — Docker container or VPS. This prevents accidental damage to your host system during autonomous execution. Never run `--dangerously-skip-permissions` on a machine with sensitive data outside the project directory.
+
+```bash
+# Docker example
+docker run -it --rm -v $(pwd):/workspace -w /workspace node:22 bash
+# install claude, then run with --dangerously-skip-permissions
+
+# VPS: any disposable instance works — the project repo is the only state that matters
+```
+
 ## Requirements
 
 - **Claude Code CLI**
