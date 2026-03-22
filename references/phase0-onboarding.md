@@ -210,6 +210,17 @@ git check-ignore -q .worktrees || echo ".worktrees/" >> .gitignore
 
 This file survives context compaction and is critical for Phase 2 discipline.
 
+## Step 6.5: Check Supervisor Prerequisites
+
+Check if the supervisor system is available:
+
+```bash
+python3 --version 2>/dev/null && echo "SUPERVISOR_AVAILABLE" || echo "SUPERVISOR_UNAVAILABLE"
+```
+
+- If python3 is available: note "Supervisor: available" in the health report
+- If python3 is missing: note "Supervisor: unavailable (python3 not found). Long-running autonomous mode requires python3." No error — single-session mode still works.
+
 ## Step 7: Permissions Setup for Autonomous Execution
 
 **Do NOT skip this step.** Check if `~/.claude/settings.json` has the required allow permissions for Superflow.
@@ -263,6 +274,7 @@ All three must exist for Phase 0 to be fully skipped on next run.
 - [ ] CLAUDE.md audited — created if missing, updated if stale (Step 5)
 - [ ] Enforcement rules verified in `~/.claude/rules/` (Step 6)
 - [ ] `.worktrees/` is in `.gitignore` (Step 6)
+- [ ] Python3 availability checked (Step 6.5)
 - [ ] **Permissions proposed to user** — accepted or declined, but MUST be asked (Step 7)
 - [ ] Markers `<!-- updated-by-superflow:YYYY-MM-DD -->` written in CLAUDE.md, llms.txt, and health report (Step 8)
 
