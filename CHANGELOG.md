@@ -16,7 +16,7 @@ All notable changes to superflow will be documented in this file.
 - Step 6: `.worktrees/` gitignore check + enforcement file path
 - Step 3: "do not invent problems to fill the template"
 - Step 2: analysis agents must use Opus (not Sonnet) — Sonnet hallucinated LangGraph from directory name `graph/` when actual framework was pydantic_graph
-- Steps 4-5: doc audit performed by orchestrator directly (not delegated to subagents) with `ultrathink` — wrong docs compound errors across all future sessions
+- Steps 4-5: doc audit agents must use Opus + `ultrathink` — wrong docs compound errors across all future sessions
 - Steps 4-5: "verify framework names by checking imports, not directory names"
 
 ### Fixed — Phase 1
