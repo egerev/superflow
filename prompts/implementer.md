@@ -40,4 +40,6 @@ STOP and report BLOCKED or NEEDS_CONTEXT with what you tried.
 - **Verification evidence:** full test output (paste, don't summarize)
 - Files changed
 - Concerns (if any)
+
+CRITICAL: "DONE" without pasted test output is NOT acceptable. Evidence first.
 ```

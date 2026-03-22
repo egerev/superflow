@@ -37,5 +37,10 @@ Record: `{"provider":"split-focus",...}`
 - Agent blocked: re-dispatch with more context. 2 fails = implement manually
 - Never stop to ask the user. Accumulate issues, report at end.
 
+## Documentation Update (after last sprint's PR)
+1. Update CLAUDE.md with new modules/files
+2. Update BACKLOG.md with completed and discovered items
+3. Commit documentation to the last sprint's branch
+
 ## Completion Report
 PRs created (with numbers), verification evidence (test counts, PAR status), known issues, merge order.
