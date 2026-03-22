@@ -8,8 +8,9 @@ from unittest.mock import patch, MagicMock, call
 
 from lib.supervisor import (
     create_worktree, cleanup_worktree, build_prompt, execute_sprint,
-    preflight, run, print_summary,
+    preflight, run, print_summary, resume, _shutdown_requested,
 )
+import lib.supervisor as supervisor_module
 from lib.queue import SprintQueue
 from lib.checkpoint import load_checkpoint
 
@@ -561,6 +562,98 @@ class TestPrintSummary(unittest.TestCase):
         output = captured.getvalue()
         self.assertIn("completed", output.lower())
         self.assertIn("failed", output.lower())
+
+
+class TestResume(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints):
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_resume_in_progress_no_worktree_resets_pending(self, mock_run):
+        """In-progress sprint with no worktree and no PR should reset to pending."""
+        sprints = [
+            _sprint(sid=1, status="in_progress", branch="feat/test-sprint-1"),
+            _sprint(sid=2, status="pending", depends_on=[1]),
+        ]
+        self._make_queue(sprints)
+        # gh pr list returns empty (no PR for this branch)
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        q = resume(self.queue_path, self.tmpdir)
+
+        self.assertEqual(q.sprints[0]["status"], "pending")
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_resume_in_progress_with_pr_marks_completed(self, mock_run):
+        """In-progress sprint with existing PR should be marked completed."""
+        sprints = [
+            _sprint(sid=1, status="in_progress", branch="feat/test-sprint-1"),
+        ]
+        self._make_queue(sprints)
+        # Worktree exists
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        os.makedirs(wt_path)
+        # gh pr list returns a PR
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="https://github.com/test/repo/pull/1\tOPEN\tTest PR\n",
+            stderr="",
+        )
+
+        q = resume(self.queue_path, self.tmpdir)
+
+        self.assertEqual(q.sprints[0]["status"], "completed")
+        self.assertIn("github.com", q.sprints[0]["pr"])
+
+
+class TestShutdownFlag(unittest.TestCase):
+    def test_shutdown_flag_stops_run_loop(self):
+        """Setting _shutdown_requested should stop the run loop after current sprint."""
+        tmpdir = tempfile.mkdtemp()
+        try:
+            queue_path = os.path.join(tmpdir, "queue.json")
+            os.makedirs(os.path.join(tmpdir, "templates"))
+            with open(os.path.join(tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+                f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n")
+            os.makedirs(os.path.join(tmpdir, "plans"))
+            with open(os.path.join(tmpdir, "plans", "plan.md"), "w") as f:
+                f.write("## Sprint 1\nStuff 1.\n\n## Sprint 2\nStuff 2.\n")
+
+            sprints = [
+                _sprint(sid=1, plan_file="plans/plan.md#sprint-1"),
+                _sprint(sid=2, plan_file="plans/plan.md#sprint-2", depends_on=[1]),
+            ]
+            q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+            q.save(queue_path)
+
+            call_count = [0]
+
+            def execute_side_effect(sprint, queue, queue_path, cp_dir, repo_root, **kwargs):
+                call_count[0] += 1
+                queue.mark_completed(sprint["id"], f"https://github.com/pr/{sprint['id']}")
+                queue.save(queue_path)
+                # Set shutdown after first sprint
+                supervisor_module._shutdown_requested = True
+                return {"sprint_id": sprint["id"], "status": "completed"}
+
+            with patch("lib.supervisor.preflight", return_value=(True, [])):
+                with patch("lib.supervisor.execute_sprint", side_effect=execute_side_effect):
+                    run(queue_path, repo_root=tmpdir)
+
+            # Only 1 sprint should have executed (shutdown after first)
+            self.assertEqual(call_count[0], 1)
+        finally:
+            supervisor_module._shutdown_requested = False
+            shutil.rmtree(tmpdir)
 
 
 if __name__ == "__main__":
