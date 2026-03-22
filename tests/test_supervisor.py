@@ -539,6 +539,129 @@ class TestRunLoop(unittest.TestCase):
         mock_execute.assert_not_called()
 
 
+class TestRunLoopParallel(unittest.TestCase):
+    """Tests for parallel execution and replanner integration in run()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n")
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nStuff 1.\n\n## Sprint 2\nStuff 2.\n\n## Sprint 3\nStuff 3.\n")
+        self.plan_path = os.path.join(self.tmpdir, "plans", "plan.md")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints):
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    @patch("lib.supervisor._run_replan")
+    @patch("lib.parallel._worker")
+    @patch("lib.supervisor.preflight")
+    def test_run_loop_parallel_two_independent(self, mock_preflight, mock_worker, mock_replan):
+        """With max_parallel=2 and 2 independent sprints, execute_parallel is used."""
+        sprints = [
+            _sprint(sid=1, plan_file="plans/plan.md#sprint-1"),
+            _sprint(sid=2, plan_file="plans/plan.md#sprint-2"),
+        ]
+        self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+        mock_replan.return_value = []
+
+        def worker_effect(sprint, queue, queue_path, cp_dir, repo_root,
+                          timeout, notifier, queue_lock):
+            with queue_lock:
+                queue.mark_completed(sprint["id"], f"https://pr/{sprint['id']}")
+                queue.save(queue_path)
+
+        mock_worker.side_effect = worker_effect
+
+        run(self.queue_path, plan_path=self.plan_path,
+            max_parallel=2, repo_root=self.tmpdir)
+
+        # Both sprints should be completed
+        q = SprintQueue.load(self.queue_path)
+        self.assertTrue(q.is_done())
+        for s in q.sprints:
+            self.assertEqual(s["status"], "completed")
+        # Worker should have been called for both
+        self.assertEqual(mock_worker.call_count, 2)
+
+    @patch("lib.supervisor._run_replan")
+    @patch("lib.supervisor.execute_sprint")
+    @patch("lib.supervisor.preflight")
+    def test_run_loop_replan_called_after_sprint(self, mock_preflight, mock_execute, mock_replan):
+        """Replanner should be called after each sprint when plan_path is set."""
+        sprints = [
+            _sprint(sid=1, plan_file="plans/plan.md#sprint-1"),
+            _sprint(sid=2, plan_file="plans/plan.md#sprint-2", depends_on=[1]),
+        ]
+        self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+        mock_replan.return_value = []
+
+        def execute_effect(sprint, queue, queue_path, cp_dir, repo_root, **kwargs):
+            queue.mark_completed(sprint["id"], f"https://pr/{sprint['id']}")
+            queue.save(queue_path)
+            return {"sprint_id": sprint["id"], "status": "completed"}
+
+        mock_execute.side_effect = execute_effect
+
+        run(self.queue_path, plan_path=self.plan_path,
+            max_parallel=1, repo_root=self.tmpdir)
+
+        # Replan should be called after each sprint
+        self.assertEqual(mock_replan.call_count, 2)
+
+    @patch("lib.supervisor._run_replan")
+    @patch("lib.supervisor.execute_sprint")
+    @patch("lib.supervisor.preflight")
+    def test_run_loop_no_replan_flag(self, mock_preflight, mock_execute, mock_replan):
+        """With no_replan=True, replanner should not be called."""
+        sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
+        self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        def execute_effect(sprint, queue, queue_path, cp_dir, repo_root, **kwargs):
+            queue.mark_completed(sprint["id"], "https://pr/1")
+            queue.save(queue_path)
+            return {"sprint_id": sprint["id"], "status": "completed"}
+
+        mock_execute.side_effect = execute_effect
+
+        run(self.queue_path, plan_path=self.plan_path,
+            max_parallel=1, no_replan=True, repo_root=self.tmpdir)
+
+        mock_replan.assert_not_called()
+
+    @patch("lib.supervisor._run_replan")
+    @patch("lib.supervisor.execute_sprint")
+    @patch("lib.supervisor.preflight")
+    def test_run_loop_no_plan_path_skips_replan(self, mock_preflight, mock_execute, mock_replan):
+        """Without plan_path, replanner should not be called."""
+        sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
+        self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        def execute_effect(sprint, queue, queue_path, cp_dir, repo_root, **kwargs):
+            queue.mark_completed(sprint["id"], "https://pr/1")
+            queue.save(queue_path)
+            return {"sprint_id": sprint["id"], "status": "completed"}
+
+        mock_execute.side_effect = execute_effect
+
+        run(self.queue_path, plan_path=None,
+            max_parallel=1, repo_root=self.tmpdir)
+
+        mock_replan.assert_not_called()
+
+
 class TestPrintSummary(unittest.TestCase):
     def test_print_summary_formats_output(self):
         """print_summary should not raise and should produce output."""
