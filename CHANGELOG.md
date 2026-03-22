@@ -2,7 +2,7 @@
 
 All notable changes to superflow will be documented in this file.
 
-## [2.0.0] - 2026-03-23
+## [2.0.1] - 2026-03-23
 
 ### Added
 - **Phase 0: Onboarding** — interactive first-run analysis: project health report, tech debt audit, DevOps/CI check
