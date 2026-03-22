@@ -59,13 +59,14 @@ Every finding must have:
 ### Verdict: APPROVE | REQUEST_CHANGES
 ```
 
-## Codex Parallel Review
+## Secondary Provider Review
 
-When dispatching to Codex in parallel, use this invocation:
+When dispatching a secondary provider in parallel with the Claude agent, both get the full
+review prompt. The value comes from model diversity, not prompt diversity.
 
+**Codex (preferred):**
 ```bash
-codex --approval-mode full-auto --quiet \
-  -p "$(cat <<PROMPT
+REVIEW_PROMPT="$(cat <<PROMPT
 You are reviewing code changes for quality.
 
 ## Diff
@@ -88,5 +89,19 @@ Be specific — file:line references. Only flag issues that would cause real pro
 ### Minor
 ### Verdict: APPROVE | REQUEST_CHANGES
 PROMPT
-)" 2>&1
+)"
+
+$TIMEOUT_CMD 600 codex exec --full-auto "$REVIEW_PROMPT" 2>&1
 ```
+
+**Other providers:** Replace `codex exec --full-auto` with the provider's non-interactive flag.
+
+## Split-Focus Fallback
+
+When no secondary provider is available, dispatch two Claude agents with different focus:
+
+**Agent A — Correctness focus:**
+Add to the base prompt: "Focus your review on: correctness (logic errors, off-by-one, null/undefined), edge cases (what inputs break this?), error handling (are errors caught and helpful?), and security (injection, auth, data exposure)."
+
+**Agent B — Architecture focus:**
+Add to the base prompt: "Focus your review on: performance (O(n^2), N+1 queries, memory leaks), pattern compliance (does this follow project conventions?), test quality (do tests verify behavior or mock behavior?), and maintainability (will this be clear in 6 months?)."

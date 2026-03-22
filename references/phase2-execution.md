@@ -57,18 +57,21 @@ For each Sprint N:
 |          4. Architecture: patterns, coupling, performance
 |          Return ACCEPTED or NEEDS_FIXES.", run_in_background=true)
 |
-|      ACTION B: Dispatch Codex reviewer (product + spec compliance):
-|        $TIMEOUT_CMD 600 codex exec --full-auto "Read spec at [path]. Then run git diff [base]. Review for:
+|      ACTION B: Dispatch secondary provider reviewer (product + spec compliance):
+|        If Codex: $TIMEOUT_CMD 600 codex exec --full-auto "REVIEW_PROMPT" 2>&1
+|        If other provider: $TIMEOUT_CMD 600 <provider> <flags> "REVIEW_PROMPT" 2>&1
+|        If no provider: Agent(prompt="REVIEW_PROMPT", run_in_background=true)
+|        REVIEW_PROMPT = "Read spec at [path]. Then run git diff [base]. Review for:
 |          1. Spec compliance — does implementation match spec?
 |          2. Product: does it solve the user's problem?
 |          3. UX gaps: uncovered flows, edge cases
 |          4. Code quality: error handling, edge cases
-|          Return ACCEPTED or NEEDS_FIXES." 2>&1
+|          Return ACCEPTED or NEEDS_FIXES."
 |
 |      ACTION C: Wait for BOTH to return.
 |      ACTION D: If NEEDS_FIXES → fix → re-test → re-review.
 |      ACTION E: Only after ACCEPTED → create .par-evidence.json:
-|        echo '{"sprint":N,"claude":"ACCEPTED","codex":"ACCEPTED","ts":"'$(date -u +%FT%TZ)'"}' > .par-evidence.json
+|        echo '{"sprint":N,"reviewer_a":"ACCEPTED","reviewer_b":"ACCEPTED","provider":"'$SECONDARY_PROVIDER'","ts":"'$(date -u +%FT%TZ)'"}' > .par-evidence.json
 |      ACTION F: Proceed to step 7.
 |
 |      IF YOU ARE READING THIS AND THINKING "I'll skip it this time": that is
@@ -98,14 +101,14 @@ For each Sprint N:
 **Review optimization:**
 - Simple tasks (1-2 files, <50 lines): spec review only
 - Medium tasks (2-5 files): spec review + Claude code quality
-- Complex tasks (5+ files): full review cycle (spec + Claude + Codex + product)
+- Complex tasks (5+ files): full review cycle (spec + dual-model + product)
 
-**When Codex is unavailable** (not installed or `codex --version` fails):
+**When no secondary provider is available:**
 Do NOT skip the second reviewer. Instead, dispatch **two Claude agents** with split focus:
 - **Agent A (Technical):** security, architecture, performance, correctness, error handling
 - **Agent B (Product):** spec compliance, UX gaps, edge cases, data integrity
 Both run in parallel via Agent tool with `run_in_background: true`.
-Record evidence as: `{"claude_technical":"ACCEPTED","claude_product":"ACCEPTED",...}`
+Record evidence as: `{"reviewer_a":"ACCEPTED","reviewer_b":"ACCEPTED","provider":"split-focus",...}`
 
 ## Git Worktree Rules
 
