@@ -434,15 +434,31 @@ def print_summary(queue):
     print()
 
 
+def _run_replan(queue, queue_path, plan_path, repo_root, checkpoints_dir, notifier):
+    """Run the adaptive replanner and notify if changes were made."""
+    from lib.replanner import replan
+    changes = replan(queue, queue_path, plan_path, repo_root, checkpoints_dir)
+    if changes and notifier:
+        summary = ", ".join(
+            f"{c['type']} sprint {c.get('sprint_id', '?')}" for c in changes
+        )
+        notifier.notify_replan(summary)
+    return changes
+
+
 def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
         no_replan=False, notifier=None, repo_root=None):
     """Main supervisor run loop.
 
-    Loads the queue, runs preflight, then executes sprints sequentially.
+    Loads the queue, runs preflight, then executes sprints.
+    When max_parallel > 1 and multiple sprints are runnable, uses parallel
+    execution via ThreadPoolExecutor. After each sprint (or batch), runs
+    the adaptive replanner unless no_replan is set.
     Checks _shutdown_requested after each sprint for graceful shutdown.
     """
     global _shutdown_requested
     from lib.queue import SprintQueue
+    from lib.parallel import execute_parallel
 
     install_signal_handlers()
     queue = SprintQueue.load(queue_path)
@@ -469,23 +485,42 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
             queue.save(queue_path)
             break
 
-        runnable = queue.next_runnable(max_parallel=1)  # Sequential for now
+        runnable = queue.next_runnable(max_parallel=max_parallel)
         if not runnable:
             queue.skip_blocked_sprints()
             queue.save(queue_path)
             break
 
-        for sprint in runnable:
-            execute_sprint(
-                sprint, queue, queue_path, checkpoints_dir, repo_root,
-                timeout=timeout, notifier=notifier,
+        # Parallel execution when multiple runnable sprints and max_parallel > 1
+        if max_parallel > 1 and len(runnable) > 1:
+            execute_parallel(
+                runnable, queue, queue_path, checkpoints_dir, repo_root,
+                timeout=timeout, notifier=notifier, max_workers=max_parallel,
             )
             queue.save(queue_path)
 
-            if _shutdown_requested:
-                print("Shutdown requested after sprint. Saving state and exiting.")
+            # Run replanner after parallel batch
+            if not no_replan and plan_path:
+                _run_replan(queue, queue_path, plan_path, repo_root,
+                            checkpoints_dir, notifier)
+        else:
+            # Sequential execution
+            for sprint in runnable:
+                execute_sprint(
+                    sprint, queue, queue_path, checkpoints_dir, repo_root,
+                    timeout=timeout, notifier=notifier,
+                )
                 queue.save(queue_path)
-                break
+
+                # Run replanner after each sprint
+                if not no_replan and plan_path:
+                    _run_replan(queue, queue_path, plan_path, repo_root,
+                                checkpoints_dir, notifier)
+
+                if _shutdown_requested:
+                    print("Shutdown requested after sprint. Saving state and exiting.")
+                    queue.save(queue_path)
+                    break
 
     print_summary(queue)
 
