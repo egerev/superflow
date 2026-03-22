@@ -6,7 +6,10 @@ import tempfile
 import unittest
 from unittest.mock import patch, MagicMock, call
 
-from lib.supervisor import create_worktree, cleanup_worktree, build_prompt, execute_sprint, preflight
+from lib.supervisor import (
+    create_worktree, cleanup_worktree, build_prompt, execute_sprint,
+    preflight, run, print_summary,
+)
 from lib.queue import SprintQueue
 from lib.checkpoint import load_checkpoint
 
@@ -447,6 +450,117 @@ class TestPreflight(unittest.TestCase):
         # Low disk is a warning, should still pass
         self.assertTrue(passed)
         self.assertTrue(any("disk" in i.lower() for i in issues))
+
+
+class TestRunLoop(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        # Create templates
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n")
+        # Create plan file
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff 1.\n\n## Sprint 2\nDo stuff 2.\n\n## Sprint 3\nDo stuff 3.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints):
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    @patch("lib.supervisor.execute_sprint")
+    @patch("lib.supervisor.preflight")
+    def test_run_loop_three_sprints(self, mock_preflight, mock_execute):
+        """Run loop processes 3 sequential sprints."""
+        sprints = [
+            _sprint(sid=1, plan_file="plans/plan.md#sprint-1"),
+            _sprint(sid=2, plan_file="plans/plan.md#sprint-2", depends_on=[1]),
+            _sprint(sid=3, plan_file="plans/plan.md#sprint-3", depends_on=[2]),
+        ]
+        self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        def execute_side_effect(sprint, queue, queue_path, cp_dir, repo_root, **kwargs):
+            queue.mark_completed(sprint["id"], f"https://github.com/pr/{sprint['id']}")
+            queue.save(queue_path)
+            return {"sprint_id": sprint["id"], "status": "completed"}
+
+        mock_execute.side_effect = execute_side_effect
+
+        run(self.queue_path, repo_root=self.tmpdir)
+
+        self.assertEqual(mock_execute.call_count, 3)
+        # Verify queue is all completed
+        q = SprintQueue.load(self.queue_path)
+        self.assertTrue(q.is_done())
+        for s in q.sprints:
+            self.assertEqual(s["status"], "completed")
+
+    @patch("lib.supervisor.execute_sprint")
+    @patch("lib.supervisor.preflight")
+    def test_run_loop_blocked_sprints_skipped(self, mock_preflight, mock_execute):
+        """When sprint 1 fails, sprint 2 depending on it should be skipped."""
+        sprints = [
+            _sprint(sid=1, plan_file="plans/plan.md#sprint-1"),
+            _sprint(sid=2, plan_file="plans/plan.md#sprint-2", depends_on=[1]),
+        ]
+        self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        def execute_side_effect(sprint, queue, queue_path, cp_dir, repo_root, **kwargs):
+            queue.mark_failed(sprint["id"], "failed")
+            queue.save(queue_path)
+            return {"sprint_id": sprint["id"], "status": "failed"}
+
+        mock_execute.side_effect = execute_side_effect
+
+        run(self.queue_path, repo_root=self.tmpdir)
+
+        q = SprintQueue.load(self.queue_path)
+        self.assertEqual(q.sprints[0]["status"], "failed")
+        self.assertEqual(q.sprints[1]["status"], "skipped")
+
+    @patch("lib.supervisor.execute_sprint")
+    @patch("lib.supervisor.preflight")
+    def test_run_loop_preflight_fails_aborts(self, mock_preflight, mock_execute):
+        """If preflight fails, run should not execute any sprints."""
+        sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
+        self._make_queue(sprints)
+        mock_preflight.return_value = (False, ["claude CLI not found"])
+
+        run(self.queue_path, repo_root=self.tmpdir)
+
+        mock_execute.assert_not_called()
+
+
+class TestPrintSummary(unittest.TestCase):
+    def test_print_summary_formats_output(self):
+        """print_summary should not raise and should produce output."""
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", [
+            _sprint(sid=1, status="completed"),
+            _sprint(sid=2, status="failed"),
+            _sprint(sid=3, status="skipped"),
+        ])
+        q.sprints[0]["pr"] = "https://github.com/pr/1"
+        q.sprints[1]["error_log"] = "crash"
+        # Should not raise
+        import io
+        import sys
+        captured = io.StringIO()
+        old_stdout = sys.stdout
+        sys.stdout = captured
+        try:
+            print_summary(q)
+        finally:
+            sys.stdout = old_stdout
+        output = captured.getvalue()
+        self.assertIn("completed", output.lower())
+        self.assertIn("failed", output.lower())
 
 
 if __name__ == "__main__":

@@ -393,3 +393,68 @@ def preflight(queue, repo_root, notifier=None):
             logger.warning("Notifier error during preflight: %s", e)
 
     return passed, issues
+
+
+def print_summary(queue):
+    """Print a formatted summary table of sprint statuses."""
+    print("\n" + "=" * 70)
+    print(f"{'ID':<5} {'Title':<30} {'Status':<12} {'PR':<15} {'Retries':<7}")
+    print("-" * 70)
+    for s in queue.sprints:
+        pr = s.get("pr") or ""
+        if pr and len(pr) > 14:
+            pr = "..." + pr[-11:]
+        retries = s.get("retries", 0)
+        print(f"{s['id']:<5} {s['title'][:29]:<30} {s['status']:<12} {pr:<15} {retries:<7}")
+    print("=" * 70)
+
+    summary = queue.summary()
+    parts = []
+    for status, count in summary.items():
+        if count > 0:
+            parts.append(f"{status}: {count}")
+    print("Summary: " + ", ".join(parts))
+    print()
+
+
+def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
+        no_replan=False, notifier=None, repo_root=None):
+    """Main supervisor run loop.
+
+    Loads the queue, runs preflight, then executes sprints sequentially.
+    """
+    from lib.queue import SprintQueue
+
+    queue = SprintQueue.load(queue_path)
+
+    if repo_root is None:
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(queue_path)))
+
+    # Determine checkpoints dir
+    checkpoints_dir = os.path.join(os.path.dirname(queue_path), "checkpoints")
+
+    # Run preflight
+    passed, issues = preflight(queue, repo_root, notifier=notifier)
+    if issues:
+        for issue in issues:
+            print(f"  {'[WARN]' if 'WARNING' in issue else '[FAIL]'} {issue}")
+    if not passed:
+        print("Preflight failed. Aborting.")
+        return
+
+    # Main loop
+    while not queue.is_done():
+        runnable = queue.next_runnable(max_parallel=1)  # Sequential for now
+        if not runnable:
+            queue.skip_blocked_sprints()
+            queue.save(queue_path)
+            break
+
+        for sprint in runnable:
+            execute_sprint(
+                sprint, queue, queue_path, checkpoints_dir, repo_root,
+                timeout=timeout, notifier=notifier,
+            )
+            queue.save(queue_path)
+
+    print_summary(queue)
