@@ -19,7 +19,7 @@ def _make_notifier(args):
         try:
             from lib.notifications import Notifier
             queue = SprintQueue.load(args.queue)
-            return Notifier(bot_token=token, chat_id=chat, total_sprints=len(queue.data["sprints"]))
+            return Notifier(bot_token=token, chat_id=chat, total_sprints=len(queue.sprints))
         except ImportError:
             print("Warning: lib.notifications not available, notifications disabled", file=sys.stderr)
     return None
