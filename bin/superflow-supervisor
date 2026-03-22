@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.queue import SprintQueue
-from lib.supervisor import run, resume, print_summary
+from lib.supervisor import run, resume, print_summary, generate_completion_report
 
 
 def _make_notifier(args):

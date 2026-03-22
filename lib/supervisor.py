@@ -524,6 +524,111 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
 
     print_summary(queue)
 
+    # Generate completion report
+    report = generate_completion_report(queue, checkpoints_dir)
+    if report:
+        print(report)
+
+
+def generate_completion_report(queue, checkpoints_dir, output_path=None):
+    """Generate Demo Day style completion report from queue and checkpoints.
+
+    Reads all checkpoints and formats a markdown report with per-sprint blocks
+    (title, status, PR, tests, PAR) and a summary section.
+
+    Args:
+        queue: SprintQueue instance with current sprint states.
+        checkpoints_dir: Path to directory containing sprint checkpoint files.
+        output_path: If provided, write the report to this file path.
+
+    Returns:
+        The report as a markdown string.
+    """
+    from lib.checkpoint import load_all_checkpoints
+
+    checkpoints = load_all_checkpoints(checkpoints_dir)
+    cp_map = {cp["sprint_id"]: cp for cp in checkpoints}
+
+    lines = []
+    lines.append("# Completion Report")
+    lines.append("")
+    lines.append(f"**Feature:** {queue.feature}")
+    lines.append("")
+
+    # Per-sprint blocks
+    for sprint in queue.sprints:
+        sid = sprint["id"]
+        title = sprint["title"]
+        status = sprint["status"]
+        pr = sprint.get("pr") or "N/A"
+        retries = sprint.get("retries", 0)
+
+        lines.append(f"## Sprint {sid}: {title}")
+        lines.append("")
+        lines.append(f"- **Status:** {status}")
+        lines.append(f"- **PR:** {pr}")
+
+        # Extract test and PAR info from checkpoint summary
+        cp = cp_map.get(sid, {})
+        summary = cp.get("summary", {})
+
+        tests = summary.get("tests")
+        if tests:
+            passed = tests.get("passed", 0)
+            failed = tests.get("failed", 0)
+            lines.append(f"- **Tests:** {passed} passed, {failed} failed")
+        else:
+            lines.append("- **Tests:** N/A")
+
+        par = summary.get("par")
+        if par:
+            claude_verdict = par.get("claude", "N/A")
+            secondary_verdict = par.get("secondary", "N/A")
+            lines.append(f"- **PAR:** Claude={claude_verdict}, Secondary={secondary_verdict}")
+        else:
+            lines.append("- **PAR:** N/A")
+
+        if retries > 0:
+            lines.append(f"- **Retries:** {retries}")
+
+        if status == "failed":
+            error = sprint.get("error_log") or cp.get("error", "Unknown")
+            lines.append(f"- **Error:** {error[:200]}")
+
+        if status == "skipped":
+            reason = sprint.get("error_log") or "dependency failed"
+            lines.append(f"- **Reason:** {reason}")
+
+        lines.append("")
+
+    # Summary section
+    summary_counts = queue.summary()
+    lines.append("## Summary")
+    lines.append("")
+    total = len(queue.sprints)
+    completed = summary_counts.get("completed", 0)
+    failed = summary_counts.get("failed", 0)
+    skipped = summary_counts.get("skipped", 0)
+    lines.append(f"- **Total sprints:** {total}")
+    lines.append(f"- **Completed:** {completed}")
+    if failed:
+        lines.append(f"- **Failed:** {failed}")
+    if skipped:
+        lines.append(f"- **Skipped:** {skipped}")
+
+    success_rate = (completed / total * 100) if total > 0 else 0
+    lines.append(f"- **Success rate:** {success_rate:.0f}%")
+    lines.append("")
+
+    report = "\n".join(lines)
+
+    if output_path:
+        os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        with open(output_path, "w") as f:
+            f.write(report)
+
+    return report
+
 
 def resume(queue_path, repo_root):
     """Resume execution after a crash.
