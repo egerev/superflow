@@ -1,6 +1,7 @@
 """Tests for the Notifier class."""
 
 import unittest
+import unittest.mock
 
 from lib.notifications import Notifier
 
@@ -244,6 +245,102 @@ class TestEventTypes(unittest.TestCase):
         self.assertIn("All sprints complete", output)
         self.assertIn("5/5 merged", output)
         self.assertIn("[all_done]", output)
+
+
+class TestTelegramHTTP(unittest.TestCase):
+    """Test Telegram HTTP request format and error handling."""
+
+    def setUp(self):
+        self.n = Notifier(bot_token="TESTTOKEN", chat_id="99887766", total_sprints=3)
+
+    @unittest.mock.patch("urllib.request.urlopen")
+    def test_request_url(self, mock_urlopen):
+        """_send_telegram sends to correct Telegram API URL."""
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = unittest.mock.Mock(return_value=False)
+        mock_urlopen.return_value.read = unittest.mock.Mock(return_value=b'{"ok":true}')
+
+        self.n._send_telegram("hello")
+
+        call_args = mock_urlopen.call_args
+        req = call_args[0][0]
+        self.assertEqual(req.full_url, "https://api.telegram.org/botTESTTOKEN/sendMessage")
+
+    @unittest.mock.patch("urllib.request.urlopen")
+    def test_request_body_contains_chat_id_and_text(self, mock_urlopen):
+        """POST body contains chat_id and text fields as JSON."""
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = unittest.mock.Mock(return_value=False)
+        mock_urlopen.return_value.read = unittest.mock.Mock(return_value=b'{"ok":true}')
+
+        self.n._send_telegram("test message")
+
+        call_args = mock_urlopen.call_args
+        req = call_args[0][0]
+        import json
+        body = json.loads(req.data.decode("utf-8"))
+        self.assertEqual(body["chat_id"], "99887766")
+        self.assertEqual(body["text"], "test message")
+
+    @unittest.mock.patch("urllib.request.urlopen")
+    def test_request_content_type_json(self, mock_urlopen):
+        """Request Content-Type header is application/json."""
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = unittest.mock.Mock(return_value=False)
+        mock_urlopen.return_value.read = unittest.mock.Mock(return_value=b'{"ok":true}')
+
+        self.n._send_telegram("hello")
+
+        call_args = mock_urlopen.call_args
+        req = call_args[0][0]
+        self.assertEqual(req.get_header("Content-type"), "application/json")
+
+    @unittest.mock.patch("urllib.request.urlopen")
+    def test_notify_sends_via_telegram_when_configured(self, mock_urlopen):
+        """notify() uses Telegram when bot_token and chat_id are set."""
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = unittest.mock.Mock(return_value=False)
+        mock_urlopen.return_value.read = unittest.mock.Mock(return_value=b'{"ok":true}')
+
+        self.n.notify("test", "hello via telegram")
+
+        call_args = mock_urlopen.call_args
+        req = call_args[0][0]
+        import json
+        body = json.loads(req.data.decode("utf-8"))
+        self.assertIn("hello via telegram", body["text"])
+
+    @unittest.mock.patch("urllib.request.urlopen")
+    def test_url_error_does_not_crash(self, mock_urlopen):
+        """URLError is caught and logged, does not raise."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.URLError("DNS failed")
+
+        result = self.n._send_telegram("boom")
+        self.assertIsNone(result)
+
+    @unittest.mock.patch("urllib.request.urlopen")
+    def test_http_error_does_not_crash(self, mock_urlopen):
+        """HTTPError is caught and logged, does not raise."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            url="https://api.telegram.org/bot/sendMessage",
+            code=403,
+            msg="Forbidden",
+            hdrs=None,
+            fp=None,
+        )
+
+        result = self.n._send_telegram("boom")
+        self.assertIsNone(result)
+
+    @unittest.mock.patch("urllib.request.urlopen")
+    def test_timeout_does_not_crash(self, mock_urlopen):
+        """Timeout is caught and logged, does not raise."""
+        mock_urlopen.side_effect = TimeoutError("timed out")
+
+        result = self.n._send_telegram("boom")
+        self.assertIsNone(result)
 
 
 if __name__ == "__main__":
