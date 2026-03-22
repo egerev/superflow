@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch, MagicMock, call
 
-from lib.supervisor import create_worktree, cleanup_worktree, build_prompt, execute_sprint
+from lib.supervisor import create_worktree, cleanup_worktree, build_prompt, execute_sprint, preflight
 from lib.queue import SprintQueue
 from lib.checkpoint import load_checkpoint
 
@@ -338,6 +338,115 @@ class TestExecuteSprint(unittest.TestCase):
         with open(log_path) as f:
             content = f.read()
         self.assertIn("Log line 1", content)
+
+
+class TestPreflight(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        # Create plan files for queue validation
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nStuff\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints=None):
+        if sprints is None:
+            sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
+        return SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+
+    @patch("lib.supervisor.shutil.disk_usage")
+    @patch("lib.supervisor.subprocess.run")
+    def test_preflight_all_pass(self, mock_run, mock_disk):
+        """All checks pass."""
+        def side_effect(cmd, **kwargs):
+            if "claude" in cmd:
+                return MagicMock(returncode=0, stdout="claude 1.0\n", stderr="")
+            if "status" in cmd and "--porcelain" in cmd:
+                return MagicMock(returncode=0, stdout="", stderr="")  # Clean
+            if "auth" in cmd:
+                return MagicMock(returncode=0, stdout="Logged in\n", stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+        mock_run.side_effect = side_effect
+        mock_disk.return_value = MagicMock(free=10 * 1024**3)  # 10GB free
+        q = self._make_queue()
+        passed, issues = preflight(q, self.tmpdir)
+        self.assertTrue(passed)
+        self.assertEqual(issues, [])
+
+    @patch("lib.supervisor.shutil.disk_usage")
+    @patch("lib.supervisor.subprocess.run")
+    def test_preflight_claude_missing(self, mock_run, mock_disk):
+        """Claude CLI not found should fail preflight."""
+        mock_run.side_effect = FileNotFoundError("claude not found")
+        mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        q = self._make_queue()
+        passed, issues = preflight(q, self.tmpdir)
+        self.assertFalse(passed)
+        self.assertTrue(any("claude" in i.lower() for i in issues))
+
+    @patch("lib.supervisor.shutil.disk_usage")
+    @patch("lib.supervisor.subprocess.run")
+    def test_preflight_dirty_git_warns(self, mock_run, mock_disk):
+        """Dirty git status should warn but not fail."""
+        def side_effect(cmd, **kwargs):
+            if "claude" in cmd:
+                return MagicMock(returncode=0, stdout="claude 1.0\n", stderr="")
+            if "status" in cmd:
+                return MagicMock(returncode=0, stdout="M file.py\n", stderr="")
+            if "auth" in cmd:
+                return MagicMock(returncode=0, stdout="Logged in\n", stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+        mock_run.side_effect = side_effect
+        mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        q = self._make_queue()
+        passed, issues = preflight(q, self.tmpdir)
+        # Dirty git is a warning, not a failure
+        self.assertTrue(passed)
+        self.assertTrue(any("dirty" in i.lower() or "uncommitted" in i.lower() for i in issues))
+
+    @patch("lib.supervisor.shutil.disk_usage")
+    @patch("lib.supervisor.subprocess.run")
+    def test_preflight_gh_auth_fails(self, mock_run, mock_disk):
+        """gh auth failure should fail preflight."""
+        def side_effect(cmd, **kwargs):
+            if "claude" in cmd:
+                return MagicMock(returncode=0, stdout="claude 1.0\n", stderr="")
+            if "status" in cmd and "--porcelain" in cmd:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if "auth" in cmd:
+                return MagicMock(returncode=1, stdout="", stderr="not logged in")
+            return MagicMock(returncode=0, stdout="", stderr="")
+        mock_run.side_effect = side_effect
+        mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        q = self._make_queue()
+        passed, issues = preflight(q, self.tmpdir)
+        self.assertFalse(passed)
+        self.assertTrue(any("gh" in i.lower() for i in issues))
+
+    @patch("lib.supervisor.shutil.disk_usage")
+    @patch("lib.supervisor.subprocess.run")
+    def test_preflight_missing_plan_file(self, mock_run, mock_disk):
+        """Missing plan file should fail preflight."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok\n", stderr="")
+        mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        q = self._make_queue([_sprint(sid=1, plan_file="nonexistent/plan.md#sprint-1")])
+        passed, issues = preflight(q, self.tmpdir)
+        self.assertFalse(passed)
+        self.assertTrue(any("plan" in i.lower() for i in issues))
+
+    @patch("lib.supervisor.shutil.disk_usage")
+    @patch("lib.supervisor.subprocess.run")
+    def test_preflight_low_disk_warns(self, mock_run, mock_disk):
+        """Low disk space should warn but not fail."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok\n", stderr="")
+        mock_disk.return_value = MagicMock(free=500 * 1024**2)  # 500MB
+        q = self._make_queue()
+        passed, issues = preflight(q, self.tmpdir)
+        # Low disk is a warning, should still pass
+        self.assertTrue(passed)
+        self.assertTrue(any("disk" in i.lower() for i in issues))
 
 
 if __name__ == "__main__":
