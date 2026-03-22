@@ -1,4 +1,4 @@
-"""Integration tests — end-to-end happy path."""
+"""Integration tests — end-to-end happy path and failure scenarios."""
 import json
 import os
 import shutil
@@ -261,6 +261,304 @@ class TestHappyPath(IntegrationBase):
         for s in q.sprints:
             self.assertIsNotNone(s["pr"])
             self.assertIn("github.com", s["pr"])
+
+
+class TestCrashRecovery(IntegrationBase):
+    """Crash recovery — checkpoints exist, resume finds PR."""
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    def test_resume_completes_in_progress_sprint_with_pr(
+        self, mock_subproc, mock_cleanup_wt
+    ):
+        """Sprints 1-2 completed, sprint 3 in_progress. Resume finds PR, marks completed."""
+        sprints = [
+            _make_sprint(1, "Foundation", "feat/foundation-1",
+                         "plans/plan.md#sprint-1"),
+            _make_sprint(2, "API Layer", "feat/api-2",
+                         "plans/plan.md#sprint-2"),
+            _make_sprint(3, "Integration", "feat/integration-3",
+                         "plans/plan.md#sprint-3", depends_on=[1]),
+        ]
+        # Manually set statuses to simulate crash state
+        sprints[0]["status"] = "completed"
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        sprints[1]["status"] = "completed"
+        sprints[1]["pr"] = "https://github.com/test/repo/pull/2"
+        sprints[2]["status"] = "in_progress"
+
+        self._create_queue(sprints)
+
+        # Write checkpoints for sprints 1-2 (completed) and sprint 3 (in_progress)
+        os.makedirs(self.checkpoints_dir, exist_ok=True)
+        save_checkpoint(self.checkpoints_dir, 1, {
+            "sprint_id": 1, "status": "completed",
+            "pr_url": "https://github.com/test/repo/pull/1",
+        })
+        save_checkpoint(self.checkpoints_dir, 2, {
+            "sprint_id": 2, "status": "completed",
+            "pr_url": "https://github.com/test/repo/pull/2",
+        })
+        save_checkpoint(self.checkpoints_dir, 3, {
+            "sprint_id": 3, "status": "in_progress",
+            "started_at": "2026-03-23T10:00:00Z",
+        })
+
+        # Mock gh pr list to return a PR for sprint 3's branch
+        def subproc_side_effect(cmd, **kwargs):
+            if "gh" in cmd and "pr" in cmd and "list" in cmd:
+                return MagicMock(
+                    returncode=0,
+                    stdout='[{"url":"https://github.com/test/repo/pull/3"}]',
+                    stderr=""
+                )
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_subproc.side_effect = subproc_side_effect
+
+        q = resume(self.queue_path, self.tmpdir)
+
+        # Sprint 3 should now be completed
+        self.assertEqual(q.sprints[2]["status"], "completed")
+        self.assertEqual(q.sprints[2]["pr"], "https://github.com/test/repo/pull/3")
+        self.assertTrue(q.is_done())
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    def test_resume_resets_in_progress_without_pr(
+        self, mock_subproc, mock_cleanup_wt
+    ):
+        """In-progress sprint with no PR should be reset to pending."""
+        sprints = [
+            _make_sprint(1, "Foundation", "feat/foundation-1",
+                         "plans/plan.md#sprint-1"),
+        ]
+        sprints[0]["status"] = "in_progress"
+        self._create_queue(sprints)
+
+        # gh pr list returns empty (no PR)
+        mock_subproc.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
+
+        q = resume(self.queue_path, self.tmpdir)
+
+        self.assertEqual(q.sprints[0]["status"], "pending")
+        self.assertEqual(q.sprints[0]["retries"], 0)
+
+
+class TestBlockedSprints(IntegrationBase):
+    """Blocked sprints — dependency fails, dependent auto-skipped."""
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    @patch("lib.supervisor.shutil.disk_usage")
+    def test_dependency_failure_skips_dependent(
+        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt
+    ):
+        """Sprint 1 fails after retries, sprint 2 (depends on 1) is auto-skipped."""
+        sprints = [
+            _make_sprint(1, "Foundation", "feat/foundation-1",
+                         "plans/plan.md#sprint-1", max_retries=1),
+            _make_sprint(2, "Depends on 1", "feat/depends-2",
+                         "plans/plan.md#sprint-2", depends_on=[1], max_retries=2),
+        ]
+        self._create_queue(sprints)
+
+        mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        mock_create_wt.side_effect = lambda sprint, root: os.path.join(
+            root, ".worktrees", f"sprint-{sprint['id']}"
+        )
+
+        def subproc_side_effect(cmd, **kwargs):
+            result = _preflight_subproc_effect(cmd, **kwargs)
+            if result is not None:
+                return result
+            cmd_list = cmd if isinstance(cmd, list) else [cmd]
+            # Sprint 1 always fails
+            if "claude" in cmd_list and "-p" in cmd_list:
+                return MagicMock(returncode=1, stdout=_claude_fail_output(), stderr="crash")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_subproc.side_effect = subproc_side_effect
+
+        run(
+            queue_path=self.queue_path,
+            max_parallel=1,
+            timeout=60,
+            no_replan=True,
+            repo_root=self.tmpdir,
+        )
+
+        q = SprintQueue.load(self.queue_path)
+        self.assertEqual(q.sprints[0]["status"], "failed",
+                         "Sprint 1 should be failed")
+        self.assertEqual(q.sprints[1]["status"], "skipped",
+                         "Sprint 2 should be skipped (dependency failed)")
+        self.assertTrue(q.is_done())
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    @patch("lib.supervisor.shutil.disk_usage")
+    def test_transitive_dependency_failure_skips_chain(
+        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt
+    ):
+        """Sprint 1 fails, sprint 2 depends on 1, sprint 3 depends on 2 — both skipped."""
+        sprints = [
+            _make_sprint(1, "Foundation", "feat/foundation-1",
+                         "plans/plan.md#sprint-1", max_retries=1),
+            _make_sprint(2, "Layer 2", "feat/layer-2",
+                         "plans/plan.md#sprint-2", depends_on=[1]),
+            _make_sprint(3, "Layer 3", "feat/layer-3",
+                         "plans/plan.md#sprint-3", depends_on=[2]),
+        ]
+        self._create_queue(sprints)
+
+        mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        mock_create_wt.side_effect = lambda sprint, root: os.path.join(
+            root, ".worktrees", f"sprint-{sprint['id']}"
+        )
+
+        def subproc_side_effect(cmd, **kwargs):
+            result = _preflight_subproc_effect(cmd, **kwargs)
+            if result is not None:
+                return result
+            cmd_list = cmd if isinstance(cmd, list) else [cmd]
+            if "claude" in cmd_list and "-p" in cmd_list:
+                return MagicMock(returncode=1, stdout="Error", stderr="crash")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_subproc.side_effect = subproc_side_effect
+
+        run(
+            queue_path=self.queue_path,
+            max_parallel=1,
+            timeout=60,
+            no_replan=True,
+            repo_root=self.tmpdir,
+        )
+
+        q = SprintQueue.load(self.queue_path)
+        self.assertEqual(q.sprints[0]["status"], "failed")
+        self.assertEqual(q.sprints[1]["status"], "skipped")
+        self.assertEqual(q.sprints[2]["status"], "skipped")
+
+
+class TestRetryScenario(IntegrationBase):
+    """Retry — mock claude fails first, succeeds second."""
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    @patch("lib.supervisor.shutil.disk_usage")
+    def test_retry_succeeds_on_second_attempt(
+        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt
+    ):
+        """Sprint fails on first attempt, succeeds on retry.
+        Verify retry count and final success status.
+        """
+        sprints = [
+            _make_sprint(1, "Flaky Sprint", "feat/flaky-1",
+                         "plans/plan.md#sprint-1", max_retries=2),
+        ]
+        self._create_queue(sprints)
+
+        mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        mock_create_wt.side_effect = lambda sprint, root: os.path.join(
+            root, ".worktrees", f"sprint-{sprint['id']}"
+        )
+
+        attempt = [0]
+
+        def subproc_side_effect(cmd, **kwargs):
+            result = _preflight_subproc_effect(cmd, **kwargs)
+            if result is not None:
+                return result
+            cmd_list = cmd if isinstance(cmd, list) else [cmd]
+            if "claude" in cmd_list and "-p" in cmd_list:
+                attempt[0] += 1
+                if attempt[0] == 1:
+                    # First attempt fails
+                    return MagicMock(returncode=1, stdout="Error on first try", stderr="")
+                else:
+                    # Second attempt succeeds
+                    return MagicMock(
+                        returncode=0,
+                        stdout=_claude_success_output(1),
+                        stderr=""
+                    )
+            if "gh" in cmd_list and "pr" in cmd_list and "view" in cmd_list:
+                return MagicMock(returncode=0, stdout="OPEN", stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_subproc.side_effect = subproc_side_effect
+
+        run(
+            queue_path=self.queue_path,
+            max_parallel=1,
+            timeout=60,
+            no_replan=True,
+            repo_root=self.tmpdir,
+        )
+
+        q = SprintQueue.load(self.queue_path)
+        self.assertEqual(q.sprints[0]["status"], "completed")
+        # Should have retried once
+        self.assertEqual(q.sprints[0]["retries"], 1)
+        self.assertIn("github.com", q.sprints[0]["pr"])
+
+        # Verify checkpoint shows completed
+        cp = load_checkpoint(self.checkpoints_dir, 1)
+        self.assertIsNotNone(cp)
+        self.assertEqual(cp["status"], "completed")
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    @patch("lib.supervisor.shutil.disk_usage")
+    def test_retry_exhausted_marks_failed(
+        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt
+    ):
+        """Sprint fails all attempts, verify it ends as failed with correct retry count."""
+        sprints = [
+            _make_sprint(1, "Always Fails", "feat/fail-1",
+                         "plans/plan.md#sprint-1", max_retries=2),
+        ]
+        self._create_queue(sprints)
+
+        mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        mock_create_wt.side_effect = lambda sprint, root: os.path.join(
+            root, ".worktrees", f"sprint-{sprint['id']}"
+        )
+
+        def subproc_side_effect(cmd, **kwargs):
+            result = _preflight_subproc_effect(cmd, **kwargs)
+            if result is not None:
+                return result
+            cmd_list = cmd if isinstance(cmd, list) else [cmd]
+            if "claude" in cmd_list and "-p" in cmd_list:
+                return MagicMock(returncode=1, stdout="Always fails", stderr="crash")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_subproc.side_effect = subproc_side_effect
+
+        run(
+            queue_path=self.queue_path,
+            max_parallel=1,
+            timeout=60,
+            no_replan=True,
+            repo_root=self.tmpdir,
+        )
+
+        q = SprintQueue.load(self.queue_path)
+        self.assertEqual(q.sprints[0]["status"], "failed")
+        self.assertEqual(q.sprints[0]["retries"], 2)
+
+        # Verify checkpoint
+        cp = load_checkpoint(self.checkpoints_dir, 1)
+        self.assertIsNotNone(cp)
+        self.assertEqual(cp["status"], "failed")
+        self.assertEqual(cp["retries"], 2)
 
 
 if __name__ == "__main__":
