@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 from datetime import datetime, timezone
 
@@ -312,3 +313,83 @@ def _notify_sprint_result(notifier, sprint):
             notifier.notify_failed(sprint)
     except Exception as e:
         logger.warning("Notifier error: %s", e)
+
+
+def preflight(queue, repo_root, notifier=None):
+    """Run preflight validation checks before sprint execution.
+
+    Returns (passed: bool, issues: list[str]).
+    Issues include both errors (which cause failure) and warnings.
+    """
+    issues = []
+    critical = False
+
+    # Check claude CLI
+    try:
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True, text=True, cwd=repo_root,
+        )
+        if result.returncode != 0:
+            issues.append("claude CLI returned non-zero exit code")
+            critical = True
+    except FileNotFoundError:
+        issues.append("claude CLI not found in PATH")
+        critical = True
+
+    # Check git status (warn if dirty, don't abort)
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, cwd=repo_root,
+        )
+        if result.stdout.strip():
+            issues.append("WARNING: git working directory is dirty (uncommitted changes)")
+    except FileNotFoundError:
+        issues.append("git not found in PATH")
+        critical = True
+
+    # Check gh auth
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True, text=True, cwd=repo_root,
+        )
+        if result.returncode != 0:
+            issues.append("gh auth failed — not logged in to GitHub CLI")
+            critical = True
+    except FileNotFoundError:
+        issues.append("gh CLI not found in PATH")
+        critical = True
+
+    # Validate all plan files exist
+    for sprint in queue.sprints:
+        plan_file = sprint.get("plan_file", "")
+        if "#" in plan_file:
+            file_part = plan_file.rsplit("#", 1)[0]
+        else:
+            file_part = plan_file
+        plan_path = os.path.join(repo_root, file_part)
+        if not os.path.exists(plan_path):
+            issues.append(f"Plan file not found: {file_part}")
+            critical = True
+
+    # Check disk space
+    try:
+        usage = shutil.disk_usage("/")
+        if usage.free < 1024**3:  # Less than 1GB
+            issues.append(
+                f"WARNING: Low disk space ({usage.free // (1024**2)}MB free)"
+            )
+    except Exception as e:
+        issues.append(f"WARNING: Could not check disk space: {e}")
+
+    passed = not critical
+
+    if notifier:
+        try:
+            notifier.notify_preflight(passed, issues)
+        except Exception as e:
+            logger.warning("Notifier error during preflight: %s", e)
+
+    return passed, issues
