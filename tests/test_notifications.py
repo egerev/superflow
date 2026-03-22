@@ -57,7 +57,7 @@ class TestNotifierStdout(unittest.TestCase):
             sys.stdout = old_stdout
 
         output = captured.getvalue().strip()
-        self.assertIn("[test_event]", output)
+        self.assertNotIn("[test_event]", output)  # no internal tags in output
         self.assertIn("hello world", output)
 
     def test_notify_with_sprint_id_includes_progress(self):
@@ -132,7 +132,7 @@ class TestEventTypes(unittest.TestCase):
     def test_notify_preflight_passed(self):
         output = self._capture_stdout(self.n.notify_preflight, passed=True)
         self.assertIn("Preflight passed", output)
-        self.assertIn("[preflight]", output)
+        self.assertNotIn("[", output)  # no internal tags
 
     def test_notify_preflight_failed_with_issues(self):
         output = self._capture_stdout(
@@ -148,7 +148,6 @@ class TestEventTypes(unittest.TestCase):
         self.assertIn("Sprint 1/5", output)
         self.assertIn("Starting", output)
         self.assertIn("Setup", output)
-        self.assertIn("[sprint_start]", output)
 
     def test_notify_sprint_complete(self):
         output = self._capture_stdout(
@@ -160,7 +159,6 @@ class TestEventTypes(unittest.TestCase):
         self.assertIn("Sprint 2/5", output)
         self.assertIn("complete", output)
         self.assertIn("https://github.com/pr/1", output)
-        self.assertIn("[sprint_complete]", output)
 
     def test_notify_sprint_failed(self):
         output = self._capture_stdout(
@@ -174,7 +172,6 @@ class TestEventTypes(unittest.TestCase):
         self.assertIn("Sprint 3/5", output)
         self.assertIn("FAILED", output)
         self.assertIn("timeout", output)
-        self.assertIn("[sprint_failed]", output)
 
     def test_notify_sprint_retry(self):
         output = self._capture_stdout(
@@ -187,7 +184,6 @@ class TestEventTypes(unittest.TestCase):
         self.assertIn("Sprint 3/5", output)
         self.assertIn("retrying", output)
         self.assertIn("2/3", output)
-        self.assertIn("[sprint_retry]", output)
 
     def test_notify_sprint_skipped(self):
         output = self._capture_stdout(
@@ -199,7 +195,6 @@ class TestEventTypes(unittest.TestCase):
         self.assertIn("Sprint 4/5", output)
         self.assertIn("skipped", output)
         self.assertIn("dependency failed", output)
-        self.assertIn("[sprint_skipped]", output)
 
     def test_notify_blocked(self):
         output = self._capture_stdout(
@@ -207,7 +202,6 @@ class TestEventTypes(unittest.TestCase):
         )
         self.assertIn("Queue blocked", output)
         self.assertIn("waiting for approval", output)
-        self.assertIn("[blocked]", output)
 
     def test_notify_timeout(self):
         output = self._capture_stdout(
@@ -219,7 +213,6 @@ class TestEventTypes(unittest.TestCase):
         self.assertIn("Sprint 2/5", output)
         self.assertIn("timed out", output)
         self.assertIn("600s", output)
-        self.assertIn("[timeout]", output)
 
     def test_notify_replan(self):
         output = self._capture_stdout(
@@ -227,7 +220,6 @@ class TestEventTypes(unittest.TestCase):
         )
         self.assertIn("Replanner updated queue", output)
         self.assertIn("removed sprint 4, added sprint 6", output)
-        self.assertIn("[replan]", output)
 
     def test_notify_crash_resume(self):
         output = self._capture_stdout(
@@ -236,7 +228,6 @@ class TestEventTypes(unittest.TestCase):
         self.assertIn("Supervisor resumed", output)
         self.assertIn("3", output)
         self.assertIn("2", output)
-        self.assertIn("[crash_resume]", output)
 
     def test_notify_all_done(self):
         output = self._capture_stdout(
@@ -244,7 +235,6 @@ class TestEventTypes(unittest.TestCase):
         )
         self.assertIn("All sprints complete", output)
         self.assertIn("5/5 merged", output)
-        self.assertIn("[all_done]", output)
 
 
 class TestTelegramHTTP(unittest.TestCase):
