@@ -3,6 +3,8 @@
 Runs once per project. Skip if Superflow artifacts already exist (see detection below).
 This phase is **conversational** — talk to the user, don't just execute silently.
 
+**All documentation output MUST be in English.** If the user communicates in another language, the LLM translates — but all generated files (llms.txt, CLAUDE.md, reports) are English.
+
 ## Detection: Is This a First Run?
 
 Check for Superflow markers:
@@ -14,8 +16,8 @@ If none found → first run. Begin onboarding.
 
 ## Step 1: Greet & Announce
 
-Tell the user:
-> "Привет! Это первый запуск Superflow в этом проекте. Дай мне минуту — познакомлюсь с кодовой базой."
+Tell the user (in their language):
+> "This is the first Superflow run on this project. Give me a moment — I'll explore the codebase."
 
 Then proceed to analysis.
 
@@ -24,7 +26,7 @@ Then proceed to analysis.
 Dispatch parallel background agents:
 - **Architecture agent**: directory structure, key files, frameworks, dependencies, data model
 - **Code quality agent**: hotspots, complexity, test coverage, linting setup
-- **Documentation agent**: existing docs (README, CLAUDE.md, comments density, API docs)
+- **Documentation agent**: existing docs (README, CLAUDE.md, llms.txt, comments density, API docs)
 
 Synthesize into a concise project profile.
 
@@ -56,41 +58,74 @@ Show the user the results conversationally — like a colleague who just explore
 3. ...
 ```
 
-Save report to `docs/superpowers/project-health-report.md`.
+Save report to `docs/superpowers/project-health-report.md` (in English).
 
-## Step 4: CLAUDE.md — Propose, Don't Force
+## Step 4: llms.txt — Project Documentation for All LLMs
+
+`llms.txt` is a standard (llmstxt.org) that helps any LLM understand a project — not just Claude. This is especially valuable since Superflow uses multiple AI providers.
+
+**If llms.txt doesn't exist, this MUST be the #1 recommendation in the Health Report.**
+
+> "This project has no llms.txt — this is must-have documentation for LLMs (llmstxt.org). Without it, subagents work blind. I recommend creating it — this will significantly improve implementation quality."
+
+Use `prompts/llms-txt-writer.md` for best practices. Generate following the spec:
+```markdown
+# Project Name
+
+> One-line project description
+
+## Docs
+- [README](./README.md): Project overview and setup
+- [Architecture](./docs/architecture.md): System design (if exists)
+
+## Source
+- [Key Module](./src/path): Description
+- [API Routes](./src/api): Description
+
+## Config
+- [Schema](./prisma/schema.prisma): Database schema (if exists)
+- [Package](./package.json): Dependencies and scripts
+```
+
+### If llms.txt exists:
+Cross-reference against actual project structure, propose updates if stale.
+
+## Step 5: CLAUDE.md — Auto-Update (No Approval Needed)
+
+CLAUDE.md is a working tool, not a deliverable. Update it silently:
 
 ### If CLAUDE.md doesn't exist:
-Propose to the user:
-> "У проекта нет CLAUDE.md — это файл с инструкциями, который помогает мне (и будущим сессиям) лучше работать с кодом. Предлагаю создать его сейчас — это займёт минуту. Создать?"
-
-If user agrees, create with:
+Create it automatically (in English) with:
 - Project overview (stack, purpose, architecture)
 - Key files table (file → purpose)
 - Commands (dev, build, test, lint)
 - Conventions discovered (naming, language, patterns)
 - Architecture notes (data flow, key modules)
+- Superflow marker (so future runs detect it)
+
+Tell user: > "Created CLAUDE.md with project description."
 
 ### If CLAUDE.md exists but is stale:
-Propose updates:
-> "CLAUDE.md есть, но я нашёл несколько неточностей: [list]. Обновить?"
-
+Fix silently:
 - Cross-reference documented files/paths against actual codebase
-- Flag outdated sections (removed files, renamed modules, new patterns)
+- Update outdated sections (removed files, renamed modules, new patterns)
 - Preserve user's custom sections — only touch factual parts
+- Add Superflow marker if missing
+
+Tell user: > "Updated CLAUDE.md — fixed [brief list]."
 
 ### If CLAUDE.md is up to date:
-> "CLAUDE.md в порядке, всё актуально."
+No action needed.
 
-## Step 5: Leave Markers
+## Step 6: Leave Markers
 
 After Phase 0 completes:
 1. Ensure CLAUDE.md mentions Superflow (so future runs detect it)
 2. The `docs/superpowers/` directory serves as the primary artifact marker
 
-## Step 6: Hand Off to Phase 1
+## Step 7: Hand Off to Phase 1
 
 Ask the user:
-> "Готово! Я познакомился с проектом. Что хочешь сделать?"
+> "Done! I've explored the project. What would you like to work on?"
 
 Then proceed to Phase 1 (Product Discovery) based on user's answer.

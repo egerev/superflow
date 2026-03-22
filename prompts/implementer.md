@@ -26,11 +26,12 @@ E. Repeat
 Wrote code before the test? Delete it. Start fresh from the test. No exceptions.
 
 ## Workflow
-1. If anything unclear — ask now, don't guess
-2. TDD cycle for each behavior
-3. Self-review: everything implemented? Nothing extra? Patterns followed? Tests verify behavior?
-4. Run full test suite, paste output
-5. Commit
+1. Read `llms.txt` (if exists) — understand project architecture before coding
+2. If anything unclear — ask now, don't guess
+3. TDD cycle for each behavior
+4. Self-review: everything implemented? Nothing extra? Patterns followed? Tests verify behavior?
+5. Run full test suite, paste output
+6. Commit
 
 ## When Stuck
 - 1-2 failed fixes: re-analyze, form new hypothesis, try again

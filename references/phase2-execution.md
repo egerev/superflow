@@ -8,7 +8,7 @@ Each sprint runs in a fresh isolated session (`claude -p` or Agent with `isolati
 1. **Re-read** this file (`references/phase2-execution.md`)
 2. **Worktree**: `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`
 3. **Baseline tests** in worktree
-4. **Dispatch implementers** via Agent tool (`mode: bypassPermissions`, `model: sonnet` for mechanical tasks). Use `prompts/implementer.md`.
+4. **Dispatch implementers** via Agent tool (`mode: bypassPermissions`, `model: sonnet` for mechanical tasks). Use `prompts/implementer.md`. Include `llms.txt` content in agent context (if exists) — this gives implementers project architecture understanding.
    - **Parallelize** when tasks are independent (different files, no shared state, no dependencies)
    - **Sequentialize** when tasks share files, state, or depend on each other's output
 5. **Review chain**: spec reviewer (background) > code quality reviewer (background) > verify tests

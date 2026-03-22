@@ -51,6 +51,7 @@ fi
 - Phase 2: `references/phase2-execution.md`
 - Phase 3: `references/phase3-merge.md`
 - Prompts: `prompts/implementer.md`, `prompts/spec-reviewer.md`, `prompts/code-quality-reviewer.md`, `prompts/product-reviewer.md`
+- Documentation: `prompts/llms-txt-writer.md`
 - Testing: `prompts/testing-guidelines.md`
 
 Re-read phase docs at every phase/sprint boundary (compaction erases skill content).
