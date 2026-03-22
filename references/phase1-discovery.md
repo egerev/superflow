@@ -1,144 +1,132 @@
 # Phase 1: Product Discovery (COLLABORATIVE)
 
-This phase is a conversation with the user. Take your time — rushing discovery leads to building the wrong thing.
-
 ## Step 1: Context Exploration
+Read CLAUDE.md, llms.txt, project docs, git history. Understand architecture, data model, existing features. Identify gaps.
 
-Before any questions, silently explore:
-- Read CLAUDE.md, project docs, recent git history
-- Understand current architecture, data model, existing features
-- Identify gaps between what exists and what the user is describing
+## Step 2: Best Practices & Product Research
 
-## Step 2: Best Practices Research
+Dispatch **parallel background research** using the Agent tool (`run_in_background: true` for each):
 
-Before brainstorming, launch parallel research agents to gather external context:
+```
+Agent(description: "Domain best practices research", run_in_background: true)
+  → domain best practices, relevant libraries, competitor approaches, design patterns
 
-**What to research (dispatch as background agents):**
-- Best practices in the domain (e.g., "financial analytics dashboard best practices")
-- Existing libraries/packages that solve parts of the problem
-- How analogous products solve the same problem (competitors, open-source alternatives)
-- Relevant design patterns, data models, algorithms
+Agent(description: "Independent product expert", run_in_background: true)
+  → "Analyze [project]. Propose 3-5 concrete product improvements. For each: what, why, how."
+```
 
-**Format:** Each research agent returns a brief summary. Orchestrator synthesizes into context for brainstorming. Share key findings with user.
-
-**This is NOT optional.** 5 minutes of research prevents hours of reinventing.
-
-## Step 2.5: Independent Product Expert (parallel with brainstorming)
-
-Dispatch an independent product expert to generate ideas in parallel.
-
-**If secondary provider is available** (Codex preferred):
+If secondary provider is available, use it for the product expert instead:
 ```bash
-$TIMEOUT_CMD 600 codex exec --full-auto "You are a Product Expert. Given this context about [project] and [research], propose 3-5 concrete product improvements. For each: what, why it matters, how it could work." 2>&1
+$TIMEOUT_CMD 600 $SECONDARY_PROVIDER "Analyze [project]. Propose 3-5 concrete product improvements. For each: what, why, how." 2>&1
 ```
 
-**If no secondary provider** — dispatch a background Claude Agent with the same prompt.
-An independent agent produces different ideas because it has no conversational anchoring bias.
+Wait for all background tasks to complete. If research yields insufficient results for a domain, note the gap — rely on codebase analysis and user input during brainstorming.
 
-Run IN PARALLEL with brainstorming. Two models (or two independent agents) produce different ideas.
+**NOT optional.** Synthesize findings before proceeding.
 
-## Step 3: Multi-Expert Brainstorming
+## Step 3: Present Research Findings
 
-**STOP GATE:** After research completes, your NEXT action MUST be a question or proposal
-to the user. Do NOT jump to Product Summary. Do NOT synthesize research into a ready plan.
-The point of brainstorming is to discover things the research DIDN'T cover.
+Present a brief summary of research results to the user before brainstorming. Include product expert proposals. This ensures the user sees what was discovered and can steer the conversation.
 
-**Format:** Freeflow conversation with product focus.
+## Step 4: Multi-Expert Brainstorming
 
-**Product vision focus (most important):**
-- Understand the WHY and FOR WHOM before the WHAT and HOW
-- Pull the user's vision: what does "done" look like?
-- Ask for references: apps, screenshots, examples
-- Understand scope: personal tool vs service? MVP vs long-term?
+**STOP GATE — Do NOT proceed past this step without user interaction.**
+Your next action MUST be a question or proposal to the user. Do NOT jump to Product Summary.
 
-**Rhythm: questions → proposals → questions**
-After gathering context (3-5 questions), make concrete product proposals. Let user react. This generates requirements you wouldn't have found by asking.
+- Understand WHY and FOR WHOM before WHAT and HOW
+- Rhythm: ask 3-5 questions total (one at a time), then concrete proposals, then follow-up questions
+- One question per message — wait for answer before the next
+- Proposals must be genuinely new (not rephrasing user's own words)
+- Three lenses: Product ("users expect X"), Architecture ("data model supports X"), Domain ("best practice is Y")
 
-**Proposals must be GENUINELY NEW ideas** — not rephrasing what the user already wrote in
-BACKLOG.md or told you earlier. If you can trace an idea back to the user's own words,
-it's not a brainstorm contribution. Bring ideas from: research findings, analogous products,
-architectural opportunities the user hasn't considered, or cross-domain patterns.
+## Step 5: Approaches + Recommendation
 
-**Three expert lenses** (weave into freeflow):
-- **Product:** "Users of similar apps typically expect X — should we include that?"
-- **Architecture:** "The current data model already supports X, we can leverage it"
-- **Domain:** "In [domain] apps, best practice for X is Y"
+Present 2-3 approaches with trade-offs. Lead with recommendation.
+For each approach: strengths, risks, effort level.
+**Mandatory step** — even if one approach seems obvious, present alternatives. The user must see options before Product Summary.
 
-**One question at a time.** Don't overload.
+## Step 6: Product Summary (APPROVAL GATE)
 
-## Step 4: Approaches + Recommendation
+Present to the user:
+- What we're building (feature list)
+- Problems solved
+- NOT in scope
+- Key decisions + rationale
 
-**DO NOT SKIP THIS STEP.** Even if you're confident in one approach, present at least 2
-alternatives with trade-offs. This forces you to consider options the user may prefer.
+**APPROVAL GATE:** Ask the user: "Approve this scope? I'll write the spec next."
+- User says "yes" / "go" / "approve" / approving phrase → proceed to Product Brief
+- User requests changes → update summary, re-present, ask again
+- Do NOT proceed to Step 7 without explicit approval
 
-Propose 2-3 approaches with trade-offs. Lead with your recommendation. Be opinionated.
-For each approach: what's good, what's risky, what's the effort level.
+## Step 7: Product Brief
 
-## Step 5: Product Summary (USER APPROVAL GATE)
+After approval, before the technical spec, write a lightweight product brief. This bridges product thinking and technical implementation. Include:
 
-**BEFORE writing a detailed spec**, present a Product Summary:
+- **Problem statement**: What user pain are we solving? (1-2 sentences)
+- **Jobs to be Done**: When [situation], I want to [motivation], so I can [outcome]
+- **User stories**: As a [role], I want [action] so that [benefit] (3-5 key stories)
+- **Success criteria**: How do we know this worked? (measurable outcomes)
+- **Edge cases**: What happens when things go wrong? (happy path + 2-3 failure modes)
 
-```
-## Product Summary: [Feature Name]
+Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-brief.md`. Create `docs/superflow/specs/` if it doesn't exist.
 
-### What we're building
-- [Feature 1]: [one-line description]
-- [Feature 2]: [one-line description]
-...
+This brief is shared with:
+1. Spec writers (basis for technical spec)
+2. Implementers (context for why, not just what)
+3. Reviewers (spec compliance = brief compliance)
 
-### Problems solved
-- [Problem 1]
-- [Problem 2]
+Keep it short (< 1 page). No frameworks — just clarity about what we're building and for whom.
 
-### NOT in scope
-- [Excluded item 1]
-- [Excluded item 2]
+## Step 8: Spec Document
 
-### Key decisions
-- [Decision 1]: [rationale]
-- [Decision 2]: [rationale]
-```
+Write to `docs/superflow/specs/YYYY-MM-DD-<topic>-design.md`. Reference the product brief.
 
-**Wait for user "ок" before proceeding.** This is the product approval gate.
+Include:
+- **Overview**: what is being built (reference brief)
+- **Technical design**: architecture, data model changes, API contracts
+- **File-level changes**: which files are modified/created
+- **Edge cases and error handling**: from the brief's edge cases
+- **Testing strategy**: what tests validate correctness
+- **Out of scope**: explicit boundaries
 
-## Step 6: Spec Document
+Create `docs/superflow/specs/` if it doesn't exist.
 
-```bash
-mkdir -p docs/superpowers/specs
-```
+## Step 9: Spec Review (dual-model parallel)
 
-Write spec to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
+Run two reviewers in parallel using `prompts/spec-reviewer.md`:
 
-## Step 7: Spec Review (dual-model PARALLEL)
+1. **Claude reviewer**: dispatch via Agent tool (`run_in_background: true`). Focus: spec completeness, security, architecture.
+2. **Secondary provider**: `$TIMEOUT_CMD 600 $SECONDARY_PROVIDER "REVIEW_PROMPT" 2>&1` via Bash (`run_in_background: true`).
+   No secondary provider = split-focus Claude: dispatch two background agents (Technical: completeness + security; Product: scope + YAGNI).
 
-Launch Claude + secondary provider in parallel. Use `prompts/spec-reviewer.md`.
-If no secondary provider, use split-focus: two Claude agents — one checks completeness/consistency,
-the other checks scope/YAGNI.
-Fix issues. Re-review if NEEDS_REVISION.
+Wait for both. If either returns NEEDS_REVISION: fix issues, re-run both reviews.
+Both must return PASS to proceed.
 
-## Step 8: Implementation Plan
+## Step 10: Implementation Plan
 
-```bash
-mkdir -p docs/superpowers/plans
-```
+Write to `docs/superflow/plans/YYYY-MM-DD-<topic>.md`. Create `docs/superflow/plans/` if it doesn't exist.
 
-Write plan to `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`.
+Break into sprints (independently deployable), 3-8 tasks each, each task 2-5 min. Include: files, steps, commit message.
 
-**Plan structure:**
-- Break into sprints (logical chunks, each deployable independently)
-- Each sprint = 3-8 tasks
-- Each step = 2-5 minutes of work (atomic operations)
-- Each task has: files, steps, commit message
+## Step 11: Plan Review (dual-model parallel)
 
-## Step 9: Plan Review (dual-model PARALLEL)
+Run two reviewers in parallel (same mechanism as Step 9):
 
-Same as spec review. Both reviewers must APPROVE.
+1. **Claude reviewer** (background): Is the plan achievable? Are sprints properly scoped? Are task estimates realistic? Dependencies correct?
+2. **Secondary provider** (background): Are there missing tasks? Over-engineering? Does sprint ordering make sense?
+   No secondary provider = split-focus Claude (Technical + Product lenses).
 
-## Step 10: User Approval
+Both must APPROVE. If either returns NEEDS_REVISION: fix, re-review.
 
-Present plan summary. This is the LAST interaction before autonomous execution:
-- Sprint breakdown with scope
-- Estimated PR count
-- "After approval, I'll execute all sprints and report when done."
+## Step 12: User Approval (FINAL GATE)
 
-User says "go" → Phase 2 begins. No more questions.
+Present:
+- Sprint breakdown with task counts
+- Estimated PR count (1 per sprint)
+- Merge order and dependencies
+
+**FINAL GATE:** Ask the user: "Ready to start autonomous execution? Say 'go' when ready."
+- User says "go" / "start" / "давай" / affirmative → proceed to Phase 2
+- User requests changes → update plan, re-present
+
+Before entering Phase 2: re-read `references/phase2-execution.md` and verify worktree prerequisites.
