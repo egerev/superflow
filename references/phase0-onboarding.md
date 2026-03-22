@@ -7,12 +7,29 @@ This phase is **conversational** — talk to the user, don't just execute silent
 
 ## Detection: Is This a First Run?
 
-Check for Superflow markers:
-1. `CLAUDE.md` exists AND contains `superflow` mention → **skip Phase 0**
-2. `docs/superpowers/` directory exists with specs/plans → **skip Phase 0**
-3. `.par-evidence.json` exists → **skip Phase 0**
+Phase 0 leaves an **exact marker** in each file it touches:
 
-If none found → first run. Begin onboarding.
+```
+<!-- superflow:onboarded:YYYY-MM-DD -->
+```
+
+Check three artifacts:
+
+| # | Check | If missing |
+|---|-------|-----------|
+| 1 | `CLAUDE.md` contains `<!-- superflow:onboarded` | Run full Phase 0 |
+| 2 | `llms.txt` contains `<!-- superflow:onboarded` | Partial: audit/create llms.txt only |
+| 3 | `docs/superflow/project-health-report.md` exists | Partial: generate health report only |
+
+**Decision logic:**
+- **All 3 present** → skip Phase 0, go to Phase 1
+- **CLAUDE.md marker missing** → full Phase 0 (first run)
+- **CLAUDE.md marker present, but llms.txt or health report missing** → partial onboarding (only the missing pieces)
+
+**NOT valid markers** (these can exist without Superflow):
+- The word "superflow" in CLAUDE.md (could be mentioned casually)
+- `docs/superflow/` directory alone (could be created by user)
+- `.par-evidence.json` (created by Phase 2, not Phase 0)
 
 ## Step 1: Greet & Announce
 
@@ -59,7 +76,7 @@ Show the user the results conversationally — like a colleague who just explore
 3. ...
 ```
 
-Save report to `docs/superpowers/project-health-report.md` (in English).
+Save report to `docs/superflow/project-health-report.md` (in English).
 
 ## Step 4: llms.txt — Project Documentation for All LLMs
 
@@ -155,9 +172,17 @@ If user declines: continue, but warn that Phase 2 will require manual approval f
 
 ## Step 7: Leave Markers
 
-After Phase 0 completes:
-1. Ensure CLAUDE.md mentions Superflow (so future runs detect it)
-2. The `docs/superpowers/` directory serves as the primary artifact marker
+After Phase 0 completes, write the **same marker** in every file you touched:
+
+```
+<!-- superflow:onboarded:YYYY-MM-DD -->
+```
+
+1. **CLAUDE.md**: append at the very end
+2. **llms.txt** (if created/updated): append at the very end
+3. **docs/superflow/project-health-report.md**: created as part of Step 3
+
+All three must exist for Phase 0 to be fully skipped on next run.
 
 ## Step 8: Hand Off to Phase 1
 

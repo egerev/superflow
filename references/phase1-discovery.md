@@ -41,7 +41,7 @@ After approval, before the technical spec, write a lightweight product brief. Th
 - **Success criteria**: How do we know this worked? (measurable outcomes)
 - **Edge cases**: What happens when things go wrong? (happy path + 2-3 failure modes)
 
-Save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-brief.md`.
+Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-brief.md`.
 
 This brief is shared with:
 1. Spec writers (basis for technical spec)
@@ -51,13 +51,13 @@ This brief is shared with:
 Keep it short (< 1 page). No frameworks — just clarity about what we're building and for whom.
 
 ## Step 6: Spec Document
-Write to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`. Reference the product brief.
+Write to `docs/superflow/specs/YYYY-MM-DD-<topic>-design.md`. Reference the product brief.
 
 ## Step 7: Spec Review (dual-model parallel)
 Claude + secondary provider in parallel using `prompts/spec-reviewer.md`. No secondary provider = split-focus (completeness vs scope/YAGNI). Fix issues, re-review if NEEDS_REVISION.
 
 ## Step 8: Implementation Plan
-Write to `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`. Break into sprints (independently deployable), 3-8 tasks each, each task 2-5 min. Include: files, steps, commit message.
+Write to `docs/superflow/plans/YYYY-MM-DD-<topic>.md`. Break into sprints (independently deployable), 3-8 tasks each, each task 2-5 min. Include: files, steps, commit message.
 
 ## Step 9: Plan Review (dual-model parallel)
 Same as spec review. Both must APPROVE.
