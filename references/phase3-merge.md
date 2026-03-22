@@ -1,31 +1,48 @@
 # Phase 3: Merge (USER-INITIATED)
 
-Triggered when user says "merge", "мёрдж", or approves merge after the Completion Report.
+Triggered when user says "merge", "мёрдж", "мерж", or gives clear affirmative response (e.g., "go ahead", "do it", "yes") after the Completion Report.
 
 ## Pre-Merge Checklist
 
 Before merging any PR:
 1. **CI must pass** on all PRs — check with `gh pr checks <number>`
 2. **No unresolved review comments** — check with `gh pr view <number>`
-3. **CLAUDE.md is up to date** — update with new modules, files, conventions from this session
-4. **BACKLOG.md is up to date** — mark completed items, add discovered items
+3. **CLAUDE.md is up to date** — audit against current codebase:
+   - New files/modules added during this session are documented
+   - New commands (build/test/lint) are listed
+   - Removed or renamed files are cleaned up
+   - Use `prompts/claude-md-writer.md` for conventions
+
+## Documentation Update (pre-merge)
+
+Before the first merge, create a dedicated documentation commit on the last sprint branch:
+1. Update `CLAUDE.md` with new/changed modules, files, conventions
+2. Update `llms.txt` if project structure changed
+3. Push the doc update, wait for CI to pass again
 
 ## Merge Order
+
+Use the PR list and merge order from the Phase 2 Completion Report. If the report is unavailable (context compaction), enumerate open PRs: `gh pr list --state open --author @me --json number,title,headRefName --jq 'sort_by(.number)'`
 
 PRs merge sequentially in sprint order (Sprint 1 first, then Sprint 2, etc.):
 
 ```
 for each PR in sprint order:
+  0. Check PR state: `gh pr view <number> --json state -q '.state'`
+     - If "MERGED": skip, log as already merged
+     - If "CLOSED": warn user, skip
+     - If "OPEN": proceed with merge
   1. gh pr checks <number> — verify CI green
-  2. git checkout main && git pull
-  3. gh pr merge <number> --rebase --delete-branch
-  4. If conflict:
-     a. git checkout <branch>
-     b. git rebase main
-     c. Fix conflicts
-     d. git push --force-with-lease
-     e. Wait for CI, then merge
-  5. Verify merge succeeded
+  2. gh pr merge <number> --rebase --delete-branch
+  3. If merge fails due to conflict:
+     a. git fetch origin main
+     b. git checkout <branch>
+     c. git rebase origin/main
+     d. Fix conflicts, commit
+     e. git push --force-with-lease  # Safe: required after rebase
+     f. Wait for CI, then retry step 2
+  4. Verify: `gh pr view <number> --json state -q '.state'` must return "MERGED"
+  5. git pull origin main  # sync local main
 ```
 
 ## Rules
@@ -33,16 +50,21 @@ for each PR in sprint order:
 - **Rebase strategy**: always `--rebase` to keep linear history
 - **Delete branch after merge**: `--delete-branch`
 - **One at a time**: merge sequentially, never parallel
-- **CI gate**: never merge with failing checks — fix first
-- **Conflict resolution**: rebase onto latest main, fix conflicts, force-push with lease, wait for CI
+- **CI gate**: never merge with failing checks — fix first (see CI Failure below)
+- **Force-push after rebase is approved**: `git push --force-with-lease` is the standard post-rebase push and is explicitly permitted in Phase 3 conflict resolution
 - **Worktree cleanup**: after all PRs merged, `git worktree prune`
+- **Artifact cleanup**: after all PRs merged, remove `.par-evidence.json` from the working directory (if present). Do NOT commit removal — these are ephemeral gate artifacts.
 
-## Documentation Update (pre-merge)
+## CI Failure During Merge
 
-Before the first merge, commit documentation updates to the last sprint branch:
-1. Update `CLAUDE.md` with new/changed modules, files, conventions
-2. Update `BACKLOG.md` with completed and discovered items
-3. Push the doc update, wait for CI
+If `gh pr checks <number>` shows failing checks:
+1. Identify the failing check: `gh pr checks <number>`
+2. Check out the branch: `git checkout <branch>`
+3. Diagnose: read CI logs, reproduce locally if possible
+4. Fix, commit, push
+5. Wait for CI to pass (poll `gh pr checks <number>`, max 5 minutes)
+6. If CI still fails after 2 fix attempts: stop and report to user with error details
+7. Resume merge sequence from the failed PR
 
 ## Post-Merge Report
 
@@ -51,11 +73,15 @@ After all PRs are merged:
 ```
 ## Merge Complete
 
-- Merged: PR #X, #Y, #Z (in order)
+- Merged: PR #X (Sprint 1: [title]), #Y (Sprint 2: [title]), #Z (Sprint 3: [title])
 - All CI checks: passed
-- Documentation: updated
+- Tests: [total passed/failed/skipped across all sprints]
+- Documentation: updated (CLAUDE.md, llms.txt)
 - Branches: cleaned up
 - Worktrees: pruned
+- Known issues / follow-ups: [from Completion Report, or "none"]
 ```
 
-Send via Telegram if MCP connected.
+Sync local main: `git checkout main && git pull origin main`
+
+Send via Telegram if MCP connected (detected by availability of `mcp__plugin_telegram_telegram__reply` tool — see SKILL.md Startup Checklist).

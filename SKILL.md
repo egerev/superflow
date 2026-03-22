@@ -7,10 +7,10 @@ description: "Use when user says 'superflow', 'суперфлоу', or asks for 
 
 Four phases: onboarding, discovery, execution, merge.
 
-Phase 0 (auto, first run only): Detect project > Analyze codebase > Bootstrap/update CLAUDE.md > Health report
-Phase 1 (with user): Context > Research > Brainstorm > Product Summary (approval) > Spec > Plan
-Phase 2 (autonomous): Sprint N (subagent + worktree) > PAR > PR #N > repeat > Demo Day Report
-Phase 3 (user-initiated): Update docs > Merge PRs sequentially (rebase) > Cleanup
+Phase 0 (auto, first run only): Detect markers > Analyze codebase (4 parallel agents) > Health report > Audit llms.txt & CLAUDE.md > Permissions > Markers > Checklist
+Phase 1 (with user, 12 steps): Context > Research (parallel agents) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Summary (APPROVAL) > Brief > Spec > Spec Review (dual-model) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE)
+Phase 2 (autonomous, 11 steps per sprint): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers > Internal review > Test verification > PAR > Push+PR > Cleanup > Telegram
+Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase merge (with CI failure handling) > Post-merge report
 
 Durable rules live in `.claude/rules/superflow-enforcement.md` (survives compaction).
 
