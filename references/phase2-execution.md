@@ -8,7 +8,7 @@ Execute continuously. Never ask, never pause. Orchestrator never writes code dir
 2. **Telegram update** (if MCP connected): "Starting sprint N: [title]"
 3. **Worktree**: verify `.worktrees/` is gitignored (`git check-ignore -q .worktrees || echo '.worktrees/' >> .gitignore`), then `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`
 4. **Baseline tests** in worktree: run full test suite, record output. If tests fail on baseline, stop and report — do not build on a broken base.
-5. **Dispatch implementers** via Agent tool (`mode: bypassPermissions`, `model: sonnet` for mechanical tasks). Use `prompts/implementer.md`. Include `llms.txt` content in agent context (if exists) — this gives implementers project architecture understanding.
+5. **Dispatch implementers** via Agent tool (`model: sonnet` for mechanical tasks; permissions are handled by `settings.json` from Phase 0 Step 7). Use `prompts/implementer.md`. Include `llms.txt` content in agent context (if exists) — this gives implementers project architecture understanding.
    - **Parallelize** when tasks are independent (different files, no shared state, no dependencies)
    - **Sequentialize** when tasks share files, state, or depend on each other's output
 6. **Internal review** (pre-PAR, scale by complexity — see Review Optimization below):
