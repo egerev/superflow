@@ -26,6 +26,7 @@ Then proceed to analysis.
 Dispatch parallel background agents:
 - **Architecture agent**: directory structure, key files, frameworks, dependencies, data model
 - **Code quality agent**: hotspots, complexity, test coverage, linting setup
+- **DevOps agent**: CI/CD pipeline, .gitignore completeness, env management, deployment setup
 - **Documentation agent**: existing docs (README, CLAUDE.md, llms.txt, comments density, API docs)
 
 Synthesize into a concise project profile.
@@ -117,7 +118,15 @@ Tell user: > "Updated CLAUDE.md — fixed [brief list]."
 ### If CLAUDE.md is up to date:
 No action needed.
 
-## Step 6: Leave Markers
+## Step 6: Verify Enforcement Rules
+
+Check if `~/.claude/rules/superflow-enforcement.md` exists:
+- If missing: copy from the skill directory (`superflow-enforcement.md` → `~/.claude/rules/`)
+- If exists: verify it's up to date (compare with skill's version)
+
+This file survives context compaction and is critical for Phase 2 discipline.
+
+## Step 7: Leave Markers
 
 After Phase 0 completes:
 1. Ensure CLAUDE.md mentions Superflow (so future runs detect it)

@@ -6,16 +6,23 @@ Lightweight Claude Code skill for autonomous product-to-production development. 
 
 ## How It Works
 
-**Phase 1 — You talk, agent proposes.** Collaborative product discovery: research, brainstorming, spec, plan. ~15-20 min.
+**Phase 0 — Onboarding** (interactive, first run only). Analyzes the project, creates `llms.txt` + `CLAUDE.md`, produces a health report with tech debt analysis. Skipped on subsequent runs.
 
-**Phase 2 — Agent executes autonomously.** PR per sprint, git worktrees, dual-model reviews, TDD. Zero interaction until done.
+**Phase 1 — Discovery** (interactive). Collaborative product discovery: research, brainstorming, product brief, spec, plan. ~15-20 min.
+
+**Phase 2 — Execution** (autonomous, zero interaction). PR per sprint, git worktrees, dual-model reviews, TDD. Reports results in Demo Day format.
+
+**Phase 3 — Merge** (interactive, user-initiated). Sequential rebase merges with CI gate, documentation update, cleanup.
 
 ```
 You: "superflow — upgrade analytics"
-Agent: [research → brainstorm → spec → plan] "4 sprints, 28 steps. Go?"
+Agent: [Phase 0: skip — already onboarded]
+Agent: [Phase 1: research → brainstorm → brief → spec → plan] "4 sprints, 28 steps. Go?"
 You: "go"
-Agent: [Sprint 1 → PR #1] [Sprint 2 → PR #2] [Sprint 3 → PR #3] [Sprint 4 → PR #4]
-Agent: "Done. 4 PRs ready, merge in order."
+Agent: [Phase 2: Sprint 1 → PR #1 → Sprint 2 → PR #2 → Sprint 3 → PR #3 → Sprint 4 → PR #4]
+Agent: "Done. 4 PRs ready. Say 'merge' to start Phase 3."
+You: "merge"
+Agent: [Phase 3: update docs → merge PRs → cleanup]
 ```
 
 ## When to Use
@@ -31,8 +38,9 @@ Agent: "Done. 4 PRs ready, merge in order."
 - **TDD** — write failing test → verify fail → implement → verify pass
 - **Dual-model reviews** — Claude + secondary provider (Codex/Gemini/other); split-focus Claude fallback
 - **PAR gate** — Product Acceptance Review before every push, `.par-evidence.json` required
+- **llms.txt** — standard project documentation for all LLMs (llmstxt.org)
+- **Product brief** — Jobs to be Done + user stories before technical spec
 - **Verification discipline** — no claims without pasted test output
-- **Root cause debugging** — investigate before fixing; 3+ failed fixes = question architecture
 - **Max parallelism** — parallelize independent tasks, sequentialize dependent ones
 
 ## Install
@@ -42,7 +50,23 @@ git clone https://github.com/egerev/superflow.git
 ln -s $(pwd)/superflow ~/.claude/skills/superflow
 ```
 
-Copy `superflow-enforcement.md` to `~/.claude/rules/` (survives context compaction).
+Phase 0 will automatically verify that `superflow-enforcement.md` is copied to `~/.claude/rules/` on first run. If missing, it copies it for you.
+
+### Recommended Permissions
+
+Add to your `~/.claude/settings.json` to reduce permission prompts:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(git worktree *)",
+      "Bash(gh pr *)",
+      "Bash(gh pr checks *)"
+    ]
+  }
+}
+```
 
 ## Requirements
 
@@ -56,10 +80,12 @@ Copy `superflow-enforcement.md` to `~/.claude/rules/` (survives context compacti
 | File | Purpose |
 |------|---------|
 | `SKILL.md` | Thin router — startup checklist, phase references |
-| `references/phase1-discovery.md` | 10-step discovery checklist |
-| `references/phase2-execution.md` | Sprint execution flow |
-| `prompts/*.md` | Agent templates (implementer, 3 reviewers, testing) |
-| `~/.claude/rules/superflow-enforcement.md` | Durable rules (survives compaction) |
+| `references/phase0-onboarding.md` | First-run onboarding (interactive) |
+| `references/phase1-discovery.md` | Product discovery (interactive) |
+| `references/phase2-execution.md` | Sprint execution (autonomous) |
+| `references/phase3-merge.md` | Merge flow (user-initiated) |
+| `prompts/*.md` | Agent templates (implementer, reviewers, doc writers) |
+| `superflow-enforcement.md` | Durable rules (copy to `~/.claude/rules/`) |
 
 ## Origin
 
