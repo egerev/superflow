@@ -168,15 +168,15 @@ def build_prompt(sprint: dict, repo_root: str) -> str:
     else:
         sprint_plan = f"(plan file not found: {plan_file})"
 
-    # Fill placeholders
-    result = template.format(
-        sprint_id=sprint["id"],
-        sprint_title=sprint["title"],
-        sprint_plan=sprint_plan,
-        claude_md=claude_md,
-        llms_txt=llms_txt,
-        branch=sprint["branch"],
-    )
+    # Fill placeholders using str.replace() instead of str.format()
+    # because templates contain literal JSON braces
+    result = template
+    result = result.replace("{sprint_id}", str(sprint["id"]))
+    result = result.replace("{sprint_title}", sprint["title"])
+    result = result.replace("{sprint_plan}", sprint_plan)
+    result = result.replace("{claude_md}", claude_md)
+    result = result.replace("{llms_txt}", llms_txt)
+    result = result.replace("{branch}", sprint["branch"])
     return result
 
 

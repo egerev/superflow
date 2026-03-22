@@ -52,15 +52,16 @@ def replan(queue, queue_path, plan_path, repo_root, checkpoints_dir):
         with open(plan_path) as f:
             plan_content = f.read()
 
-    prompt = template.format(
-        completed_sprints=json.dumps(completed_summaries, indent=2),
-        remaining_sprints=json.dumps(
-            [{"id": s["id"], "title": s["title"], "depends_on": s["depends_on"]}
-             for s in remaining],
-            indent=2,
-        ),
-        plan_content=plan_content,
-    )
+    # Use string replacement instead of str.format() because the template
+    # contains literal JSON braces that conflict with Python format strings
+    prompt = template
+    prompt = prompt.replace("{completed_sprints}", json.dumps(completed_summaries, indent=2))
+    prompt = prompt.replace("{remaining_sprints}", json.dumps(
+        [{"id": s["id"], "title": s["title"], "depends_on": s["depends_on"]}
+         for s in remaining],
+        indent=2,
+    ))
+    prompt = prompt.replace("{plan_content}", plan_content)
 
     # 4. Launch claude subprocess
     try:
