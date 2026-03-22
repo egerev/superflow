@@ -14,7 +14,7 @@ All notable changes to superflow will be documented in this file.
 - **New prompts**: `llms-txt-writer.md`, `claude-md-writer.md` with best practices
 
 ### Changed
-- **Fully independent from Superpowers**: Superflow is now a standalone skill. Context weight evolution: original Superpowers-integrated SKILL.md was ~19KB monolithic → v1.4.0 restructured to ~13KB modular → v2.0.0 is ~30KB total but with 4 phases, 8 prompts, 4 references (was 2 phases, 5 prompts, 2 references). The Superpowers dependency was removed in v1.4.0 (PR #4).
+- **Fully independent from Superpowers**: v1.0.0 loaded 7 Superpowers skills (~113KB) + own SKILL.md (~19KB) = ~132KB total context. v2.0.0 is ~30KB with 2x more features — **77% context reduction** while doubling capability (4 phases, 8 prompts, 4 references vs 2 phases, 5 prompts, 2 references). Superpowers dependency removed in v1.4.0 (PR #4).
 - Phase 0: CLAUDE.md auto-updates silently (no approval needed)
 - Phase 0: all generated documentation must be in English
 - Phase 0: 4 parallel analysis agents (architecture, code quality, DevOps, documentation)
