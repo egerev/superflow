@@ -14,12 +14,25 @@ All notable changes to superflow will be documented in this file.
 - **New prompts**: `llms-txt-writer.md`, `claude-md-writer.md` with best practices
 
 ### Changed
+- **Fully independent from Superpowers**: Superflow is now a standalone skill with its own architecture. Original Superpowers was ~41KB monolithic; Superflow v2.0.0 is ~30KB modular (25% lighter) with 2x more features (4 phases, 8 prompts, 4 references).
 - Phase 0: CLAUDE.md auto-updates silently (no approval needed)
 - Phase 0: all generated documentation must be in English
 - Phase 0: 4 parallel analysis agents (architecture, code quality, DevOps, documentation)
 - Phase 2: implementers read `llms.txt` as first step for project context
 - Phase 2: documentation update moved to Phase 3 (pre-merge)
 - README: complete overhaul with all 4 phases, interaction labels, permissions guide
+
+## [1.4.0] - 2026-03-22
+
+### Changed
+- **Context weight reduced by 68%** (41KB → 13KB): monolithic SKILL.md split into modular references + prompts (#4)
+- **Provider-agnostic reviews**: replaced Codex-specific logic with generic secondary provider detection (Codex > Gemini > Aider > split-focus Claude) (#3)
+- **Slim README**: condensed to essentials, moved best practices to separate reference (#5)
+
+### Added
+- Compaction-resilient architecture: durable rules in `~/.claude/rules/`, thin SKILL.md router
+- "When to Use" scope guidance
+- PAR enforcement with concrete 6-step algorithm + `.par-evidence.json` gate
 
 ## [1.3.0] - 2026-03-22
 
