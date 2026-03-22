@@ -47,10 +47,21 @@ Record: `{"provider":"split-focus",...}`
 - Agent blocked: re-dispatch with more context. 2 fails = implement manually
 - Never stop to ask the user. Accumulate issues, report at end.
 
-## Documentation Update (after last sprint's PR)
-1. Update CLAUDE.md with new modules/files
-2. Update BACKLOG.md with completed and discovered items
-3. Commit documentation to the last sprint's branch
+## Completion Report (Demo Day Format)
 
-## Completion Report
-PRs created (with numbers), verification evidence (test counts, PAR status), known issues, merge order.
+Present a product-oriented summary — like a demo day, not a tech log. For each sprint:
+
+### Per-Sprint Block
+- **Sprint N: [Product-level title]** (e.g., "Inline Transaction Editing")
+  - What it does for the user (1-2 sentences, product language)
+  - Key changes: bullet list of user-visible features/improvements
+  - PR: `#NNN` — link, status (open/merged), CI status
+  - PAR: ACCEPTED/NEEDS_FIXES
+  - Tests: count (passed/failed/skipped)
+
+### Summary Section
+- Total PRs: N
+- All tests passing: yes/no
+- Known issues or follow-ups (if any)
+- **Merge order** (sequential, with dependencies noted)
+- Suggested next action: "Ready to merge — say 'merge' to start Phase 3"

@@ -1,14 +1,16 @@
 ---
 name: superflow
-description: "Use when user says 'superflow', 'суперфлоу', or asks for full dev workflow. Two phases: (1) collaborative Product Discovery with multi-expert brainstorming, (2) fully autonomous execution with PR-per-sprint, git worktrees, dual-model reviews, max parallelism, and verification discipline."
+description: "Use when user says 'superflow', 'суперфлоу', or asks for full dev workflow. Four phases: (0) project onboarding & CLAUDE.md bootstrap, (1) collaborative Product Discovery with multi-expert brainstorming, (2) fully autonomous execution with PR-per-sprint, git worktrees, dual-model reviews, max parallelism, and verification discipline, (3) merge with documentation update."
 ---
 
 # Superflow
 
-Two phases: collaborative discovery, then autonomous execution.
+Four phases: onboarding, discovery, execution, merge.
 
+Phase 0 (auto, first run only): Detect project > Analyze codebase > Bootstrap/update CLAUDE.md > Health report
 Phase 1 (with user): Context > Research > Brainstorm > Product Summary (approval) > Spec > Plan
-Phase 2 (autonomous): Sprint N (subagent + worktree) > PAR > PR #N > repeat > Report
+Phase 2 (autonomous): Sprint N (subagent + worktree) > PAR > PR #N > repeat > Demo Day Report
+Phase 3 (user-initiated): Update docs > Merge PRs sequentially (rebase) > Cleanup
 
 Durable rules live in `.claude/rules/superflow-enforcement.md` (survives compaction).
 
@@ -19,7 +21,8 @@ Durable rules live in `.claude/rules/superflow-enforcement.md` (survives compact
 3. Detect timeout: `gtimeout` > `timeout` > perl fallback
 4. Detect Telegram MCP: `mcp__plugin_telegram_telegram__reply`
 5. Detect mode: existing code = Enhancement, empty repo = Greenfield
-6. Read CLAUDE.md and project docs
+6. **Run Phase 0** if first run (see detection in `references/phase0-onboarding.md`)
+7. Read CLAUDE.md and project docs
 
 ## Secondary Provider Detection
 
@@ -43,8 +46,10 @@ fi
 
 ## Phase References
 
+- Phase 0: `references/phase0-onboarding.md` (first run only)
 - Phase 1: `references/phase1-discovery.md`
 - Phase 2: `references/phase2-execution.md`
+- Phase 3: `references/phase3-merge.md`
 - Prompts: `prompts/implementer.md`, `prompts/spec-reviewer.md`, `prompts/code-quality-reviewer.md`, `prompts/product-reviewer.md`
 - Testing: `prompts/testing-guidelines.md`
 

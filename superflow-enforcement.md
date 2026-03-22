@@ -41,6 +41,14 @@ If you think any of these, STOP and do the thing:
 
 Before writing a spec, present Product Summary (features, problems solved, out of scope). Wait for user approval.
 
+## Phase 0 Gate
+
+On first run (no Superflow artifacts detected), Phase 0 is mandatory. Do not skip to Phase 1 without completing onboarding. See `references/phase0-onboarding.md`.
+
+## Phase 3 Gate
+
+After Phase 2 Completion Report, do not merge without user saying "merge" / "мёрдж". Merge follows strict order: sequential, rebase, CI green, docs updated. See `references/phase3-merge.md`.
+
 ## Telegram Progress
 
 When MCP connected: send short updates at sprint start, PR created, errors/blockers, completion. Acknowledge receipt before background work.
