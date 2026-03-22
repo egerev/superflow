@@ -20,7 +20,7 @@ Most AI coding workflows are either too hands-on (you babysit every step) or too
 
 **Phase 1 — You talk, agent listens and proposes.** Freeflow product conversation with research, expert lenses, and proactive suggestions. The agent doesn't just ask questions — it proposes ideas, challenges assumptions, and brings best practices from the domain. This phase takes time, and that's intentional.
 
-**Phase 2 — You say "go", agent executes autonomously.** Zero interaction until done. The agent creates a PR per sprint using git worktrees for isolation, uses parallel subagents for implementation, runs dual-provider reviews (Claude + Codex), enforces test-first development, requires verification evidence before any completion claim, and does product acceptance testing. You get a report with ready-to-merge PRs at the end.
+**Phase 2 — You say "go", agent executes autonomously.** Zero interaction until done. The agent creates a PR per sprint using git worktrees for isolation, uses parallel subagents for implementation, runs dual-model reviews (Codex preferred, with fallbacks), enforces test-first development, requires verification evidence before any completion claim, and does product acceptance testing. You get a report with ready-to-merge PRs at the end.
 
 ## What a Session Looks Like
 
@@ -31,7 +31,7 @@ Agent: [silently reads codebase, launches research agents]
 Agent: [asks about your vision, proposes ideas from competitor analysis]
 Agent: [presents 2-3 approaches, recommends one]
 Agent: [presents design section by section]
-Agent: [writes spec, reviews with Claude + Codex in parallel, fixes issues]
+Agent: [writes spec, reviews with dual-model reviewers in parallel, fixes issues]
 Agent: [writes implementation plan with bite-sized steps, reviews, fixes]
 Agent: "Plan ready — 4 sprints, 28 steps, ~4 PRs. Go?"
 
@@ -60,9 +60,9 @@ Agent: "Done. 4 PRs ready:
 | 4 | Approaches + recommendation | **Yes — choice** |
 | 5 | Design presentation | **Yes — discussion** |
 | 6 | Write spec document | No |
-| 7 | Spec review (Claude + Codex parallel) | No |
+| 7 | Spec review (dual-model parallel) | No |
 | 8 | Write implementation plan (bite-sized steps) | No |
-| 9 | Plan review (Claude + Codex parallel) | No |
+| 9 | Plan review (dual-model parallel) | No |
 | 10 | Your approval to start | **Yes — "go"** |
 
 4 interactive steps, 6 autonomous. Your involvement is one continuous conversation (steps 3-5) plus one "go" (step 10).
@@ -86,9 +86,9 @@ For each Sprint:
 +-- Run baseline tests (verify clean starting state)
 +-- Implement tasks (maximum parallel agents, TDD cycle)
 |   +-- Per task: write failing test -> verify fail -> implement -> verify pass
-|   +-- Spec review -> code quality review (Claude + Codex)
+|   +-- Spec review -> code quality review (dual-model)
 |   +-- Verify: run tests, paste output as evidence
-+-- Product Acceptance Review (Claude + Codex parallel)
++-- Product Acceptance Review (dual-model parallel)
 |   +-- Verify implementation matches spec intent
 +-- Run full test suite, push, create PR
 +-- Clean up worktree
@@ -102,7 +102,7 @@ For each Sprint:
 - **Test-first development** — write failing test, verify failure, implement, verify pass. Never skip steps
 - **Verification discipline** — no completion claims without actual test output as evidence
 - **Max parallelism** — 5 agents if 5 tasks are independent. Never serialize independent work
-- **Dual-provider reviews** — Claude + Codex review in parallel. Different models catch different bugs
+- **Dual-model reviews** — Claude + secondary provider (Codex preferred) in parallel; split-focus Claude fallback when no provider available
 - **Product acceptance** — after code review passes, product agents verify the implementation matches the *intent* of the spec
 - **Systematic debugging** — when tests fail, investigate root cause before attempting fixes
 - **Never stops** — accumulates issues and reports at the end. Never asks "should I continue?"
@@ -110,7 +110,7 @@ For each Sprint:
 ## 6 Rules
 
 1. **NEVER pause** during autonomous execution
-2. **ALWAYS use Codex** for reviews (parallel with Claude)
+2. **ALWAYS use dual-model reviews** — Codex preferred, other providers as fallback, split-focus Claude as last resort
 3. **PR per sprint** — smaller PRs, easier to review
 4. **Maximum parallelism** — use all available agents
 5. **Proactive product thinking** — propose ideas, don't just ask questions
@@ -123,11 +123,11 @@ superflow uses the user's default model for planning and review (where critical 
 | Phase | Task | Model | Reasoning |
 |-------|------|-------|-----------|
 | Phase 1 | Brainstorming, spec, plan | Opus (recommended) | ultrathink for deep reasoning |
-| Phase 1 | Codex product ideas | Codex default | Parallel brainstorming partner |
+| Phase 1 | Independent product expert | Secondary provider (Codex preferred) | Parallel brainstorming partner |
 | Phase 2 | Implementation agents | Sonnet | Standard — plan is detailed enough |
 | Phase 2 | Code quality review | Opus (recommended) | ultrathink for critical analysis |
 | Phase 2 | Product acceptance | Opus (recommended) | ultrathink for intent verification |
-| Phase 2 | Codex reviews | Codex default | xhigh reasoning by default |
+| Phase 2 | Secondary provider reviews | Codex default (or other) | Cross-model diversity |
 
 **Reasoning depth:** superflow uses `ultrathink` in prompts for spec review, plan review, and product acceptance — triggering extended thinking regardless of user's default reasoning effort setting. Implementation agents use standard reasoning since the plan is already detailed.
 
@@ -145,7 +145,7 @@ claude --dangerously-skip-permissions
 
 **Reasoning effort:** Set to `high` or `max` via `/effort` in Claude Code. superflow adds `ultrathink` to critical prompts on top of this.
 
-**Codex:** Runs with `--full-auto` by default (sandboxed to workspace).
+**Secondary providers:** Codex runs with `--full-auto` by default. Other providers use their non-interactive mode.
 
 ## Safety Warning
 
@@ -156,7 +156,7 @@ superflow runs in fully autonomous mode during Phase 2 — it creates branches, 
 - **Disposable branch** — always works on feature branches, never commits to main directly
 - **Review before merge** — PRs are created but never auto-merged; you review and merge manually
 
-`--dangerously-skip-permissions` disables all safety prompts. `--full-auto` gives Codex write access to your workspace. Only use these in environments you're comfortable with.
+`--dangerously-skip-permissions` disables all safety prompts. `--full-auto` gives Codex write access to your workspace. Only use in environments you're comfortable with.
 
 ## Install
 
@@ -174,9 +174,9 @@ cp superflow/prompts/*.md ~/.claude/skills/superflow/prompts/
 ## Requirements
 
 - **Claude Code CLI** — the host environment
-- **Codex CLI** (optional but recommended) — `npm install -g @openai/codex` + `OPENAI_API_KEY` env var. Enables dual-provider reviews. Without Codex, superflow falls back to two Claude agents with split review focus (technical vs product) instead of skipping reviews
+- **Secondary provider CLI** (optional, recommended) — Codex preferred (`npm install -g @openai/codex` + `OPENAI_API_KEY`), but any CLI-based LLM works (Gemini CLI, Aider, etc.). Enables dual-model reviews. Without one, superflow falls back to two Claude agents with split review focus
 - **GitHub CLI** (`gh`) — for PR creation
-- **macOS users**: `brew install coreutils` provides `gtimeout` for Codex timeout management. If coreutils is unavailable, superflow falls back to a Perl-based timeout (`perl -e 'alarm N; exec @ARGV'`) which works on any system with Perl (including stock macOS)
+- **macOS users**: `brew install coreutils` provides `gtimeout` for timeout management. If unavailable, superflow falls back to Perl-based timeout (`perl -e 'alarm N; exec @ARGV'`)
 
 ## Files
 
@@ -185,8 +185,8 @@ cp superflow/prompts/*.md ~/.claude/skills/superflow/prompts/
 | `SKILL.md` | Main skill definition — orchestrator loaded by Claude Code |
 | `prompts/implementer.md` | Implementation agent template with TDD enforcement |
 | `prompts/spec-reviewer.md` | Spec compliance reviewer with calibration rules |
-| `prompts/code-quality-reviewer.md` | Code quality reviewer with anti-noise rules + Codex template |
-| `prompts/product-reviewer.md` | Product acceptance reviewer + Codex template |
+| `prompts/code-quality-reviewer.md` | Code quality reviewer with anti-noise rules + secondary provider/split-focus templates |
+| `prompts/product-reviewer.md` | Product acceptance reviewer + secondary provider/split-focus templates |
 | `prompts/testing-guidelines.md` | Testing anti-patterns and best practices reference |
 
 ## Relationship with Superpowers
@@ -206,7 +206,7 @@ superflow is built on top of [Superpowers](https://github.com/obra/superpowers) 
 ### What superflow adds
 - **Two-phase architecture** — collaborative discovery, then fully autonomous execution
 - **Context drift prevention** — checkpoint re-reads, self-check questions, sprint checklists
-- **Dual-model reviews** — Claude + Codex in parallel ("two models catch more bugs than one")
+- **Dual-model reviews** — Claude + secondary provider in parallel, split-focus fallback ("two reviewers catch more bugs than one")
 - **Product Acceptance Review** — 3rd review stage verifying spec *intent*, not just code quality
 - **PR per sprint** — smaller, reviewable, independently deployable PRs
 - **Best practices research** — parallel research agents before brainstorming
@@ -227,7 +227,7 @@ Built during a real session: analytics engine for a family finance tracker. 16 t
 |------|--------------|
 | Never pause | User had to ask 3 times to stop confirming |
 | PR per sprint | 20-commit PR was too big to review |
-| Always use Codex | Rule existed but wasn't enforced — Codex was never invoked |
+| Always use dual-model reviews | Rule existed but wasn't enforced — second reviewer was never invoked |
 | Proactive thinking | Brainstorming was one-sided — only questions, no proposals |
 | Product acceptance | Code passed technical review but missed product intent |
 | Verification evidence | Agent claimed "tests pass" without running them |

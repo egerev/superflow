@@ -23,15 +23,19 @@ Before brainstorming, launch parallel research agents to gather external context
 
 **This is NOT optional.** 5 minutes of research prevents hours of reinventing.
 
-## Step 2.5: Codex as Product Expert (parallel with brainstorming)
+## Step 2.5: Independent Product Expert (parallel with brainstorming)
 
-If Codex is available, dispatch it to generate product ideas independently:
+Dispatch an independent product expert to generate ideas in parallel.
 
+**If secondary provider is available** (Codex preferred):
 ```bash
 $TIMEOUT_CMD 600 codex exec --full-auto "You are a Product Expert. Given this context about [project] and [research], propose 3-5 concrete product improvements. For each: what, why it matters, how it could work." 2>&1
 ```
 
-Run IN PARALLEL with brainstorming. Two models produce different ideas.
+**If no secondary provider** — dispatch a background Claude Agent with the same prompt.
+An independent agent produces different ideas because it has no conversational anchoring bias.
+
+Run IN PARALLEL with brainstorming. Two models (or two independent agents) produce different ideas.
 
 ## Step 3: Multi-Expert Brainstorming
 
@@ -105,9 +109,11 @@ mkdir -p docs/superpowers/specs
 
 Write spec to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
 
-## Step 7: Spec Review (Claude + Codex PARALLEL)
+## Step 7: Spec Review (dual-model PARALLEL)
 
-Launch BOTH in parallel. Use `prompts/spec-reviewer.md`.
+Launch Claude + secondary provider in parallel. Use `prompts/spec-reviewer.md`.
+If no secondary provider, use split-focus: two Claude agents — one checks completeness/consistency,
+the other checks scope/YAGNI.
 Fix issues. Re-review if NEEDS_REVISION.
 
 ## Step 8: Implementation Plan
@@ -124,9 +130,9 @@ Write plan to `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`.
 - Each step = 2-5 minutes of work (atomic operations)
 - Each task has: files, steps, commit message
 
-## Step 9: Plan Review (Claude + Codex PARALLEL)
+## Step 9: Plan Review (dual-model PARALLEL)
 
-Same as spec review. Both must APPROVE.
+Same as spec review. Both reviewers must APPROVE.
 
 ## Step 10: User Approval
 

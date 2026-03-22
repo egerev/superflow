@@ -67,13 +67,14 @@ Every finding must include a concrete scenario:
 ### Verdict: ACCEPTED | NEEDS_FIXES
 ```
 
-## Codex Parallel Review
+## Secondary Provider Review
 
-When dispatching to Codex in parallel:
+When dispatching a secondary provider in parallel with the Claude agent, both get the full
+review prompt.
 
+**Codex (preferred):**
 ```bash
-codex --approval-mode full-auto --quiet \
-  -p "$(cat <<PROMPT
+REVIEW_PROMPT="$(cat <<PROMPT
 You are a Product Owner reviewing delivered software against its specification.
 
 ## Spec
@@ -93,8 +94,22 @@ $(git log SPRINT_BASE..HEAD --oneline)
 ### UX Concerns
 ### Verdict: ACCEPTED | NEEDS_FIXES
 PROMPT
-)" 2>&1
+)"
+
+$TIMEOUT_CMD 600 codex exec --full-auto "$REVIEW_PROMPT" 2>&1
 ```
+
+**Other providers:** Replace `codex exec --full-auto` with the provider's non-interactive flag.
+
+## Split-Focus Fallback
+
+When no secondary provider is available, dispatch two Claude agents with different focus:
+
+**Agent A — Spec fit focus:**
+Add to the base prompt: "Focus on spec-to-implementation fit and data correctness. Does the code deliver what the spec described? Any requirements skipped or misinterpreted? Are amounts, dates, currencies handled correctly?"
+
+**Agent B — User scenarios focus:**
+Add to the base prompt: "Focus on user scenarios and edge cases. Walk through the happy path end-to-end. What happens on empty input, missing data, first-time use? Are error messages helpful? Can the user complete the full task without getting stuck?"
 
 ## When Product Review Finds Issues
 
