@@ -33,7 +33,7 @@ Record: `{"provider":"split-focus",...}`
 1. Read failure output, identify failing assertion
 2. Form hypothesis before touching code
 3. Targeted fix, verify with specific test then full suite
-4. 2 failed attempts = BLOCKED with evidence, continue
+4. 3+ failed attempts on same issue = likely architectural problem. Report BLOCKED with evidence, suggest rethinking approach
 
 ## Handling NEEDS_FIXES from PAR
 - Verify each finding against the codebase before implementing (reviewer may lack context)
