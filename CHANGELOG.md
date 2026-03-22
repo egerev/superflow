@@ -2,6 +2,13 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [2.0.2] - 2026-03-23
+
+### Fixed
+- Phase 0 detection: explicit `<!-- superflow:onboarded:YYYY-MM-DD -->` marker instead of weak string matching
+- Three-artifact check (CLAUDE.md, llms.txt, health report) with partial onboarding for missing pieces
+- Rename `docs/superpowers/` → `docs/superflow/` in all paths
+
 ## [2.0.1] - 2026-03-23
 
 ### Added
