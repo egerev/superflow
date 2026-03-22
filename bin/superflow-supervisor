@@ -11,14 +11,30 @@ from lib.queue import SprintQueue
 from lib.supervisor import run, resume, print_summary
 
 
+def _make_notifier(args):
+    """Create a Notifier from CLI args or env vars."""
+    token = getattr(args, 'telegram_token', None) or os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat = getattr(args, 'telegram_chat', None) or os.environ.get('TELEGRAM_CHAT_ID')
+    if token and chat:
+        try:
+            from lib.notifications import Notifier
+            queue = SprintQueue.load(args.queue)
+            return Notifier(bot_token=token, chat_id=chat, total_sprints=len(queue.data["sprints"]))
+        except ImportError:
+            print("Warning: lib.notifications not available, notifications disabled", file=sys.stderr)
+    return None
+
+
 def cmd_run(args):
     """Execute the supervisor run loop."""
+    notifier = _make_notifier(args)
     run(
         queue_path=args.queue,
         plan_path=args.plan,
         max_parallel=args.parallel,
         timeout=args.timeout,
         no_replan=args.no_replan,
+        notifier=notifier,
     )
 
 
@@ -37,11 +53,13 @@ def cmd_resume(args):
 
     if not queue.is_done():
         print("Continuing execution...")
+        notifier = _make_notifier(args)
         run(
             queue_path=args.queue,
             plan_path=args.plan,
             max_parallel=args.parallel,
             timeout=args.timeout,
+            notifier=notifier,
         )
 
 
