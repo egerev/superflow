@@ -4,6 +4,9 @@ import logging
 import os
 import re
 import subprocess
+from datetime import datetime, timezone
+
+from lib.checkpoint import save_checkpoint
 
 logger = logging.getLogger(__name__)
 
@@ -157,3 +160,155 @@ def build_prompt(sprint: dict, repo_root: str) -> str:
         branch=sprint["branch"],
     )
     return result
+
+
+def _now_iso() -> str:
+    """Return current UTC time as ISO 8601 string."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_json_summary(output: str) -> dict | None:
+    """Parse JSON summary from the last non-empty line of output."""
+    lines = output.strip().splitlines()
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            return json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            return None
+    return None
+
+
+_FILTERED_ENV_KEYS = {
+    "ANTHROPIC_API_KEY", "PATH", "HOME", "LANG",
+    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+}
+
+
+def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
+                   timeout=1800, notifier=None, queue_lock=None):
+    """Execute a single sprint: worktree, claude invocation, result handling.
+
+    Returns the checkpoint dict for this sprint.
+    """
+    sid = sprint["id"]
+
+    # 1. Mark in_progress
+    if queue_lock:
+        with queue_lock:
+            queue.mark_in_progress(sid)
+            queue.save(queue_path)
+    else:
+        queue.mark_in_progress(sid)
+        queue.save(queue_path)
+
+    # 2. Save initial checkpoint
+    save_checkpoint(checkpoints_dir, sid, {
+        "sprint_id": sid, "status": "in_progress", "started_at": _now_iso(),
+    })
+
+    # 3. Create worktree
+    wt_path = create_worktree(sprint, repo_root)
+
+    try:
+        result = _attempt_sprint(sprint, queue, queue_path, checkpoints_dir,
+                                 repo_root, wt_path, timeout)
+        return result
+    finally:
+        # 13. Always cleanup worktree
+        cleanup_worktree(sprint, repo_root)
+        if notifier:
+            _notify_sprint_result(notifier, sprint)
+
+
+def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
+                    wt_path, timeout):
+    """Run claude for a sprint, with retry logic."""
+    sid = sprint["id"]
+    prompt = build_prompt(sprint, repo_root)
+
+    while True:
+        # Filter environment
+        env = {k: v for k, v in os.environ.items() if k in _FILTERED_ENV_KEYS}
+
+        # Launch claude subprocess
+        try:
+            result = subprocess.run(
+                ["claude", "-p", "--verbose"],
+                input=prompt, cwd=wt_path, timeout=timeout,
+                capture_output=True, text=True, env=env,
+            )
+        except subprocess.TimeoutExpired:
+            result = type("Result", (), {
+                "returncode": 1, "stdout": "Timeout expired", "stderr": ""
+            })()
+
+        # Save output log
+        os.makedirs(checkpoints_dir, exist_ok=True)
+        log_path = os.path.join(checkpoints_dir, f"sprint-{sid}-output.log")
+        with open(log_path, "w") as f:
+            f.write(result.stdout or "")
+
+        # Parse JSON from last line
+        summary = _parse_json_summary(result.stdout or "")
+        json_parse_error = (result.returncode == 0 and summary is None)
+        success = (result.returncode == 0 and summary is not None)
+
+        if success:
+            # Verify PR
+            pr_url = summary.get("pr_url", "")
+            if pr_url:
+                pr_check = subprocess.run(
+                    ["gh", "pr", "view", pr_url],
+                    capture_output=True, text=True, cwd=repo_root,
+                )
+                if pr_check.returncode != 0:
+                    logger.warning("PR verification failed for %s", pr_url)
+
+            # Mark completed
+            queue.mark_completed(sid, pr_url)
+            queue.save(queue_path)
+            cp = {
+                "sprint_id": sid, "status": "completed",
+                "completed_at": _now_iso(), "pr_url": pr_url,
+                "summary": summary,
+            }
+            save_checkpoint(checkpoints_dir, sid, cp)
+            return cp
+
+        # Failure path — check retries
+        sprint["retries"] = sprint.get("retries", 0) + 1
+        if sprint["retries"] >= sprint.get("max_retries", 2):
+            # Max retries reached — mark failed
+            error_msg = result.stderr or result.stdout or "Unknown error"
+            queue.mark_failed(sid, error_msg[:500])
+            queue.save(queue_path)
+            cp = {
+                "sprint_id": sid, "status": "failed",
+                "failed_at": _now_iso(), "error": error_msg[:500],
+                "retries": sprint["retries"],
+            }
+            save_checkpoint(checkpoints_dir, sid, cp)
+            return cp
+
+        # Retry — if JSON parse error, append instruction to prompt
+        if json_parse_error:
+            prompt += (
+                "\n\nIMPORTANT: Your previous output did not include the required "
+                "JSON summary as the LAST line. You MUST output a JSON summary as "
+                "the very last line of your response."
+            )
+        logger.info("Retrying sprint %d (attempt %d)", sid, sprint["retries"] + 1)
+
+
+def _notify_sprint_result(notifier, sprint):
+    """Call the notifier with the sprint result."""
+    try:
+        if sprint["status"] == "completed":
+            notifier.notify_completed(sprint)
+        elif sprint["status"] == "failed":
+            notifier.notify_failed(sprint)
+    except Exception as e:
+        logger.warning("Notifier error: %s", e)

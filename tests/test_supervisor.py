@@ -6,7 +6,9 @@ import tempfile
 import unittest
 from unittest.mock import patch, MagicMock, call
 
-from lib.supervisor import create_worktree, cleanup_worktree, build_prompt
+from lib.supervisor import create_worktree, cleanup_worktree, build_prompt, execute_sprint
+from lib.queue import SprintQueue
+from lib.checkpoint import load_checkpoint
 
 
 def _sprint(sid=1, title="Test Sprint", status="pending", branch="feat/test-sprint-1",
@@ -174,6 +176,168 @@ class TestBuildPrompt(unittest.TestCase):
         result = build_prompt(sprint, self.tmpdir)
         self.assertIn("Do the first thing.", result)
         self.assertIn("Do the second thing.", result)
+
+
+class TestExecuteSprint(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        # Create templates
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n")
+        # Create plan file
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints=None):
+        if sprints is None:
+            sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    def test_execute_sprint_success(self, mock_run, mock_create_wt, mock_cleanup_wt):
+        """Successful execution: claude returns JSON, exit 0, PR verified."""
+        q = self._make_queue()
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+
+        # Claude subprocess
+        claude_output = (
+            "Working on sprint...\n"
+            '{"status":"completed","pr_url":"https://github.com/test/repo/pull/1",'
+            '"tests":{"passed":5,"failed":0},"par":{"claude":"ACCEPTED","secondary":"ACCEPTED"}}'
+        )
+        claude_result = MagicMock(returncode=0, stdout=claude_output, stderr="")
+        # gh pr view subprocess
+        gh_result = MagicMock(returncode=0, stdout="OPEN")
+        mock_run.side_effect = [claude_result, gh_result]
+
+        cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        self.assertEqual(cp["status"], "completed")
+        self.assertEqual(sprint["status"], "completed")
+        self.assertEqual(sprint["pr"], "https://github.com/test/repo/pull/1")
+        mock_cleanup_wt.assert_called_once()
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    def test_execute_sprint_failure_marks_failed(self, mock_run, mock_create_wt, mock_cleanup_wt):
+        """After max_retries failures, sprint is marked failed."""
+        sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint_data["max_retries"] = 1
+        sprint_data["retries"] = 1  # Already at max
+        q = self._make_queue([sprint_data])
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+
+        # Claude subprocess fails
+        claude_result = MagicMock(returncode=1, stdout="Error occurred", stderr="crash")
+        mock_run.return_value = claude_result
+
+        cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        self.assertEqual(cp["status"], "failed")
+        self.assertEqual(sprint["status"], "failed")
+        mock_cleanup_wt.assert_called_once()
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    def test_execute_sprint_retry_on_failure(self, mock_run, mock_create_wt, mock_cleanup_wt):
+        """On failure with retries left, should retry and eventually succeed."""
+        sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint_data["max_retries"] = 2
+        sprint_data["retries"] = 0
+        q = self._make_queue([sprint_data])
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+
+        # First attempt fails (exit 1), retry succeeds
+        fail_result = MagicMock(returncode=1, stdout="Error", stderr="")
+        success_output = (
+            "Done.\n"
+            '{"status":"completed","pr_url":"https://github.com/test/repo/pull/2",'
+            '"tests":{"passed":3,"failed":0},"par":{"claude":"ACCEPTED","secondary":"ACCEPTED"}}'
+        )
+        success_result = MagicMock(returncode=0, stdout=success_output, stderr="")
+        gh_result = MagicMock(returncode=0, stdout="OPEN")
+        mock_run.side_effect = [fail_result, success_result, gh_result]
+
+        cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        self.assertEqual(cp["status"], "completed")
+        self.assertEqual(sprint["retries"], 1)
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    def test_execute_sprint_json_parse_error_retries(self, mock_run, mock_create_wt, mock_cleanup_wt):
+        """Exit 0 but no valid JSON on last line should retry with appended instruction."""
+        sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint_data["max_retries"] = 2
+        sprint_data["retries"] = 0
+        q = self._make_queue([sprint_data])
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+
+        # First: exit 0 but no JSON
+        no_json = MagicMock(returncode=0, stdout="Done but forgot JSON", stderr="")
+        # Retry: exit 0 with proper JSON
+        good_output = (
+            "Done.\n"
+            '{"status":"completed","pr_url":"https://github.com/test/repo/pull/3",'
+            '"tests":{"passed":1,"failed":0},"par":{"claude":"ACCEPTED","secondary":"ACCEPTED"}}'
+        )
+        good_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        gh_result = MagicMock(returncode=0, stdout="OPEN")
+        mock_run.side_effect = [no_json, good_result, gh_result]
+
+        cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        self.assertEqual(cp["status"], "completed")
+        self.assertEqual(sprint["retries"], 1)
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.run")
+    def test_execute_sprint_saves_output_log(self, mock_run, mock_create_wt, mock_cleanup_wt):
+        """Output should be saved to sprint-{id}-output.log."""
+        q = self._make_queue()
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+
+        claude_output = (
+            "Log line 1\n"
+            '{"status":"completed","pr_url":"https://github.com/test/repo/pull/1",'
+            '"tests":{"passed":1,"failed":0},"par":{"claude":"ACCEPTED","secondary":"ACCEPTED"}}'
+        )
+        claude_result = MagicMock(returncode=0, stdout=claude_output, stderr="")
+        gh_result = MagicMock(returncode=0, stdout="OPEN")
+        mock_run.side_effect = [claude_result, gh_result]
+
+        execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        log_path = os.path.join(self.cp_dir, "sprint-1-output.log")
+        self.assertTrue(os.path.exists(log_path))
+        with open(log_path) as f:
+            content = f.read()
+        self.assertIn("Log line 1", content)
 
 
 if __name__ == "__main__":
