@@ -93,6 +93,23 @@ Only proceed to Completion Report after all CRITICAL/HIGH issues are resolved.
 
 **Why this exists:** In the first project using this flow, all 6 per-sprint PARs passed, but the holistic review found 7 critical/high issues (race conditions, missing notifications, env leaks) that only appeared when looking at the full system.
 
+## Supervisor Mode (Long-Running)
+
+For tasks with 3+ sprints that should run unattended (overnight, multi-hour):
+
+1. Phase 1 creates the sprint queue: `docs/superflow/sprint-queue.json`
+2. User launches supervisor in a separate terminal: `./bin/superflow-supervisor run --queue docs/superflow/sprint-queue.json --plan docs/superflow/plans/<plan-file>.md`
+3. Supervisor executes each sprint as a fresh Claude Code session (no context degradation)
+4. Each sprint follows the same Per-Sprint Flow above, but orchestrated by the supervisor
+5. Supervisor handles: retries, parallel execution, adaptive replanning, checkpoint/resume
+
+**When to use supervisor vs single-session:**
+- 1-2 sprints → single-session (this file's normal flow)
+- 3+ sprints → supervisor recommended
+- Overnight/unattended → supervisor required
+
+**Key difference:** In supervisor mode, the supervisor creates the worktree and sets the working directory. The Claude session inside does NOT create its own worktree.
+
 ## Completion Report (Demo Day Format)
 
 Present a product-oriented summary — like a demo day, not a tech log. For each sprint:
