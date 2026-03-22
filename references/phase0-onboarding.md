@@ -42,53 +42,107 @@ Dispatch **4 parallel agents** using the Agent tool (`run_in_background: true`, 
 
 **Critical: use Opus for analysis, not Sonnet.** Wrong documentation is worse than no documentation — a Sonnet agent may hallucinate framework names based on directory structure (e.g., calling pydantic_graph "LangGraph" because the directory is named `graph/`). Analysis agents must verify by reading actual imports and code, not guessing from names.
 
+Each agent prompt MUST include `ultrathink` and the **mandatory checks** below. Agents must show evidence (file paths, counts, code snippets) for every finding — no unsupported claims.
+
 ```
 Agent(description: "Architecture analysis", run_in_background: true, model: opus)
-  → directory structure, key files, frameworks (verify by checking imports!), dependencies, data model
+  ultrathink. Mandatory checks — show evidence for each:
+  1. List all top-level directories with file counts and total LOC per directory
+  2. Identify frameworks/libraries by reading actual `import` statements (NOT by guessing from directory names)
+  3. Map the data model: list all DB models/schemas with field counts
+  4. Find architecture violations: does business logic import from adapters/infrastructure? List every violation with file:line
+  5. Identify the top 10 largest files by LOC — these are refactoring candidates
+  6. Map key entry points (API routes, CLI commands, event handlers)
 
 Agent(description: "Code quality analysis", run_in_background: true, model: opus)
-  → hotspots, complexity, test coverage, linting setup
+  ultrathink. Mandatory checks — show evidence for each:
+  1. List ALL files >500 LOC with exact line counts (use `wc -l` or count lines)
+  2. Find all TODO/FIXME/HACK/XXX comments — count and list top 10
+  3. Count test files vs source files — calculate coverage ratio
+  4. Find source files with NO corresponding test file
+  5. Check for code duplication: similar function signatures across files
+  6. Check linter config exists and is enforced (pre-commit hooks, CI checks)
+  7. Find dead code: unused imports, unreachable functions (if tooling available)
 
 Agent(description: "DevOps analysis", run_in_background: true, model: opus)
-  → CI/CD pipeline, .gitignore completeness, env management, deployment setup
+  ultrathink. Mandatory checks — show evidence for each:
+  1. Docker Compose: count services, check for `latest` tags (non-deterministic), check volume mounts
+  2. CI/CD: list all GitHub Actions workflows, check what they actually test/deploy
+  3. Deploy script: does it run migrations? Does it have rollback? Health checks?
+  4. Security scanning: is dependabot/renovate configured? CodeQL or similar?
+  5. Backup strategy: is there one for databases/persistent storage?
+  6. Environment management: .env.example exists? Secrets management?
+  7. .gitignore completeness: check for common misses (.env, __pycache__, node_modules, .worktrees/)
 
 Agent(description: "Documentation analysis", run_in_background: true, model: opus)
-  → existing docs (README, CLAUDE.md, llms.txt, comments density, API docs)
+  ultrathink. Mandatory checks — show evidence for each:
+  1. List all documentation files with last-modified dates (git log)
+  2. Compare README claims against actual project state (commands, setup steps)
+  3. If llms.txt exists: count entries vs actual source directories — coverage %
+  4. If CLAUDE.md exists: check every documented path exists, check commands work
+  5. Check for stale references: grep for file paths in docs, verify each exists
+  6. API documentation: is it auto-generated or manual? Is it current?
 ```
 
 All 4 agents run in parallel. Wait for all to complete, then synthesize into a concise project profile.
 
-**After synthesis, cross-check**: do framework/library names in the profile match actual `import` statements in code? If any look wrong, verify before proceeding.
+**After synthesis, cross-check**: do framework/library names in the profile match actual `import` statements in code? Do file counts match across agents? Resolve discrepancies before proceeding.
 
 ## Step 3: Present Project Health Report
 
-Show the user the results conversationally — like a colleague who just explored the codebase:
+Show the user the results conversationally — like a colleague who just explored the codebase. **Every claim must have evidence** (file path, count, command output).
 
 ```
 ## Project Health Report
 
 ### Overview
-- Stack: [detected]
-- Size: [files, LOC]
-- Test coverage: [detected or "no tests found"]
+- Stack: [detected — verify by checking imports, not directory names]
+- Size: [source files count] source files, [total LOC] LOC
+- Tests: [test files count] test files, [test functions count] test functions
+- Test coverage ratio: [test files / source files]%
 
-### Strengths
-- [what's well-structured]
+### Large Files (>500 LOC) — Refactoring Candidates
+| File | LOC | Role | Recommendation |
+|------|-----|------|----------------|
+| path/to/file.py | 1,675 | description | Split into X, Y |
+| ... | ... | ... | ... |
+
+### Architecture Violations
+| Violation | File:Line | Details |
+|-----------|-----------|---------|
+| Business imports adapter | file.py:42 | `from adapters.x import Y` |
+| ... | ... | ... |
+
+(If no violations found, state: "No architecture violations detected — [layer structure description]")
 
 ### Technical Debt
-| Priority | Issue | Location | Recommendation |
-|----------|-------|----------|----------------|
-| P0       | ...   | ...      | ...            |
-| P1       | ...   | ...      | ...            |
-| P2       | ...   | ...      | ...            |
+| Priority | Issue | Location | Evidence | Recommendation |
+|----------|-------|----------|----------|----------------|
+| P0       | ...   | file:line | what was found | fix suggestion |
+| P1       | ...   | ...      | ...      | ...            |
+| P2       | ...   | ...      | ...      | ...            |
+
+### DevOps & Infrastructure
+- Docker: [N services, any `latest` tags?, volumes?]
+- CI/CD: [what's configured, what's missing]
+- Deploy: [migrations included?, rollback?, health checks?]
+- Security: [dependabot?, CodeQL?, scanning?]
+- Backups: [strategy or "none detected"]
+
+### Documentation Freshness
+| Doc | Last Updated | Status |
+|-----|-------------|--------|
+| README.md | YYYY-MM-DD | [current/stale] |
+| CLAUDE.md | YYYY-MM-DD | [current/stale] |
+| llms.txt | YYYY-MM-DD | [current/stale — N entries vs M source dirs] |
 
 ### Recommendations
-1. [actionable improvement]
-2. [actionable improvement]
+1. [actionable improvement with specific file/location]
+2. [actionable improvement with specific file/location]
 3. ...
 ```
 
-If a section has no issues (e.g., no technical debt), state that explicitly — do not invent problems to fill the template.
+If a section has no issues, state that explicitly with evidence — "No files >500 LOC" or "All 17 documented paths verified to exist". Do not invent problems, but do not rubber-stamp either — **the absence of findings requires proof**.
 
 Save report to `docs/superflow/project-health-report.md` (in English).
 
@@ -106,12 +160,14 @@ Save report to `docs/superflow/project-health-report.md` (in English).
 Use `prompts/llms-txt-writer.md` for best practices. Verify every framework/library name by checking actual imports in the code — never guess from directory names.
 
 ### If llms.txt exists:
-**Audit it against the codebase** — don't just skip:
-- Cross-reference every linked path — do they still exist?
-- Are key modules missing from the listing?
-- Is the description still accurate?
-- **Verify framework names**: check actual `import` statements, not just directory names (e.g., `agents/graph/` might be pydantic_graph, not LangGraph)
-- Report findings: "llms.txt is up to date" or "llms.txt has N stale entries, propose update?"
+**Quantitative audit** — produce numbers, not just "looks good":
+1. Count source directories → count llms.txt entries → report coverage: "llms.txt covers X of Y source directories (Z%)"
+2. Check every linked path exists: `for each path in llms.txt: verify file/dir exists`
+3. List stale entries (path doesn't exist or description is wrong)
+4. List missing entries (key source dirs not in llms.txt)
+5. Check `git log --since="last marker date"` — were new modules added since last audit?
+6. **Verify framework names**: check actual `import` statements, not directory names
+7. Report: "llms.txt covers N/M dirs (X%). Found K stale entries, J missing entries."
 
 ## Step 5: Audit & Update CLAUDE.md
 
@@ -130,14 +186,16 @@ Create it automatically (in English) with:
 Tell user: > "Created CLAUDE.md with project description."
 
 ### If CLAUDE.md exists:
-**Audit it against the codebase** — don't just add a marker:
-- Cross-reference documented files/paths — do they still exist?
-- Are key files/commands missing?
-- Are there outdated sections (removed files, renamed modules)?
-- Preserve user's custom sections — only touch factual parts
-- Fix silently if stale, tell user what changed
+**Quantitative audit** — produce numbers, not just "looks good":
+1. Check every documented file path exists: count valid / total → "X/Y paths valid (Z%)"
+2. Run every documented command (dev, test, lint) — do they work?
+3. Check `git log --since="last marker date"` — list new files/modules added since last audit
+4. Cross-reference architecture description with actual imports — is the described structure current?
+5. List what's missing: new key files not documented, new commands not listed
+6. Preserve user's custom sections — only touch factual parts
+7. Fix silently if stale, tell user what changed
 
-Tell user: > "Audited CLAUDE.md — [all good / fixed N issues: brief list]."
+Tell user: > "Audited CLAUDE.md — [X/Y paths valid, N new modules since last audit, fixed K issues: brief list]."
 
 ## Step 6: Verify Enforcement Rules & Gitignore
 
