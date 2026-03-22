@@ -522,8 +522,8 @@ def resume(queue_path, repo_root):
         except Exception:
             has_pr = False
 
-        if has_worktree and has_pr:
-            # Extract PR URL
+        if has_pr:
+            # PR exists — sprint was completed (worktree may already be cleaned up)
             try:
                 pr_data = json.loads(pr_output)
                 pr_url = pr_data[0]["url"] if pr_data else ""
@@ -531,9 +531,16 @@ def resume(queue_path, repo_root):
                 pr_url = pr_output.split("\t")[0] if pr_output else ""
             queue.mark_completed(sid, pr_url)
             logger.info("Sprint %d: found PR, marked completed", sid)
+            # Clean up orphaned worktree if still exists
+            if has_worktree:
+                cleanup_worktree(sprint, repo_root)
         else:
             sprint["status"] = "pending"
+            sprint["retries"] = 0
             logger.info("Sprint %d: no PR found, reset to pending", sid)
+            # Clean up orphaned worktree if still exists
+            if has_worktree:
+                cleanup_worktree(sprint, repo_root)
 
     queue.save(queue_path)
     return queue
