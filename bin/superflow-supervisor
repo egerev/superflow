@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Superflow Supervisor CLI — orchestrates autonomous sprint execution."""
+import argparse
+import os
+import sys
+
+# Add parent directory to sys.path so lib imports work
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from lib.queue import SprintQueue
+from lib.supervisor import run, resume, print_summary
+
+
+def cmd_run(args):
+    """Execute the supervisor run loop."""
+    run(
+        queue_path=args.queue,
+        plan_path=args.plan,
+        max_parallel=args.parallel,
+        timeout=args.timeout,
+        no_replan=args.no_replan,
+    )
+
+
+def cmd_status(args):
+    """Show current queue status."""
+    queue = SprintQueue.load(args.queue)
+    print_summary(queue)
+
+
+def cmd_resume(args):
+    """Resume execution after a crash."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(args.queue)))
+    queue = resume(args.queue, repo_root)
+    print("Resume complete. Current state:")
+    print_summary(queue)
+
+    if not queue.is_done():
+        print("Continuing execution...")
+        run(
+            queue_path=args.queue,
+            plan_path=args.plan,
+            max_parallel=args.parallel,
+            timeout=args.timeout,
+        )
+
+
+def cmd_reset(args):
+    """Reset a sprint to pending status."""
+    queue = SprintQueue.load(args.queue)
+    try:
+        sprint = queue._find_sprint(args.sprint)
+    except KeyError:
+        print(f"Error: Sprint {args.sprint} not found", file=sys.stderr)
+        sys.exit(1)
+
+    sprint["status"] = "pending"
+    sprint["retries"] = 0
+    sprint["error_log"] = None
+    sprint["pr"] = None
+    queue.save(args.queue)
+    print(f"Sprint {args.sprint} reset to pending.")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="superflow-supervisor",
+        description="Superflow Supervisor — autonomous sprint execution orchestrator",
+    )
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # run
+    run_parser = subparsers.add_parser("run", help="Execute sprint queue")
+    run_parser.add_argument("--queue", required=True, help="Path to queue.json")
+    run_parser.add_argument("--plan", default=None, help="Path to plan file")
+    run_parser.add_argument("--parallel", type=int, default=1, help="Max parallel sprints")
+    run_parser.add_argument("--timeout", type=int, default=1800, help="Timeout per sprint (seconds)")
+    run_parser.add_argument("--no-replan", action="store_true", help="Disable adaptive replanning")
+    run_parser.add_argument("--telegram-token", default=None, help="Telegram bot token")
+    run_parser.add_argument("--telegram-chat", default=None, help="Telegram chat ID")
+    run_parser.set_defaults(func=cmd_run)
+
+    # status
+    status_parser = subparsers.add_parser("status", help="Show queue status")
+    status_parser.add_argument("--queue", required=True, help="Path to queue.json")
+    status_parser.set_defaults(func=cmd_status)
+
+    # resume
+    resume_parser = subparsers.add_parser("resume", help="Resume after crash")
+    resume_parser.add_argument("--queue", required=True, help="Path to queue.json")
+    resume_parser.add_argument("--plan", default=None, help="Path to plan file")
+    resume_parser.add_argument("--parallel", type=int, default=1, help="Max parallel sprints")
+    resume_parser.add_argument("--timeout", type=int, default=1800, help="Timeout per sprint (seconds)")
+    resume_parser.add_argument("--telegram-token", default=None, help="Telegram bot token")
+    resume_parser.add_argument("--telegram-chat", default=None, help="Telegram chat ID")
+    resume_parser.set_defaults(func=cmd_resume)
+
+    # reset
+    reset_parser = subparsers.add_parser("reset", help="Reset a sprint to pending")
+    reset_parser.add_argument("--queue", required=True, help="Path to queue.json")
+    reset_parser.add_argument("--sprint", type=int, required=True, help="Sprint ID to reset")
+    reset_parser.set_defaults(func=cmd_reset)
+
+    args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
