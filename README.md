@@ -2,6 +2,8 @@
 
 Lightweight Claude Code skill for autonomous product-to-production development. Designed for modern models (Opus 4.6+) — minimal instructions, maximum autonomy.
 
+**Philosophy:** Many AI coding skills are heavyweight — hundreds of rules that fill context and degrade quality. Superflow trusts the model and keeps instructions minimal. Instead of preventing errors with verbose rules, it catches them through cross-model reviews (Claude + secondary provider). Less context overhead, better output.
+
 ## How It Works
 
 **Phase 1 — You talk, agent proposes.** Collaborative product discovery: research, brainstorming, spec, plan. ~15-20 min.
