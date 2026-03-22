@@ -3,82 +3,111 @@
 Best practices for generating high-quality `CLAUDE.md` files — instructions for Claude Code.
 
 ```
-You are writing a CLAUDE.md file for a software project. This file tells Claude Code
+ultrathink. You are writing a CLAUDE.md file for a software project. This file tells Claude Code
 how to work effectively in this codebase. It is NOT documentation for humans — it is
 an instruction manual for an AI assistant.
 
 ## Purpose
 
 CLAUDE.md answers: "If a new Claude session opens this project, what does it need
-to know to be productive immediately?"
+to know to be productive immediately?" A great CLAUDE.md saves 5-10 minutes of
+context-gathering on every session. A bad one wastes context window on useless info.
+
+## Mandatory Process — Do NOT Skip
+
+Before writing or auditing CLAUDE.md, run these checks and include the results:
+
+### 1. Discovery Phase (run these commands, record output)
+- `find . -name "*.py" -o -name "*.ts" -o -name "*.js" -o -name "*.rb" -o -name "*.go" | head -5` — detect primary language
+- `cat package.json 2>/dev/null | head -20` or equivalent — detect framework/dependencies
+- `ls -la` — top-level structure
+- `git log --oneline -10` — recent activity context
+- Check for existing config: `ls Makefile justfile Dockerfile docker-compose* .github/workflows/ 2>/dev/null`
+
+### 2. Verify Every Claim
+- **Every file path** you include → verify it exists with `ls` or `test -f`
+- **Every command** you include → verify it works (or note if untested)
+- **Every framework name** → verify by checking actual `import`/`require` statements, NOT directory names
+- **Every convention claim** → show evidence (grep for the pattern)
+
+### 3. Quantitative Checks
+- Count source files vs test files → include ratio
+- List top 5 largest files by LOC → these are the ones the AI will most likely need to work on
+- Check for `.env.example` or equivalent → document required env vars
 
 ## Structure Template
 
 # {Project Name} — Claude Instructions
 
 ## Project Overview
-{What this project does, in 1-2 sentences. Stack. Key constraints.}
+{What this project does, in 1-2 sentences. Exact stack with versions if discoverable.
+Key constraints that affect implementation decisions.}
 
 ## Key Rules
-{Non-obvious rules that affect how code should be written:}
-- Naming conventions
-- Language rules (e.g., "user-facing text in Russian, code in English")
-- Import patterns
-- Error handling approach
-- Testing requirements
+{Non-obvious rules. Each rule MUST have WHY.}
+- `Convention: reason` format
+- Example: "All API responses use { data, error } shape — because frontend error handling depends on this"
+- Example: "Never import from adapters/ in business/ — hexagonal architecture boundary"
 
 ## Architecture
-{Brief description of how the system fits together:}
-- Entry points
-- Data flow
-- Key abstractions
-- Module boundaries
+{How the system fits together. Focus on DECISION-RELEVANT info:}
+- Layer structure with dependency direction (which layer imports which)
+- Entry points: where requests come in
+- Data flow: how a typical request moves through the system
+- Key abstractions: patterns the AI must follow when adding code
+- Module boundaries: what goes where when creating new files
 
-## Key Files
-| File | Purpose |
-|------|---------|
-| `path/to/file` | What it does |
-| ... | ... |
+## Key Files (verify each path exists!)
+| File | LOC | Purpose |
+|------|-----|---------|
+| `path/to/file` | ~N | What it does and WHY it matters |
+| ... | ... | ... |
+
+Focus on files the AI is most likely to modify. Include LOC to signal complexity.
 
 ## Commands
 ```bash
-npm run dev        # Development server
-npm run build      # Production build
-npm run test       # Run tests
-npm run lint       # Lint check
+# Development
+{actual command}    # {what it does}
+
+# Testing
+{actual command}    # {what it does}
+
+# Linting
+{actual command}    # {what it does}
+
+# Build/Deploy
+{actual command}    # {what it does}
 ```
 
-## Conventions
-{Patterns the AI should follow when writing code:}
-- How to name files, functions, variables
-- Where to put new code
-- How to handle errors
-- Testing patterns
+Each command MUST be verified to work. If a command has prerequisites, note them.
 
-## Known Issues
-{Current problems the AI should be aware of:}
-- Known bugs
-- Technical debt
-- Things that look wrong but are intentional
+## Conventions (with evidence)
+{Each convention must be backed by a grep or file reference:}
+- "Files use snake_case" (evidence: `ls src/` shows all snake_case)
+- "Error handling uses Result pattern" (evidence: `grep -r "Result\[" src/ | head -3`)
+- "Tests are co-located with source" (evidence: `ls src/module/ shows module.py + test_module.py`)
 
-## Best Practices
+## Known Issues & Tech Debt
+{Current problems. Each must reference a specific file:line or pattern:}
+- "file.py:1675 LOC — needs splitting into X and Y" (evidence: `wc -l file.py`)
+- "No tests for module Z" (evidence: `find tests/ -name "*z*"` returns nothing)
 
-1. **Be actionable.** Every line should help the AI make a decision.
-   Bad: "We use React" — Good: "React 19 with Server Components, no client-side state management"
-2. **Be specific.** Vague rules get ignored.
-   Bad: "Follow conventions" — Good: "All API routes return { data, error } shape"
-3. **Include the WHY.** Rules without reasons get broken.
-   Bad: "Don't use console.log" — Good: "Use logger.ts instead of console.log — structured JSON for production"
-4. **Key files table is critical.** This is the #1 thing that helps AI navigate.
-5. **Commands must be copy-pasteable.** Include actual commands, not descriptions.
-6. **Update regularly.** Stale CLAUDE.md is worse than no CLAUDE.md.
-7. **Keep it under 200 lines.** Longer = AI skims and misses things.
-
-## Anti-Patterns
-
-- Duplicating README content (link to README, don't copy)
+## What NOT to Include
 - Generic advice ("write clean code") — be project-specific
-- Listing every file (focus on key files, not all files)
-- Outdated commands or paths (verify before writing)
-- Over-engineering with complex section hierarchies
+- README content (link to it: "See README.md for setup instructions")
+- Every file in the project (focus on KEY files that AI will actually touch)
+- Aspirational architecture (document what IS, not what should be)
+- Stale information (verify every claim against current code)
+
+## Quality Gate
+
+Before finalizing, verify:
+- [ ] Every file path in the document exists (test -f each one)
+- [ ] Every command in the document works (or is marked as untested)
+- [ ] Every framework/library name was verified via import statements
+- [ ] No section is just a rewrite of README
+- [ ] Total length is under 200 lines (concise = actually read by AI)
+- [ ] Each convention has evidence (grep output, file listing)
+- [ ] Known issues reference specific files, not vague areas
 ```
