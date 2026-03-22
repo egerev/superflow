@@ -26,7 +26,7 @@ llmstxt.org spec and fits within a single context load (~10KB max).
 ## Format Rules (llmstxt.org spec)
 
 - Plain Markdown, UTF-8
-- Max ~10KB, so it fits in a single LLM context load
+- No hard size limit per llmstxt.org spec. Prefer completeness over brevity — missing details actively mislead LLMs. For large projects (50k+ LOC), 15-25KB is normal
 - H1: Project name (required, exactly one)
 - Blockquote after H1: One-line project summary
 - H2 sections: Categorize resources
@@ -137,7 +137,7 @@ After writing, verify coverage to make sure the map is useful:
 - Every framework name is confirmed via import statements, not directory names.
 - Descriptions are specific and add information beyond the entry name.
 - LOC and file counts are accurate (verified with `wc -l` or `find | wc -l`).
-- Total file size stays under 10KB.
+- File size is proportional to project complexity. No artificial cap — completeness over brevity.
 - Coverage reaches >80% of key source directories.
 </constraints>
 
@@ -151,6 +151,6 @@ Before finalizing, confirm each item:
 - [ ] LOC/file counts are accurate (verified with `wc -l` or `find | wc -l`)
 - [ ] Recent modules included (check `git log` for files added in last 30 days)
 - [ ] No stale entries (paths that were renamed or deleted)
-- [ ] Total size under 10KB
+- [ ] File size is proportional to project complexity (no artificial cap)
 </verification>
 ```
