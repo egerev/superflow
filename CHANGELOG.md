@@ -2,6 +2,25 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [2.0.0] - 2026-03-23
+
+### Added
+- **Phase 0: Onboarding** — interactive first-run analysis: project health report, tech debt audit, DevOps/CI check
+- **Phase 3: Merge** — user-initiated sequential rebase merges with CI gate, doc update, cleanup
+- **llms.txt support** — standard project documentation for all LLMs (llmstxt.org); #1 recommendation in health report if missing
+- **Product Brief** (Phase 1, Step 5.5) — Jobs to be Done + user stories before technical spec
+- **Demo Day completion report** — product-oriented sprint summaries instead of tech log
+- **Auto-enforcement check** — Phase 0 verifies `superflow-enforcement.md` is in `~/.claude/rules/`
+- **New prompts**: `llms-txt-writer.md`, `claude-md-writer.md` with best practices
+
+### Changed
+- Phase 0: CLAUDE.md auto-updates silently (no approval needed)
+- Phase 0: all generated documentation must be in English
+- Phase 0: 4 parallel analysis agents (architecture, code quality, DevOps, documentation)
+- Phase 2: implementers read `llms.txt` as first step for project context
+- Phase 2: documentation update moved to Phase 3 (pre-merge)
+- README: complete overhaul with all 4 phases, interaction labels, permissions guide
+
 ## [1.3.0] - 2026-03-22
 
 ### Fixed
