@@ -1,6 +1,7 @@
 # Phase 2: Autonomous Execution (ZERO INTERACTION)
 
 Execute continuously. Never ask, never pause. Orchestrator never writes code directly.
+Each sprint runs in a fresh isolated session (`claude -p` or Agent with `isolation: "worktree"`) for full context — zero drift.
 
 ## Per-Sprint Flow
 
@@ -10,7 +11,7 @@ Execute continuously. Never ask, never pause. Orchestrator never writes code dir
 4. **Dispatch implementers** via Agent tool (`mode: bypassPermissions`, `model: sonnet` for mechanical tasks). Use `prompts/implementer.md`. Maximize parallel agents for independent tasks.
 5. **Review chain**: spec reviewer (background) > code quality reviewer (background) > verify tests
 6. **Full test suite** with pasted output
-7. **PAR** (see `enforcement.md` for algorithm): Claude reviewer + secondary provider, both receive SPEC. Write `.par-evidence.json` after ACCEPTED.
+7. **PAR** (see `~/.claude/rules/superflow-enforcement.md` for algorithm): Claude reviewer + secondary provider, both receive SPEC. Write `.par-evidence.json` after ACCEPTED.
 8. **Push + PR**: verify `.par-evidence.json` exists. `gh pr create --base main`
 9. **Cleanup**: `git worktree remove .worktrees/sprint-N`
 10. **Telegram update** (if MCP connected), then next sprint
