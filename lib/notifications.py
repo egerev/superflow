@@ -50,7 +50,7 @@ class Notifier:
     def notify(self, event_type, message, sprint_id=None, **kwargs):
         """Format and send a notification."""
         prefix = self._format_progress(sprint_id)
-        full_message = f"[{event_type}] {prefix + ': ' if prefix else ''}{message}"
+        full_message = f"{prefix + ' | ' if prefix else ''}{message}"
 
         if self.is_configured:
             self._send_telegram(full_message)
