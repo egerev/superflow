@@ -222,7 +222,14 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         queue.mark_in_progress(sid)
         queue.save(queue_path)
 
-    # 2. Save initial checkpoint
+    # 2. Notify sprint start
+    if notifier:
+        try:
+            notifier.notify_sprint_start(sid, sprint.get("title", f"Sprint {sid}"))
+        except Exception as e:
+            logger.warning("Notifier error: %s", e)
+
+    # 3. Save initial checkpoint
     save_checkpoint(checkpoints_dir, sid, {
         "sprint_id": sid, "status": "in_progress", "started_at": _now_iso(),
     })
@@ -324,10 +331,17 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
 def _notify_sprint_result(notifier, sprint):
     """Call the notifier with the sprint result."""
     try:
+        sid = sprint["id"]
+        title = sprint.get("title", f"Sprint {sid}")
         if sprint["status"] == "completed":
-            notifier.notify_completed(sprint)
+            notifier.notify_sprint_complete(sid, title, sprint.get("pr", ""))
         elif sprint["status"] == "failed":
-            notifier.notify_failed(sprint)
+            notifier.notify_sprint_failed(
+                sid, title, sprint.get("error_log", "unknown"),
+                sprint.get("retries", 0), sprint.get("max_retries", 2),
+            )
+        elif sprint["status"] == "skipped":
+            notifier.notify_sprint_skipped(sid, title, sprint.get("error_log", "dependency failed"))
     except Exception as e:
         logger.warning("Notifier error: %s", e)
 
