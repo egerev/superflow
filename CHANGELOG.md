@@ -14,7 +14,7 @@ All notable changes to superflow will be documented in this file.
 - **New prompts**: `llms-txt-writer.md`, `claude-md-writer.md` with best practices
 
 ### Changed
-- **Fully independent from Superpowers**: Superflow is now a standalone skill with its own architecture. Original Superpowers was ~41KB monolithic; Superflow v2.0.0 is ~30KB modular (25% lighter) with 2x more features (4 phases, 8 prompts, 4 references).
+- **Fully independent from Superpowers**: Superflow is now a standalone skill. Context weight evolution: original Superpowers-integrated SKILL.md was ~19KB monolithic → v1.4.0 restructured to ~13KB modular → v2.0.0 is ~30KB total but with 4 phases, 8 prompts, 4 references (was 2 phases, 5 prompts, 2 references). The Superpowers dependency was removed in v1.4.0 (PR #4).
 - Phase 0: CLAUDE.md auto-updates silently (no approval needed)
 - Phase 0: all generated documentation must be in English
 - Phase 0: 4 parallel analysis agents (architecture, code quality, DevOps, documentation)
@@ -28,6 +28,7 @@ All notable changes to superflow will be documented in this file.
 - **Context weight reduced by 68%** (41KB → 13KB): monolithic SKILL.md split into modular references + prompts (#4)
 - **Provider-agnostic reviews**: replaced Codex-specific logic with generic secondary provider detection (Codex > Gemini > Aider > split-focus Claude) (#3)
 - **Slim README**: condensed to essentials, moved best practices to separate reference (#5)
+- **Fully decoupled from Superpowers**: removed all direct references to obra/superpowers skill files. Superflow now stands alone — origin acknowledged in README only.
 
 ### Added
 - Compaction-resilient architecture: durable rules in `~/.claude/rules/`, thin SKILL.md router
