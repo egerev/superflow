@@ -10,7 +10,7 @@ This phase is **conversational** — talk to the user, don't just execute silent
 Phase 0 leaves an **exact marker** in each file it touches:
 
 ```
-<!-- superflow:onboarded:YYYY-MM-DD -->
+<!-- updated-by-superflow:YYYY-MM-DD -->
 ```
 
 Check three artifacts:
@@ -30,6 +30,8 @@ Check three artifacts:
 - The word "superflow" in CLAUDE.md (could be mentioned casually)
 - `docs/superflow/` directory alone (could be created by user)
 - `.par-evidence.json` (created by Phase 2, not Phase 0)
+
+---
 
 ## Step 1: Greet & Announce
 
@@ -78,39 +80,27 @@ Show the user the results conversationally — like a colleague who just explore
 
 Save report to `docs/superflow/project-health-report.md` (in English).
 
-## Step 4: llms.txt — Project Documentation for All LLMs
+## Step 4: Audit & Update llms.txt
 
-`llms.txt` is a standard (llmstxt.org) that helps any LLM understand a project — not just Claude. This is especially valuable since Superflow uses multiple AI providers.
+`llms.txt` is a standard (llmstxt.org) that helps any LLM understand a project. **Always audit, even if it exists.**
 
-**If llms.txt doesn't exist, this MUST be the #1 recommendation in the Health Report.**
+### If llms.txt doesn't exist:
+**This MUST be the #1 recommendation in the Health Report.**
 
-> "This project has no llms.txt — this is must-have documentation for LLMs (llmstxt.org). Without it, subagents work blind. I recommend creating it — this will significantly improve implementation quality."
+> "This project has no llms.txt — must-have documentation for LLMs. I recommend creating it."
 
-Use `prompts/llms-txt-writer.md` for best practices. Generate following the spec:
-```markdown
-# Project Name
-
-> One-line project description
-
-## Docs
-- [README](./README.md): Project overview and setup
-- [Architecture](./docs/architecture.md): System design (if exists)
-
-## Source
-- [Key Module](./src/path): Description
-- [API Routes](./src/api): Description
-
-## Config
-- [Schema](./prisma/schema.prisma): Database schema (if exists)
-- [Package](./package.json): Dependencies and scripts
-```
+Use `prompts/llms-txt-writer.md` for best practices.
 
 ### If llms.txt exists:
-Cross-reference against actual project structure, propose updates if stale.
+**Audit it against the codebase** — don't just skip:
+- Cross-reference every linked path — do they still exist?
+- Are key modules missing from the listing?
+- Is the description still accurate?
+- Report findings: "llms.txt is up to date" or "llms.txt has N stale entries, propose update?"
 
-## Step 5: CLAUDE.md — Auto-Update (No Approval Needed)
+## Step 5: Audit & Update CLAUDE.md
 
-CLAUDE.md is a working tool, not a deliverable. Update it silently:
+**Always audit, even if it exists.** Use `prompts/claude-md-writer.md` for best practices.
 
 ### If CLAUDE.md doesn't exist:
 Create it automatically (in English) with:
@@ -119,21 +109,18 @@ Create it automatically (in English) with:
 - Commands (dev, build, test, lint)
 - Conventions discovered (naming, language, patterns)
 - Architecture notes (data flow, key modules)
-- Superflow marker (so future runs detect it)
 
 Tell user: > "Created CLAUDE.md with project description."
 
-### If CLAUDE.md exists but is stale:
-Fix silently:
-- Cross-reference documented files/paths against actual codebase
-- Update outdated sections (removed files, renamed modules, new patterns)
+### If CLAUDE.md exists:
+**Audit it against the codebase** — don't just add a marker:
+- Cross-reference documented files/paths — do they still exist?
+- Are key files/commands missing?
+- Are there outdated sections (removed files, renamed modules)?
 - Preserve user's custom sections — only touch factual parts
-- Add Superflow marker if missing
+- Fix silently if stale, tell user what changed
 
-Tell user: > "Updated CLAUDE.md — fixed [brief list]."
-
-### If CLAUDE.md is up to date:
-No action needed.
+Tell user: > "Audited CLAUDE.md — [all good / fixed N issues: brief list]."
 
 ## Step 6: Verify Enforcement Rules
 
@@ -143,10 +130,11 @@ Check if `~/.claude/rules/superflow-enforcement.md` exists:
 
 This file survives context compaction and is critical for Phase 2 discipline.
 
-## Step 6.5: Permissions Setup for Autonomous Execution
+## Step 7: Permissions Setup for Autonomous Execution
 
-Check if `~/.claude/settings.json` has the required allow permissions for Superflow. If missing, propose:
+**Do NOT skip this step.** Check if `~/.claude/settings.json` has the required allow permissions for Superflow.
 
+If missing, propose to the user:
 > "Phase 2 runs autonomously — dozens of commands without human approval. To enable this, I need to add permissions for git, GitHub CLI, npm, and secondary providers to your settings. Without this, you'll get prompted on every command. Add permissions?"
 
 If user agrees, add to `~/.claude/settings.json` (merge with existing, don't overwrite):
@@ -170,12 +158,12 @@ If user agrees, add to `~/.claude/settings.json` (merge with existing, don't ove
 
 If user declines: continue, but warn that Phase 2 will require manual approval for each command.
 
-## Step 7: Leave Markers
+## Step 8: Leave Markers
 
-After Phase 0 completes, write the **same marker** in every file you touched:
+After all steps above, write the **same marker** in every file you touched:
 
 ```
-<!-- superflow:onboarded:YYYY-MM-DD -->
+<!-- updated-by-superflow:YYYY-MM-DD -->
 ```
 
 1. **CLAUDE.md**: append at the very end
@@ -184,7 +172,21 @@ After Phase 0 completes, write the **same marker** in every file you touched:
 
 All three must exist for Phase 0 to be fully skipped on next run.
 
-## Step 8: Hand Off to Phase 1
+## Step 9: Completion Checklist
+
+**Before handing off to Phase 1, verify ALL of these:**
+
+- [ ] Health report saved to `docs/superflow/project-health-report.md`
+- [ ] llms.txt audited (created if missing, updated if stale)
+- [ ] CLAUDE.md audited (created if missing, updated if stale)
+- [ ] Enforcement rules verified in `~/.claude/rules/`
+- [ ] **Permissions proposed to user** (accepted or declined — but MUST be asked)
+- [ ] Markers written in CLAUDE.md, llms.txt, and health report
+- [ ] .worktrees/ in .gitignore
+
+If any item is unchecked, go back and complete it before proceeding.
+
+## Step 10: Hand Off to Phase 1
 
 Ask the user:
 > "Done! I've explored the project. What would you like to work on?"

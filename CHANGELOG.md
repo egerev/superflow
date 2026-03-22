@@ -2,6 +2,16 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [2.0.3] - 2026-03-23
+
+### Fixed
+- Phase 0: model was skipping permissions proposal (Step 6.5) and CLAUDE.md/llms.txt audit
+- Renumbered all steps properly (1-10), no more "Step 6.5"
+- Steps 4-5 now say "Audit & Update" — model must check quality, not just add marker
+- Step 7 (Permissions) marked with **"Do NOT skip"** emphasis
+- Added Step 9: Completion Checklist — model must verify all items before hand-off
+- Marker format changed to `<!-- updated-by-superflow:YYYY-MM-DD -->` (clearer intent)
+
 ## [2.0.2] - 2026-03-23
 
 ### Fixed
