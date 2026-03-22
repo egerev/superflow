@@ -54,36 +54,57 @@ Phase 0 will automatically verify that `superflow-enforcement.md` is copied to `
 
 ### Recommended Permissions
 
-Add to your `~/.claude/settings.json` to reduce permission prompts:
+Add to `~/.claude/settings.json` for fully autonomous Phase 2 execution **without** `--dangerously-skip-permissions`:
 
 ```json
 {
   "permissions": {
     "allow": [
       "Bash(git worktree *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git push --force-with-lease *)",
+      "Bash(git rebase *)",
+      "Bash(git pull *)",
+      "Bash(git check-ignore *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
       "Bash(gh pr *)",
-      "Bash(gh pr checks *)"
+      "Bash(gh pr create *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh pr view *)",
+      "Bash(npm test *)",
+      "Bash(npm run *)",
+      "Bash(npx *)",
+      "Bash(codex *)",
+      "Bash(gemini *)",
+      "Bash(aider *)",
+      "Bash(gtimeout *)",
+      "Bash(timeout *)"
     ]
   }
 }
 ```
 
-### Autonomous Execution (recommended)
+This is the **safer alternative** to `--dangerously-skip-permissions` — Superflow gets autonomy for exactly the commands it needs, nothing more.
 
-Phase 2 runs autonomously — dozens of tool calls without human approval. For uninterrupted execution:
+### Alternative: Full Skip Permissions
+
+If you prefer zero prompts and accept the risk:
 
 ```bash
 claude --dangerously-skip-permissions
 ```
 
-**Safety:** Run inside an isolated environment — Docker container or VPS. This prevents accidental damage to your host system during autonomous execution. Never run `--dangerously-skip-permissions` on a machine with sensitive data outside the project directory.
+**Safety:** Only use inside an isolated environment — Docker container or VPS. Never on a machine with sensitive data outside the project directory.
 
 ```bash
 # Docker example
 docker run -it --rm -v $(pwd):/workspace -w /workspace node:22 bash
-# install claude, then run with --dangerously-skip-permissions
-
-# VPS: any disposable instance works — the project repo is the only state that matters
+# install claude, then: claude --dangerously-skip-permissions
 ```
 
 ## Requirements
