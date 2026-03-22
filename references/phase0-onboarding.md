@@ -126,13 +126,40 @@ Check if `~/.claude/rules/superflow-enforcement.md` exists:
 
 This file survives context compaction and is critical for Phase 2 discipline.
 
+## Step 6.5: Permissions Setup for Autonomous Execution
+
+Check if `~/.claude/settings.json` has the required allow permissions for Superflow. If missing, propose:
+
+> "Phase 2 runs autonomously — dozens of commands without human approval. To enable this, I need to add permissions for git, GitHub CLI, npm, and secondary providers to your settings. Without this, you'll get prompted on every command. Add permissions?"
+
+If user agrees, add to `~/.claude/settings.json` (merge with existing, don't overwrite):
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(git worktree *)", "Bash(git checkout *)", "Bash(git add *)",
+      "Bash(git commit *)", "Bash(git push *)", "Bash(git push --force-with-lease *)",
+      "Bash(git rebase *)", "Bash(git pull *)", "Bash(git check-ignore *)",
+      "Bash(git log *)", "Bash(git diff *)",
+      "Bash(gh pr *)", "Bash(gh pr create *)", "Bash(gh pr checks *)",
+      "Bash(gh pr merge *)", "Bash(gh pr view *)",
+      "Bash(npm test *)", "Bash(npm run *)", "Bash(npx *)",
+      "Bash(codex *)", "Bash(gemini *)", "Bash(aider *)",
+      "Bash(gtimeout *)", "Bash(timeout *)"
+    ]
+  }
+}
+```
+
+If user declines: continue, but warn that Phase 2 will require manual approval for each command.
+
 ## Step 7: Leave Markers
 
 After Phase 0 completes:
 1. Ensure CLAUDE.md mentions Superflow (so future runs detect it)
 2. The `docs/superpowers/` directory serves as the primary artifact marker
 
-## Step 7: Hand Off to Phase 1
+## Step 8: Hand Off to Phase 1
 
 Ask the user:
 > "Done! I've explored the project. What would you like to work on?"
