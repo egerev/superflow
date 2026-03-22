@@ -6,13 +6,13 @@ Lightweight Claude Code skill for autonomous product-to-production development. 
 
 ## How It Works
 
-**Phase 0 — Onboarding** (interactive, first run only). Analyzes the project, creates `llms.txt` + `CLAUDE.md`, produces a health report with tech debt analysis. Skipped on subsequent runs.
+**Phase 0 — Onboarding** (interactive, first run only, 10 steps). 4 parallel Opus agents analyze the project, audit/create `llms.txt` + `CLAUDE.md` (Opus + ultrathink), produce health report, propose permissions. Skipped on subsequent runs (marker detection with backwards compatibility).
 
-**Phase 1 — Discovery** (interactive). Collaborative product discovery: research, brainstorming, product brief, spec, plan. ~15-20 min.
+**Phase 1 — Discovery** (interactive, 12 steps). Research with parallel agents, brainstorming (STOP GATE), approaches, product summary (APPROVAL GATE), product brief, spec, dual-model spec review, plan, dual-model plan review, user approval (FINAL GATE).
 
-**Phase 2 — Execution** (autonomous, zero interaction). PR per sprint, git worktrees, dual-model reviews, TDD. Reports results in Demo Day format.
+**Phase 2 — Execution** (autonomous, zero interaction, 11 steps per sprint). PR per sprint, git worktrees, internal review + mandatory PAR, sprint completion checklist. Reports results in Demo Day format.
 
-**Phase 3 — Merge** (interactive, user-initiated). Sequential rebase merges with CI gate, documentation update, cleanup.
+**Phase 3 — Merge** (interactive, user-initiated). Pre-merge checklist, doc update, sequential rebase merges with CI failure recovery, post-merge report.
 
 ```
 You: "superflow — upgrade analytics"
@@ -42,6 +42,7 @@ Agent: [Phase 3: update docs → merge PRs → cleanup]
 - **Product brief** — Jobs to be Done + user stories before technical spec
 - **Verification discipline** — no claims without pasted test output
 - **Max parallelism** — parallelize independent tasks, sequentialize dependent ones
+- **Opus + ultrathink for docs** — CLAUDE.md and llms.txt audits use highest quality models to prevent hallucinated documentation
 
 ## Install
 
@@ -60,34 +61,20 @@ Add to `~/.claude/settings.json` for fully autonomous Phase 2 execution **withou
 {
   "permissions": {
     "allow": [
-      "Bash(git worktree *)",
-      "Bash(git checkout *)",
-      "Bash(git add *)",
-      "Bash(git commit *)",
-      "Bash(git push *)",
-      "Bash(git push --force-with-lease *)",
-      "Bash(git rebase *)",
-      "Bash(git pull *)",
-      "Bash(git check-ignore *)",
-      "Bash(git log *)",
-      "Bash(git diff *)",
+      "Bash(git worktree *)", "Bash(git checkout *)", "Bash(git add *)",
+      "Bash(git commit *)", "Bash(git push *)", "Bash(git push --force-with-lease *)",
+      "Bash(git rebase *)", "Bash(git pull *)", "Bash(git check-ignore *)",
+      "Bash(git log *)", "Bash(git diff *)",
       "Bash(gh pr *)",
-      "Bash(gh pr create *)",
-      "Bash(gh pr checks *)",
-      "Bash(gh pr merge *)",
-      "Bash(gh pr view *)",
-      "Bash(npm test *)",
-      "Bash(npm run *)",
-      "Bash(npx *)",
-      "Bash(codex *)",
-      "Bash(gemini *)",
-      "Bash(aider *)",
-      "Bash(gtimeout *)",
-      "Bash(timeout *)"
+      "Bash(npm test *)", "Bash(npm run *)",
+      "Bash(codex *)", "Bash(gemini *)", "Bash(aider *)",
+      "Bash(gtimeout *)", "Bash(timeout *)"
     ]
   }
 }
 ```
+
+Adapt to your toolchain — replace `npm` with `yarn`/`bun`/`pnpm` as needed. Phase 0 will propose these permissions automatically on first run.
 
 This is the **safer alternative** to `--dangerously-skip-permissions` — Superflow gets autonomy for exactly the commands it needs, nothing more.
 
