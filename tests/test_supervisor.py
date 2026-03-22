@@ -9,10 +9,11 @@ from unittest.mock import patch, MagicMock, call
 from lib.supervisor import (
     create_worktree, cleanup_worktree, build_prompt, execute_sprint,
     preflight, run, print_summary, resume, _shutdown_requested,
+    generate_completion_report,
 )
 import lib.supervisor as supervisor_module
 from lib.queue import SprintQueue
-from lib.checkpoint import load_checkpoint
+from lib.checkpoint import load_checkpoint, save_checkpoint
 
 
 def _sprint(sid=1, title="Test Sprint", status="pending", branch="feat/test-sprint-1",
@@ -777,6 +778,129 @@ class TestShutdownFlag(unittest.TestCase):
         finally:
             supervisor_module._shutdown_requested = False
             shutil.rmtree(tmpdir)
+
+
+class TestCompletionReport(unittest.TestCase):
+    """Tests for generate_completion_report()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints):
+        return SprintQueue("test-feature", "2026-01-01T00:00:00Z", sprints)
+
+    def test_report_all_completed(self):
+        """Report for all-completed queue includes each sprint with status and PR."""
+        sprints = [
+            _sprint(sid=1, title="Setup", status="completed"),
+            _sprint(sid=2, title="Build", status="completed"),
+        ]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        sprints[1]["pr"] = "https://github.com/test/repo/pull/2"
+        q = self._make_queue(sprints)
+
+        # Create checkpoints with summary data
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed",
+            "summary": {
+                "tests": {"passed": 5, "failed": 0},
+                "par": {"claude": "ACCEPTED", "secondary": "ACCEPTED"},
+            },
+        })
+        save_checkpoint(self.cp_dir, 2, {
+            "sprint_id": 2, "status": "completed",
+            "summary": {
+                "tests": {"passed": 10, "failed": 0},
+                "par": {"claude": "ACCEPTED", "secondary": "ACCEPTED"},
+            },
+        })
+
+        report = generate_completion_report(q, self.cp_dir)
+
+        self.assertIn("# Completion Report", report)
+        self.assertIn("test-feature", report)
+        self.assertIn("Sprint 1: Setup", report)
+        self.assertIn("Sprint 2: Build", report)
+        self.assertIn("completed", report)
+        self.assertIn("https://github.com/test/repo/pull/1", report)
+        self.assertIn("5 passed, 0 failed", report)
+        self.assertIn("Claude=ACCEPTED", report)
+        self.assertIn("100%", report)
+
+    def test_report_with_failures(self):
+        """Report includes failed sprint info with error messages."""
+        sprints = [
+            _sprint(sid=1, title="Setup", status="completed"),
+            _sprint(sid=2, title="Build", status="failed"),
+            _sprint(sid=3, title="Deploy", status="skipped"),
+        ]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        sprints[1]["error_log"] = "crash during build"
+        sprints[1]["retries"] = 2
+        sprints[2]["error_log"] = "dependency failed"
+        q = self._make_queue(sprints)
+
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed",
+            "summary": {"tests": {"passed": 3, "failed": 0}, "par": {"claude": "ACCEPTED", "secondary": "ACCEPTED"}},
+        })
+        save_checkpoint(self.cp_dir, 2, {
+            "sprint_id": 2, "status": "failed",
+            "error": "crash during build", "retries": 2,
+        })
+
+        report = generate_completion_report(q, self.cp_dir)
+
+        self.assertIn("failed", report.lower())
+        self.assertIn("crash during build", report)
+        self.assertIn("skipped", report.lower())
+        self.assertIn("dependency failed", report)
+        self.assertIn("Retries", report)
+        self.assertIn("33%", report)  # 1 out of 3
+
+    def test_report_no_checkpoints(self):
+        """Report works even with no checkpoint files."""
+        sprints = [_sprint(sid=1, title="Sprint 1", status="pending")]
+        q = self._make_queue(sprints)
+
+        report = generate_completion_report(q, self.cp_dir)
+
+        self.assertIn("# Completion Report", report)
+        self.assertIn("Sprint 1", report)
+        self.assertIn("N/A", report)  # No test/PAR data
+
+    def test_report_writes_to_file(self):
+        """When output_path is provided, report is written to file."""
+        sprints = [_sprint(sid=1, title="Sprint 1", status="completed")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = self._make_queue(sprints)
+
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+
+        output_path = os.path.join(self.tmpdir, "reports", "report.md")
+        report = generate_completion_report(q, self.cp_dir, output_path=output_path)
+
+        # File should exist
+        self.assertTrue(os.path.exists(output_path))
+        with open(output_path) as f:
+            file_content = f.read()
+        self.assertEqual(report, file_content)
+
+    def test_report_returns_string(self):
+        """Report always returns a string, even without output_path."""
+        sprints = [_sprint(sid=1, title="Sprint 1", status="completed")]
+        q = self._make_queue(sprints)
+
+        report = generate_completion_report(q, self.cp_dir)
+
+        self.assertIsInstance(report, str)
+        self.assertTrue(len(report) > 0)
 
 
 if __name__ == "__main__":
