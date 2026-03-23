@@ -418,11 +418,13 @@ python3 --version 2>/dev/null && echo "SUPERVISOR_AVAILABLE" || echo "SUPERVISOR
 
 **Do NOT skip this step.** Check if `~/.claude/settings.json` has the required allow permissions for Superflow.
 
+**If the user already approved permissions in the proposal (Step 3.5), skip this prompt and proceed to setup.** Only ask if the proposal was skipped or the user chose 'edit'.
+
 If missing, propose to the user:
 > "Phase 2 runs autonomously — dozens of commands without human approval. To enable this, I need to add broad permissions for git, GitHub CLI, build tools, and secondary providers. Without this, you'll get prompted constantly. Add permissions?"
 
 **Explain the safety model** (especially for beginners):
-> "These permissions only apply inside Claude Code sessions. They allow Claude to run git, tests, and build commands without asking each time. Destructive commands like `rm -rf` or `git push --force` are NOT included."
+> "These permissions only apply inside Claude Code sessions. They allow Claude to run git, tests, and build commands without asking each time. These are broad wildcards (e.g., `Bash(git *)` covers ALL git subcommands including `git push --force`). The tradeoff is autonomy vs safety — Phase 2 needs these to work without interruption. If you prefer tighter control, ask Claude to use explicit subcommands instead."
 
 If user agrees, add to `~/.claude/settings.json` (merge with existing, don't overwrite). **Adapt to this project's toolchain** — detect package manager and test runner, then build the permissions list:
 
@@ -523,6 +525,8 @@ If user declines: continue, but warn that Phase 2 will require manual approval f
 ## Step 7.5: Hooks Setup
 
 **Hooks automate quality checks** — especially valuable for beginners who forget to format/lint. Based on the detected stack from Step 2, propose a hooks configuration.
+
+**If the user already approved hooks in the proposal (Step 3.5), skip this prompt.** Only ask if proposal was skipped or user chose 'skip_hooks'.
 
 Tell the user (in their language):
 > "I can set up auto-formatting and quality hooks so Claude automatically formats code after every edit. This catches style issues instantly. Set up hooks?"
@@ -671,8 +675,8 @@ After writing hooks to `.claude/settings.json`, verify they actually work. A hoo
 
 **Stage 1: Pipe test** — verify the hook command parses input correctly:
 ```bash
-# Synthesize the event payload and pipe it to the hook command
-echo '{"tool_name":"Edit","tool_input":{"file_path":"<a real .ts/.py file from this repo>"}}' | <hook command without 2>/dev/null || true wrapper>
+# Example for prettier:
+echo '{"tool_name":"Edit","tool_input":{"file_path":"src/index.ts"}}' | jq -r '.tool_input.file_path' | { read -r f; echo "$f" | grep -qE '\.(ts|tsx)$' && npx prettier --write "$f"; }
 ```
 Check: exit code 0, no errors. If fails: wrong jq path, missing tool, bad quoting.
 
@@ -697,7 +701,7 @@ gofmt -e /dev/null 2>/dev/null && echo "AVAILABLE" || echo "NOT_FOUND"
 # Create a test file with a known formatting issue
 echo "const   x   =   1" > /tmp/superflow-hook-test.ts
 # Feed the hook command a real event payload
-echo '{"tool_name":"Edit","tool_input":{"file_path":"/tmp/superflow-hook-test.ts"}}' | <full hook command>
+echo '{"tool_name":"Edit","tool_input":{"file_path":"/tmp/superflow-hook-test.ts"}}' | jq -r '.tool_input.file_path' | { read -r f; echo "$f" | grep -qE '\.(ts|tsx)$' && npx prettier --write "$f"; } 2>/dev/null || true
 # Verify the file was formatted
 cat /tmp/superflow-hook-test.ts  # Should show formatted output
 rm -f /tmp/superflow-hook-test.ts
@@ -716,7 +720,7 @@ rm -f /tmp/superflow-hook-test.ts
 - **Beginner** ($USER_CONTEXT.experience == "beginner"): "The [formatter] hook couldn't be verified — [formatter] might not be installed. Want me to add it to the project? (`npm install -D prettier`)"
 - **Advanced**: "Hook written but [formatter] not available. Hook will no-op until installed. Run `npm install -D prettier` when ready."
 
-**If jq is not available:** Skip Stages 1-2. Log: "jq not found — skipping hook validation. Verify manually with `/hooks`."
+**If jq is not available:** Skip Stages 1-2. Log: "jq not found — skipping hook validation. Verify manually by editing a file and checking if formatting is applied."
 
 ## Step 7.7: Skills Recommendation
 
@@ -761,6 +765,28 @@ Create `<project>/.claude/skills/verify/SKILL.md` (NOT in Superflow's prompts/ d
 name: verify
 description: Run full local verification (lint + typecheck + tests). Use before committing or creating PRs.
 ---
+```
+
+The SKILL.md body (below the frontmatter) should contain the actual verification instructions:
+
+```
+Run the full verification pipeline for this project:
+
+```bash
+[detected verify command from table above]
+```
+
+If any step fails:
+1. Show the error output
+2. Fix the issue
+3. Re-run the full pipeline
+
+Report results as:
+| Check | Result | Details |
+|-------|--------|---------|
+| Lint | PASS/FAIL | ... |
+| Type check | PASS/FAIL/SKIP | ... |
+| Tests | PASS (N passed) / FAIL | ... |
 ```
 
 **Detection logic** — build the verification command based on detected stack:
