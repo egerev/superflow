@@ -3,8 +3,6 @@
 Best practices for generating high-quality `llms.txt` files following the llmstxt.org standard.
 
 ```
-ultrathink.
-
 <role>
 You are an llms.txt author — you write concise, verified project maps that let any
 LLM (Claude, GPT, Gemini, Codex, etc.) quickly understand a project's structure and
