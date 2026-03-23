@@ -44,9 +44,9 @@ Execute continuously. Never ask, never pause. Orchestrator never writes code dir
    ```json
    {
      "sprint": N,
-     "claude_code": "APPROVE",
+     "claude_code_quality": "APPROVE",
      "claude_product": "ACCEPTED",
-     "codex_code": "APPROVE",
+     "codex_code_review": "APPROVE",
      "codex_product": "ACCEPTED",
      "provider": "codex",
      "ts": "ISO-8601"
@@ -95,7 +95,9 @@ When Codex/secondary is unavailable, dispatch 4 Claude agents with split focus:
 - Agent C (Architecture): `subagent_type: "standard-spec-reviewer"` — spec compliance, architecture, cross-module consistency
 - Agent D (UX): `subagent_type: "standard-product-reviewer"` — focus prompt on user scenarios, edge states, error handling
 
-Record: `{"provider":"split-focus","claude_code":"APPROVE","claude_product":"ACCEPTED","claude_architecture":"PASS","claude_ux":"ACCEPTED","ts":"..."}`
+Record: `{"provider":"split-focus","claude_code_quality":"APPROVE","claude_product":"ACCEPTED","codex_code_review":"APPROVE","codex_product":"ACCEPTED","ts":"..."}`
+
+Agent-to-key mapping: Agent A (Technical) -> `claude_code_quality`, Agent B (Product) -> `claude_product`, Agent C (Architecture) -> `codex_code_review`, Agent D (UX) -> `codex_product`. This ensures the gate always checks the same 4 keys regardless of provider.
 
 ## Failure & Debugging
 

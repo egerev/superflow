@@ -12,8 +12,9 @@ Survives context compaction. SKILL.md does not.
    3. Dispatch Codex code reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=high --ephemeral`
    4. Dispatch Codex product reviewer: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high`
    5. Wait for all 4. Fix confirmed issues (NEEDS_FIXES, REQUEST_CHANGES, or FAIL). Re-review only flagging agents.
-   6. Write `.par-evidence.json`: `{"sprint":N,"claude_code":"APPROVE","claude_product":"ACCEPTED","codex_code":"APPROVE","codex_product":"ACCEPTED","ts":"..."}`
+   6. Write `.par-evidence.json`: `{"sprint":N,"claude_code_quality":"APPROVE","claude_product":"ACCEPTED","codex_code_review":"APPROVE","codex_product":"ACCEPTED","ts":"..."}`
    7. GATE: `git push` / `gh pr create` blocked until `.par-evidence.json` exists with all 4 verdicts passing.
+   8. Pass verdicts: APPROVE, ACCEPTED, PASS. Fail verdicts: REQUEST_CHANGES, NEEDS_FIXES, FAIL. The orchestrator must accept any pass verdict from any agent role.
 4. **Tests with evidence.** Paste actual output before claiming done.
 5. **Re-read phase docs** at each sprint boundary via Read tool.
 6. **Dual-model reviews mandatory.** Use secondary provider for spec review, plan review, and PAR.
