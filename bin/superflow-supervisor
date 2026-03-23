@@ -9,7 +9,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.queue import SprintQueue
-from lib.supervisor import run, resume, print_summary, generate_completion_report
+from lib.supervisor import run, resume, print_summary
 
 
 def _make_notifier(args):
@@ -102,15 +102,18 @@ def main():
     parser.add_argument("--version", action="version", version="superflow-supervisor 1.0.0")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
+    # shared parent parser for run and resume (avoids repeating 7 identical arguments)
+    shared_parser = argparse.ArgumentParser(add_help=False)
+    shared_parser.add_argument("--queue", required=True, help="Path to queue.json")
+    shared_parser.add_argument("--plan", default=None, help="Path to plan file")
+    shared_parser.add_argument("--parallel", type=int, default=1, help="Max parallel sprints")
+    shared_parser.add_argument("--timeout", type=int, default=1800, help="Timeout per sprint (seconds)")
+    shared_parser.add_argument("--no-replan", action="store_true", help="Disable adaptive replanning")
+    shared_parser.add_argument("--telegram-token", default=None, help="Telegram bot token")
+    shared_parser.add_argument("--telegram-chat", default=None, help="Telegram chat ID")
+
     # run
-    run_parser = subparsers.add_parser("run", help="Execute sprint queue")
-    run_parser.add_argument("--queue", required=True, help="Path to queue.json")
-    run_parser.add_argument("--plan", default=None, help="Path to plan file")
-    run_parser.add_argument("--parallel", type=int, default=1, help="Max parallel sprints")
-    run_parser.add_argument("--timeout", type=int, default=1800, help="Timeout per sprint (seconds)")
-    run_parser.add_argument("--no-replan", action="store_true", help="Disable adaptive replanning")
-    run_parser.add_argument("--telegram-token", default=None, help="Telegram bot token")
-    run_parser.add_argument("--telegram-chat", default=None, help="Telegram chat ID")
+    run_parser = subparsers.add_parser("run", help="Execute sprint queue", parents=[shared_parser])
     run_parser.set_defaults(func=cmd_run)
 
     # status
@@ -119,14 +122,7 @@ def main():
     status_parser.set_defaults(func=cmd_status)
 
     # resume
-    resume_parser = subparsers.add_parser("resume", help="Resume after crash")
-    resume_parser.add_argument("--queue", required=True, help="Path to queue.json")
-    resume_parser.add_argument("--plan", default=None, help="Path to plan file")
-    resume_parser.add_argument("--parallel", type=int, default=1, help="Max parallel sprints")
-    resume_parser.add_argument("--timeout", type=int, default=1800, help="Timeout per sprint (seconds)")
-    resume_parser.add_argument("--no-replan", action="store_true", help="Disable adaptive replanning")
-    resume_parser.add_argument("--telegram-token", default=None, help="Telegram bot token")
-    resume_parser.add_argument("--telegram-chat", default=None, help="Telegram chat ID")
+    resume_parser = subparsers.add_parser("resume", help="Resume after crash", parents=[shared_parser])
     resume_parser.set_defaults(func=cmd_resume)
 
     # reset

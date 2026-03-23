@@ -157,7 +157,7 @@ You will receive Telegram notifications for sprint starts, completions, failures
 | `lib/parallel.py` | Parallel sprint execution via ThreadPoolExecutor |
 | `lib/replanner.py` | Adaptive replanner (adjusts remaining sprints after completion) |
 | `lib/notifications.py` | Telegram/stdout notification system |
-| `tests/` | Unit and integration tests (140+ tests) |
+| `tests/` | Unit and integration tests (130+ tests) |
 
 ## Origin
 

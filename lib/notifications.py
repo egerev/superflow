@@ -90,14 +90,6 @@ class Notifier:
             sprint_id=sprint_id,
         )
 
-    def notify_sprint_retry(self, sprint_id, title, attempt, max_retries):
-        """Sprint failed, retrying."""
-        self.notify(
-            "sprint_retry",
-            f"{title} failed, retrying (attempt {attempt}/{max_retries})",
-            sprint_id=sprint_id,
-        )
-
     def notify_sprint_skipped(self, sprint_id, title, reason):
         """Sprint skipped."""
         self.notify(
@@ -110,24 +102,9 @@ class Notifier:
         """Queue is blocked, needs user attention."""
         self.notify("blocked", f"Queue blocked: {message}")
 
-    def notify_timeout(self, sprint_id, title, timeout_seconds):
-        """Sprint timed out."""
-        self.notify(
-            "timeout",
-            f"{title} timed out after {timeout_seconds}s",
-            sprint_id=sprint_id,
-        )
-
     def notify_replan(self, changes_summary):
         """Replanner changed the queue."""
         self.notify("replan", f"Replanner updated queue: {changes_summary}")
-
-    def notify_crash_resume(self, completed, remaining):
-        """Supervisor resumed after crash."""
-        self.notify(
-            "crash_resume",
-            f"Supervisor resumed. Completed: {completed}, remaining: {remaining}",
-        )
 
     def notify_all_done(self, summary):
         """All sprints finished."""

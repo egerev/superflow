@@ -15,26 +15,26 @@ Version: v3.0.0 (2026-03-23). MIT License.
 
 ## File Structure
 
-- [SKILL.md](SKILL.md): Entry point — startup checklist, provider detection, supervisor detection, phase routing (89 lines)
-- [superflow-enforcement.md](superflow-enforcement.md): 9 hard rules that survive context compaction — deployed to ~/.claude/rules/ (54 lines)
-- [CLAUDE.md](CLAUDE.md): Project instructions for Claude — architecture, key files table, conventions (75 lines)
+- [SKILL.md](SKILL.md): Entry point — startup checklist, provider detection, supervisor detection, phase routing (90 lines)
+- [superflow-enforcement.md](superflow-enforcement.md): 9 hard rules that survive context compaction — deployed to ~/.claude/rules/ (74 lines)
+- [CLAUDE.md](CLAUDE.md): Project instructions for Claude — architecture, key files table, conventions (100 lines)
 - [README.md](README.md): Installation, usage, supervisor docs, file table, permissions setup (168 lines)
 
 ## Phase References
 
-- [references/phase0-onboarding.md](references/phase0-onboarding.md): First-run onboarding — 11 steps, marker detection, 5 parallel agents (4 Claude + 1 Codex), health report, llms.txt/CLAUDE.md audit, python3 check (~323 lines)
-- [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — 12 steps, brainstorm STOP GATE, product summary APPROVAL, spec/plan with dual-model review (132 lines)
-- [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — 10 steps, worktree, TDD, implementer dispatch, 4-agent unified review, push+PR, Final Holistic Review (166 lines)
-- [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, CI handling, post-merge report (87 lines)
+- [references/phase0-onboarding.md](references/phase0-onboarding.md): First-run onboarding — 11 steps, marker detection, 5 parallel agents (4 Claude + 1 Codex), health report, llms.txt/CLAUDE.md audit, python3 check (323 lines)
+- [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — 12 steps, brainstorm STOP GATE, product summary APPROVAL, spec/plan with dual-model review (138 lines)
+- [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — 10 steps, worktree, TDD, implementer dispatch, 4-agent unified review, push+PR, Final Holistic Review (168 lines)
+- [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, CI handling, post-merge report (89 lines)
 
 ## Agent Prompts
 
 - [prompts/implementer.md](prompts/implementer.md): TDD-driven code implementation agent — Red-Green-Refactor cycle, test evidence required (81 lines)
 - [prompts/spec-reviewer.md](prompts/spec-reviewer.md): Spec compliance reviewer — verifies implementation matches specification (55 lines)
-- [prompts/code-quality-reviewer.md](prompts/code-quality-reviewer.md): Code quality reviewer — correctness, security, maintainability, OWASP (77 lines)
-- [prompts/product-reviewer.md](prompts/product-reviewer.md): Product acceptance reviewer — user perspective, UX gaps, edge cases (72 lines)
-- [prompts/llms-txt-writer.md](prompts/llms-txt-writer.md): llms.txt generation/audit prompt — llmstxt.org standard, verified entries only (156 lines)
-- [prompts/claude-md-writer.md](prompts/claude-md-writer.md): CLAUDE.md generation/audit prompt — verified paths and commands (150 lines)
+- [prompts/code-quality-reviewer.md](prompts/code-quality-reviewer.md): Code quality reviewer — correctness, security, maintainability, OWASP (79 lines)
+- [prompts/product-reviewer.md](prompts/product-reviewer.md): Product acceptance reviewer — user perspective, UX gaps, edge cases (73 lines)
+- [prompts/llms-txt-writer.md](prompts/llms-txt-writer.md): llms.txt generation/audit prompt — llmstxt.org standard, verified entries only (154 lines)
+- [prompts/claude-md-writer.md](prompts/claude-md-writer.md): CLAUDE.md generation/audit prompt — verified paths and commands (148 lines)
 - [prompts/testing-guidelines.md](prompts/testing-guidelines.md): Testing reference — TDD cycle, coverage expectations, included in implementer context (68 lines)
 - [prompts/codex/code-reviewer.md](prompts/codex/code-reviewer.md): Codex code quality review prompt
 - [prompts/codex/product-reviewer.md](prompts/codex/product-reviewer.md): Codex product acceptance review prompt
@@ -51,24 +51,24 @@ Version: v3.0.0 (2026-03-23). MIT License.
 
 The supervisor is a Python CLI that orchestrates autonomous multi-sprint execution outside of Claude Code's context window.
 
-- [bin/superflow-supervisor](bin/superflow-supervisor): CLI entry point — argparse-based with run/status/resume/reset commands (147 lines)
-- [lib/supervisor.py](lib/supervisor.py): Core supervisor — worktree lifecycle, prompt building, sprint execution with retry, run loop, completion report generation (743 lines, ~572 LOC)
+- [bin/superflow-supervisor](bin/superflow-supervisor): CLI entry point — argparse-based with run/status/resume/reset commands (143 lines)
+- [lib/supervisor.py](lib/supervisor.py): Core supervisor — worktree lifecycle, prompt building, sprint execution with retry, run loop, completion report generation (763 lines, ~590 LOC)
 - [lib/queue.py](lib/queue.py): Sprint queue — JSON-based queue with DAG dependency resolution, atomic saves, status tracking (114 lines, ~98 LOC)
 - [lib/checkpoint.py](lib/checkpoint.py): Checkpoint system — save/load sprint execution state for crash recovery with atomic writes (37 lines, ~31 LOC)
 - [lib/parallel.py](lib/parallel.py): Parallel execution — ThreadPoolExecutor-based concurrent sprint execution with queue locking (38 lines, ~31 LOC)
 - [lib/replanner.py](lib/replanner.py): Adaptive replanner — analyzes completed sprints, adjusts remaining plans via Claude subprocess (212 lines, ~168 LOC)
-- [lib/notifications.py](lib/notifications.py): Notifications — Telegram Bot API integration with stdout fallback, 11 event types (134 lines, ~110 LOC)
-- [templates/supervisor-sprint-prompt.md](templates/supervisor-sprint-prompt.md): Sprint execution prompt template with placeholders for sprint plan, CLAUDE.md, llms.txt (25 lines)
+- [lib/notifications.py](lib/notifications.py): Notifications — Telegram Bot API integration with stdout fallback, 8 event types (111 lines, ~90 LOC)
+- [templates/supervisor-sprint-prompt.md](templates/supervisor-sprint-prompt.md): Sprint execution prompt template with placeholders for sprint plan, CLAUDE.md, llms.txt (33 lines)
 - [templates/replan-prompt.md](templates/replan-prompt.md): Replanner prompt template with placeholders for completed/remaining sprints (26 lines)
-- [examples/sprint-queue-example.json](examples/sprint-queue-example.json): Queue file template for new users (42 lines)
+- [examples/sprint-queue-example.json](examples/sprint-queue-example.json): Queue file template for new users (45 lines)
 
 ## Tests
 
-149 tests across 8 test files (2948 lines total):
-- [tests/test_supervisor.py](tests/test_supervisor.py): Core supervisor tests — sprint execution, worktree lifecycle, run loop (907 lines)
-- [tests/test_integration.py](tests/test_integration.py): Integration tests — happy path, crash recovery, blocked sprints, retry scenarios (565 lines)
+132 tests across 8 test files (2759 lines total):
+- [tests/test_supervisor.py](tests/test_supervisor.py): Core supervisor tests — sprint execution, worktree lifecycle, run loop (939 lines)
+- [tests/test_integration.py](tests/test_integration.py): Integration tests — happy path, crash recovery, blocked sprints, retry scenarios (569 lines)
 - [tests/test_queue.py](tests/test_queue.py): Queue tests — DAG resolution, atomic saves, status transitions (371 lines)
-- [tests/test_notifications.py](tests/test_notifications.py): Notification tests — all 11 event types, Telegram API, stdout fallback (337 lines)
+- [tests/test_notifications.py](tests/test_notifications.py): Notification tests — 8 event types, Telegram API, stdout fallback (112 lines)
 - [tests/test_replanner.py](tests/test_replanner.py): Replanner tests — JSON parsing, sprint modification, guard conditions (296 lines)
 - [tests/test_parallel.py](tests/test_parallel.py): Parallel execution tests — concurrency, queue locking, dependency handling (219 lines)
 - [tests/test_cli.py](tests/test_cli.py): CLI argument parsing and command dispatch tests (166 lines)
@@ -85,5 +85,5 @@ The supervisor is a Python CLI that orchestrates autonomous multi-sprint executi
 - **Sprint queue:** JSON file defining sprints with DAG dependencies, processed by the supervisor CLI
 - **Checkpoints:** Per-sprint JSON files storing execution state, enabling crash recovery via `resume` command
 
-<!-- updated-by-superflow:2026-03-23 -->
+<!-- updated-by-superflow:2026-03-24 -->
 

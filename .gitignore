@@ -1,5 +1,6 @@
 .worktrees/
 .par-evidence.json
+.env
 .DS_Store
 *.swp
 docs/superflow/checkpoints/

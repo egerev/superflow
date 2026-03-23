@@ -38,7 +38,7 @@ superflow/
   prompts/               — Agent prompt templates (7 prompts)
     codex/               — Codex-specific prompts (3 prompts)
   references/            — Phase documentation (phases 0-3)
-  tests/                 — Unit and integration tests (140+ tests)
+  tests/                 — Unit and integration tests (130+ tests)
 ```
 
 ## Startup Checklist
