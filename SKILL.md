@@ -7,7 +7,7 @@ description: "Use when user says 'superflow', 'суперфлоу', or asks for 
 
 Four phases: onboarding, discovery, execution, merge.
 
-Phase 0 (auto, first run only): Detect markers > Mini-interview (3 questions) > Analyze codebase (4 parallel agents) > Health report > Audit llms.txt & CLAUDE.md > Permissions > Hooks setup > Skills recommendation > Markers > Checklist
+Phase 0 (auto, first run only): Detect markers > Mini-interview (AskUserQuestion) > Detect empty/existing > Analyze codebase (4 parallel agents) > Health report > Proposal (approval gate) > Audit llms.txt & CLAUDE.md > CLAUDE.local.md > Permissions > Hooks setup + verification > /verify skill > Plugins > Markers > Restart instruction
 Phase 1 (with user, 12 steps): Context > Research (parallel agents) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Summary (APPROVAL) > Brief > Spec > Spec Review (dual-model) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE)
 Phase 2 (autonomous, 11 steps per sprint): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers > Internal review > Test verification > PAR > Push+PR > Cleanup > Telegram
 Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase merge (with CI failure handling) > Post-merge report
@@ -34,6 +34,7 @@ superflow/
   templates/
     supervisor-sprint-prompt.md — Sprint execution prompt template
     replan-prompt.md     — Replanner prompt template
+  # Phase 0 creates <project>/.claude/skills/verify/SKILL.md during onboarding
   prompts/               — Agent prompt templates (7 prompts)
   references/            — Phase documentation (phases 0-3)
   tests/                 — Unit and integration tests (140+ tests)

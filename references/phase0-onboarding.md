@@ -34,23 +34,106 @@ Phase 0 leaves an **exact marker** in each file it touches:
 Tell the user (in their language):
 > "This is the first Superflow run on this project. Before I dive in — a couple of quick questions so I can tailor the setup."
 
-Ask the user **3 short questions** (adapt wording to their language):
+Ask the user using AskUserQuestion (structured UI). If AskUserQuestion is unavailable (non-interactive mode), fall back to text-based questions.
 
-1. **"Working solo or in a team?"**
-   → Affects: CI/hooks recommendations, review process emphasis
-2. **"How comfortable are you with [detected stack]?"** (beginner / intermediate / advanced)
-   → Affects: report detail level, how much to explain recommendations
-3. **"Do you have CI/CD set up?"** (yes / no / not sure)
-   → Affects: DevOps analysis depth, hook recommendations
+**Question 1:**
+```
+AskUserQuestion(
+  question: "Working solo or in a team?",
+  options: [
+    {"value": "solo", "label": "Solo — just me"},
+    {"value": "small_team", "label": "Small team (2-5)"},
+    {"value": "large_team", "label": "Large team (6+)"}
+  ]
+)
+```
 
-Store answers as `$USER_CONTEXT` — pass to analysis agents in Step 2 so they adjust focus:
+**Question 2:**
+```
+AskUserQuestion(
+  question: "How comfortable are you with [detected stack]?",
+  options: [
+    {"value": "beginner", "label": "Beginner — still learning"},
+    {"value": "intermediate", "label": "Intermediate — comfortable"},
+    {"value": "advanced", "label": "Advanced — expert level"}
+  ]
+)
+```
+
+**Question 3:**
+```
+AskUserQuestion(
+  question: "Do you have CI/CD set up?",
+  options: [
+    {"value": "yes", "label": "Yes — CI is configured"},
+    {"value": "no", "label": "No CI yet"},
+    {"value": "not_sure", "label": "Not sure"}
+  ]
+)
+```
+
+**Fallback (non-interactive mode):** If AskUserQuestion is unavailable, ask the same questions as plain text and parse the response. The existing text-based format works as fallback.
+
+**Edge case — "just go":** If user dismisses any question or says "just go" / "просто начинай", use defaults: `{team: "solo", experience: "intermediate", ci: "no"}`. Proceed immediately.
+
+Store answers as `$USER_CONTEXT`:
+```json
+{
+  "team": "solo" | "small_team" | "large_team",
+  "experience": "beginner" | "intermediate" | "advanced",
+  "ci": "yes" | "no" | "not_sure",
+  "dismissed": false
+}
+```
+
+Pass `$USER_CONTEXT` to analysis agents in Step 2 so they adjust focus:
 - **Beginner**: more explanation, flag basics (missing linter, no tests), recommend learning resources
 - **Solo**: skip team-oriented suggestions (branch protection, code owners)
 - **No CI**: flag as P1 recommendation, suggest simple GitHub Actions starter
 
-> **Keep it lightweight.** If the user seems impatient or says "just go", skip remaining questions and use sensible defaults (solo, intermediate, no CI). The interview must not feel like a blocker.
+> **Keep it lightweight.** The interview must not feel like a blocker — the "just go" edge case ensures impatient users skip straight to analysis.
 
 Then proceed to analysis.
+
+## Step 1.5: Detect Empty Project vs Existing
+
+Insert after the interview, before analysis. Determines which onboarding path to follow.
+
+**Detection logic:**
+
+```bash
+# Count tracked files (excluding config-only)
+FILE_COUNT=$(git ls-files | grep -v -E '^\.gitignore$|^\.github/|^\.gitlab/|^README|^LICENSE|^CHANGELOG' | wc -l | tr -d ' ')
+
+# Count source files on disk (catches untracked files too)
+SOURCE_COUNT=$(find . -maxdepth 3 \( -name '*.js' -o -name '*.ts' -o -name '*.py' -o -name '*.rb' -o -name '*.go' -o -name '*.rs' \) -not -path '*/node_modules/*' -not -path '*/.git/*' | wc -l | tr -d ' ')
+
+# Check git history depth
+COMMIT_COUNT=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+
+# Check for any source code files in git
+HAS_SOURCE=$(git ls-files | grep -E '\.(js|ts|jsx|tsx|py|rb|go|rs|java|c|cpp|cs|php|swift|kt|luau|lua)$' | head -1)
+```
+
+**Decision matrix:**
+
+| FILE_COUNT | COMMIT_COUNT | SOURCE_COUNT | HAS_SOURCE | Result |
+|-----------|-------------|-------------|------------|--------|
+| 0 | 0 | 0 | empty | **Greenfield** → route to greenfield path (Sprint 3) |
+| ≤5 | ≤2 | 0 | empty | **Near-empty** → treat as greenfield |
+| >5 | any | any | non-empty | **Existing project** → proceed to Step 2 |
+| ≤5 | any | >0 | any | **Existing (untracked)** → proceed to Step 2 |
+| ≤5 | >2 | 0 | empty | **Config-heavy** → ask user: "This repo has config files but no source code. New project or existing?" |
+
+**Edge case:** A repo that once had source code but it was deleted:
+```bash
+git log --diff-filter=A --name-only --pretty=format: 2>/dev/null | grep -E '\.(js|ts|py|rb|go|rs)$' | head -1
+```
+If this returns results → treat as existing project (it had source code before).
+
+**Routing:**
+- **Greenfield detected:** Tell user: "This looks like a new project! I'll help set up the foundation." → Route to greenfield path (defined in Sprint 3). For now, add placeholder: "Greenfield path: see Sprint 3 implementation."
+- **Existing project:** Proceed to Step 2 as normal.
 
 ## Step 2: Project Analysis (background)
 
@@ -162,6 +245,63 @@ If a section has no issues, state that explicitly with evidence — "No files >5
 
 Save report to `docs/superflow/project-health-report.md` (in English).
 
+## Step 3.5: Proposal — Review Before Execution
+
+After analysis (Step 2) and health report (Step 3), present a proposal of ALL planned actions before executing them. This is the user's last approval checkpoint.
+
+**Show the proposal using AskUserQuestion** with preview. The proposal covers everything Phase 0 will do next:
+
+```markdown
+## Phase 0 Proposal
+
+Based on the analysis, here's what I'm planning to do. Review and approve before I proceed.
+
+### Documentation
+- [ ] **llms.txt**: [Create from scratch | Update — N stale entries, M missing modules]
+- [ ] **CLAUDE.md**: [Create from scratch | Update — X/Y paths valid, add Z new modules]
+
+### Personal Settings
+- [ ] **CLAUDE.local.md**: Create with role ([solo/team]), experience level, communication preferences
+
+### Development Environment
+- [ ] **Permissions** (`~/.claude/settings.json`): Add [N] permissions for [detected stack]
+  - Preview: `Bash(npm *)`, `Bash(npx *)`, `Bash(git *)`, ...
+- [ ] **Hooks** (`.claude/settings.json`): [prettier on Edit/Write | ruff format on Edit/Write | none detected]
+  - Preview: `jq -r '.tool_input.file_path' | ...`
+- [ ] **Desktop notifications**: [Add Notification hook for permission_prompt/idle_prompt]
+
+### Infrastructure
+- [ ] **Enforcement rules**: [Install to ~/.claude/rules/ | Already up to date]
+- [ ] **.gitignore**: [Add .worktrees/, CLAUDE.local.md, .superflow-state.json | Already present]
+- [ ] **Supervisor**: [python3 available | python3 not found — single-session only]
+
+### Recommendations
+- [ ] **/verify skill**: Create `<project>/.claude/skills/verify/SKILL.md` for [detected stack]
+- [ ] **Plugins**: [list relevant plugins based on stack]
+```
+
+**Approval gate:**
+
+```
+AskUserQuestion(
+  question: "Does this plan look right?",
+  options: [
+    {"value": "approve", "label": "Looks good — proceed with everything"},
+    {"value": "skip_hooks", "label": "Skip hooks and notifications"},
+    {"value": "skip_optional", "label": "Only documentation (skip hooks, skills, plugins)"},
+    {"value": "edit", "label": "I want to change something"}
+  ]
+)
+```
+
+**Handling each option:**
+- **approve**: proceed with all items
+- **skip_hooks**: skip Steps 7.5, Notification hook. Proceed with everything else
+- **skip_optional**: only Steps 4-5 (llms.txt + CLAUDE.md). Skip Steps 5.5, 7.5, 7.7, 9.5
+- **edit**: ask free text "What would you like to change?", adjust plan, re-present
+
+**Skip individual confirmations:** Items approved in this proposal do NOT need individual AskUserQuestion calls later. The proposal replaces per-step approval.
+
 ## Step 4: Audit & Update llms.txt
 
 `llms.txt` is a standard (llmstxt.org) that helps any LLM understand a project. **Always audit, even if it exists.**
@@ -212,6 +352,40 @@ Tell user: > "Created CLAUDE.md with project description."
 7. Fix silently if stale, tell user what changed
 
 Tell user: > "Audited CLAUDE.md — [X/Y paths valid, N new modules since last audit, fixed K issues: brief list]."
+
+## Step 5.5: Create CLAUDE.local.md
+
+Create a personal preferences file that is gitignored. This stores user-specific settings from the interview.
+
+**Check if it already exists:**
+```bash
+[ -f CLAUDE.local.md ] && echo "EXISTS" || echo "CREATE"
+```
+
+If it doesn't exist, create `CLAUDE.local.md` with content based on `$USER_CONTEXT`:
+
+```markdown
+# Personal Preferences
+
+## Role
+- [Solo founder | Team member of N] — [experience level] with [detected stack]
+
+## Communication
+- [Based on interview: explain tradeoffs / be terse / detailed explanations]
+
+## Workflow
+- Using Superflow for feature development
+- [If worktrees detected: worktree-aware setup]
+```
+
+**Gitignore it:**
+```bash
+grep -q 'CLAUDE.local.md' .gitignore || echo "CLAUDE.local.md" >> .gitignore
+```
+
+**Worktree handling:** `CLAUDE.local.md` is gitignored and will be absent in worktrees. This is intentional — automated sprint sessions should use project-level CLAUDE.md only. If the user uses sibling worktrees (detected via `git worktree list`), suggest creating `~/.claude/<project>-instructions.md` and making CLAUDE.local.md a one-line stub: `@~/.claude/<project>-instructions.md`.
+
+Tell user: > "Created CLAUDE.local.md with your preferences. It's gitignored — personal to you."
 
 ## Step 6: Verify Enforcement Rules & Gitignore
 
@@ -488,6 +662,59 @@ If no formatter is detected and user is a **beginner**, recommend installing one
 
 If user declines hooks: continue without them. Not a blocker.
 
+### Hook Verification Pipeline
+
+After writing hooks to `.claude/settings.json`, verify they actually work. A hook that silently does nothing is worse than no hook.
+
+**Stage 1: Pipe test** — verify the hook command parses input correctly:
+```bash
+# Synthesize the event payload and pipe it to the hook command
+echo '{"tool_name":"Edit","tool_input":{"file_path":"<a real .ts/.py file from this repo>"}}' | <hook command without 2>/dev/null || true wrapper>
+```
+Check: exit code 0, no errors. If fails: wrong jq path, missing tool, bad quoting.
+
+**Stage 2: Settings validation** — verify the JSON is well-formed:
+```bash
+jq -e '.hooks.PostToolUse[] | select(.matcher == "Write|Edit") | .hooks[] | select(.type == "command") | .command' .claude/settings.json
+```
+Check: exit 0 + prints the command string. Exit 4/5 = malformed JSON. A broken settings.json silently disables ALL settings from that file.
+
+**Stage 3: Live proof** — verify the formatter is available:
+```bash
+# For prettier:
+echo "test" | npx prettier --check --parser typescript 2>/dev/null && echo "AVAILABLE" || echo "NOT_FOUND"
+# For ruff:
+ruff --version 2>/dev/null && echo "AVAILABLE" || echo "NOT_FOUND"
+# For gofmt:
+gofmt -e /dev/null 2>/dev/null && echo "AVAILABLE" || echo "NOT_FOUND"
+```
+
+**Stage 4: End-to-end smoke test** — verify the full pipeline works:
+```bash
+# Create a test file with a known formatting issue
+echo "const   x   =   1" > /tmp/superflow-hook-test.ts
+# Feed the hook command a real event payload
+echo '{"tool_name":"Edit","tool_input":{"file_path":"/tmp/superflow-hook-test.ts"}}' | <full hook command>
+# Verify the file was formatted
+cat /tmp/superflow-hook-test.ts  # Should show formatted output
+rm -f /tmp/superflow-hook-test.ts
+```
+
+**Verification report:**
+
+| Stage | Result | Details |
+|-------|--------|---------|
+| Pipe test | PASS/FAIL | Exit code, any errors |
+| Settings validation | PASS/FAIL | jq output |
+| Live proof | PASS/FAIL/SKIP | Formatter availability |
+| End-to-end | PASS/FAIL/SKIP | File actually formatted |
+
+**If any stage fails:**
+- **Beginner** ($USER_CONTEXT.experience == "beginner"): "The [formatter] hook couldn't be verified — [formatter] might not be installed. Want me to add it to the project? (`npm install -D prettier`)"
+- **Advanced**: "Hook written but [formatter] not available. Hook will no-op until installed. Run `npm install -D prettier` when ready."
+
+**If jq is not available:** Skip Stages 1-2. Log: "jq not found — skipping hook validation. Verify manually with `/hooks`."
+
 ## Step 7.7: Skills Recommendation
 
 Based on detected stack and user experience level from Step 1, recommend relevant Claude Code skills. **Show only skills that match the project's stack** — don't overwhelm with the full list.
@@ -520,6 +747,44 @@ Keep it brief — just list the slash commands without explanation. They know wh
 
 > **Note:** Skills don't require installation — they're built into Claude Code. Just mention them so the user knows they exist.
 
+### Create /verify Skill
+
+In addition to recommending skills, create a project-specific `/verify` skill that runs the full local verification pipeline.
+
+Create `<project>/.claude/skills/verify/SKILL.md` (NOT in Superflow's prompts/ directory — this goes in the user's project):
+
+```yaml
+---
+name: verify
+description: Run full local verification (lint + typecheck + tests). Use before committing or creating PRs.
+---
+```
+
+**Detection logic** — build the verification command based on detected stack:
+
+| Stack | Verify Command |
+|-------|---------------|
+| Node.js (npm) | `npm run lint && npx tsc --noEmit && npm test` |
+| Node.js (yarn) | `yarn lint && yarn tsc --noEmit && yarn test` |
+| Node.js (pnpm) | `pnpm lint && pnpm tsc --noEmit && pnpm test` |
+| Python (ruff + pytest) | `ruff check src/ tests/ && ruff format --check src/ tests/ && pytest` |
+| Python (ruff + pyright) | `ruff check src/ tests/ && pyright src/ && pytest` |
+| Go | `go vet ./... && go test ./...` |
+| Ruby (rubocop + rspec) | `rubocop && rspec` |
+| Luau (stylua + selene) | `stylua --check src && selene src` |
+
+**Output format** — the skill should report results as:
+
+| Check | Result | Details |
+|-------|--------|---------|
+| Lint | PASS/FAIL | ... |
+| Type check | PASS/FAIL/SKIP | ... |
+| Tests | PASS (N passed) / FAIL (N failed) | ... |
+
+If any check fails, fix the issue and re-run. Report all results before marking done.
+
+Tell user: > "Created /verify skill — run `/verify` anytime to check your code before committing."
+
 ## Step 8: Leave Markers
 
 After all steps above, write the **same marker** in every file you touched:
@@ -534,27 +799,61 @@ After all steps above, write the **same marker** in every file you touched:
 
 All three must exist for Phase 0 to be fully skipped on next run.
 
+## Step 9.5: Plugin Recommendations
+
+Based on detected stack and available MCP tools, recommend relevant Claude Code plugins.
+
+**Always recommend:**
+- `/plugin install skill-creator@claude-plugins-official` — create and optimize skills with evals
+
+**Stack-specific:**
+
+| Detected | Plugin | Why |
+|----------|--------|-----|
+| React / Next.js / Vue / Svelte | `/plugin install frontend-design@claude-plugins-official` | Design principles, component patterns, polished UI |
+| Any web project | `/plugin install playwright@claude-plugins-official` | Browser automation, screenshot verification, visual bug detection |
+
+**Presentation:**
+- **Beginner**: explain what each plugin does, show example use case
+- **Advanced**: one-liner per plugin, no explanation needed
+
+> Only recommend plugins that are relevant to the detected stack. Don't overwhelm with the full list.
+
 ## Step 9: Completion Checklist
 
 **Walk through each item below. For each, verify it was completed. If not, go back to the relevant step.**
 
-- [ ] Mini-interview completed — user context captured (Step 1)
+- [ ] Mini-interview completed — user context captured via AskUserQuestion (Step 1)
+- [ ] Empty vs existing project detected (Step 1.5)
 - [ ] Health report saved to `docs/superflow/project-health-report.md` (Step 3)
+- [ ] Proposal presented and approved by user (Step 3.5)
 - [ ] llms.txt audited — created if missing, updated if stale (Step 4)
 - [ ] CLAUDE.md audited — created if missing, updated if stale (Step 5)
+- [ ] CLAUDE.local.md created and gitignored (Step 5.5)
 - [ ] Enforcement rules verified in `~/.claude/rules/` (Step 6)
-- [ ] `.worktrees/` is in `.gitignore` (Step 6)
+- [ ] `.worktrees/`, `CLAUDE.local.md`, `.superflow-state.json` in `.gitignore` (Step 6)
 - [ ] Python3 availability checked (Step 6.5)
 - [ ] **Permissions proposed to user** — accepted or declined, but MUST be asked (Step 7)
-- [ ] **Hooks proposed to user** — set up or declined, but MUST be asked (Step 7.5)
+- [ ] **Hooks set up and verified** — 4-stage pipeline passed (pipe-test + jq + live proof + e2e) (Step 7.5)
+- [ ] **/verify skill created** in `<project>/.claude/skills/verify/SKILL.md` (Step 7.7)
 - [ ] **Skills recommended** based on detected stack (Step 7.7)
+- [ ] **Plugin recommendations shown** (Step 9.5)
 - [ ] Markers `<!-- updated-by-superflow:YYYY-MM-DD -->` written in CLAUDE.md, llms.txt, and health report (Step 8)
 
 If any item is unchecked, go back to the referenced step and complete it before proceeding.
 
-## Step 10: Hand Off to Phase 1
+## Step 10: Complete & Restart
 
-Ask the user:
-> "Done! I've explored the project. What would you like to work on?"
+**If permissions or hooks were configured (Steps 7-7.5):**
+
+> "Phase 0 complete! To activate the new permissions and hooks, restart Claude Code:
+> 1. Exit this session (type `exit` or press Ctrl+C)
+> 2. Run `claude` (or `claude --resume` to continue where you left off)
+>
+> Permissions and hooks are read at startup — they won't take effect until restart."
+
+**If nothing was configured** (user declined everything in the proposal):
+
+> "Phase 0 complete! What would you like to work on?"
 
 Then proceed to Phase 1 (Product Discovery) based on user's answer.
