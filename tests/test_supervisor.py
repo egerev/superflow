@@ -10,7 +10,7 @@ from unittest.mock import patch, MagicMock, call
 from lib.supervisor import (
     create_worktree, cleanup_worktree, build_prompt, execute_sprint,
     preflight, run, print_summary, resume, _shutdown_event,
-    generate_completion_report,
+    generate_completion_report, _check_pr_exists,
     _validate_evidence_verdicts, _validate_par_evidence,
     _validate_sprint_summary,
     _resolve_baseline_cmd, run_baseline_tests,
@@ -800,10 +800,10 @@ class TestResume(unittest.TestCase):
         # Worktree exists
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         os.makedirs(wt_path)
-        # gh pr list returns a PR
+        # gh pr list returns a PR (JSON format)
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout="https://github.com/test/repo/pull/1\tOPEN\tTest PR\n",
+            stdout='[{"url":"https://github.com/test/repo/pull/1"}]\n',
             stderr="",
         )
 
@@ -811,6 +811,121 @@ class TestResume(unittest.TestCase):
 
         self.assertEqual(q.sprints[0]["status"], "completed")
         self.assertIn("github.com", q.sprints[0]["pr"])
+
+
+class TestResumeMilestoneAware(unittest.TestCase):
+    """Test milestone-aware resume recovery (Sprint 3)."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        os.makedirs(self.cp_dir)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints):
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_resume_with_milestones(self, mock_run):
+        """Resume reads milestones from checkpoint and saves resume_context."""
+        sprints = [
+            _sprint(sid=1, status="in_progress", branch="feat/s1"),
+            _sprint(sid=2, status="in_progress", branch="feat/s2"),
+        ]
+        self._make_queue(sprints)
+
+        # Sprint 1: has checkpoint with milestones (baseline + implemented)
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "in_progress",
+            "milestones": {"baseline_passed": True, "implemented": True},
+        })
+        # Sprint 2: has checkpoint with only baseline
+        save_checkpoint(self.cp_dir, 2, {
+            "sprint_id": 2, "status": "in_progress",
+            "milestones": {"baseline_passed": True},
+        })
+
+        # gh pr list returns empty for both (no PRs)
+        mock_run.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
+
+        q = resume(self.queue_path, self.tmpdir)
+
+        # Both should be reset to pending
+        self.assertEqual(q.sprints[0]["status"], "pending")
+        self.assertEqual(q.sprints[1]["status"], "pending")
+        self.assertEqual(q.sprints[0]["retries"], 0)
+        self.assertEqual(q.sprints[1]["retries"], 0)
+
+        # Check resume_context was written in checkpoints
+        cp1 = load_checkpoint(self.cp_dir, 1)
+        self.assertEqual(cp1["status"], "resumed")
+        self.assertTrue(cp1["resume_context"]["baseline_was_passing"])
+        self.assertFalse(cp1["resume_context"]["par_was_validated"])
+
+        cp2 = load_checkpoint(self.cp_dir, 2)
+        self.assertEqual(cp2["status"], "resumed")
+        self.assertTrue(cp2["resume_context"]["baseline_was_passing"])
+        self.assertFalse(cp2["resume_context"]["par_was_validated"])
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_resume_holistic_in_progress(self, mock_run):
+        """Resume detects holistic review in_progress checkpoint."""
+        sprints = [
+            _sprint(sid=1, status="completed", branch="feat/s1"),
+        ]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        self._make_queue(sprints)
+
+        # Save holistic checkpoint as in_progress
+        save_checkpoint(self.cp_dir, "holistic", {
+            "phase": "holistic_review", "status": "in_progress",
+        })
+
+        # No in_progress sprints, so subprocess.run won't be called for gh pr list
+        mock_run.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
+
+        q = resume(self.queue_path, self.tmpdir)
+
+        # Queue unchanged (no in_progress sprints)
+        self.assertEqual(q.sprints[0]["status"], "completed")
+        # Holistic checkpoint still exists (resume just logs it, doesn't modify)
+        from lib.checkpoint import load_checkpoint_by_name
+        holistic_cp = load_checkpoint_by_name(self.cp_dir, "holistic")
+        self.assertIsNotNone(holistic_cp)
+        self.assertEqual(holistic_cp["status"], "in_progress")
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_resume_with_notifier(self, mock_run):
+        """Resume calls notify_resume_recovery when notifier provided."""
+        sprints = [
+            _sprint(sid=1, status="in_progress", branch="feat/s1"),
+            _sprint(sid=2, status="in_progress", branch="feat/s2"),
+        ]
+        self._make_queue(sprints)
+
+        # Sprint 1 has PR, Sprint 2 doesn't
+        def gh_side_effect(*args, **kwargs):
+            cmd = args[0]
+            if isinstance(cmd, list) and "feat/s1" in cmd:
+                return MagicMock(
+                    returncode=0,
+                    stdout='[{"url": "https://github.com/pr/1"}]',
+                    stderr="",
+                )
+            return MagicMock(returncode=0, stdout="[]", stderr="")
+
+        mock_run.side_effect = gh_side_effect
+
+        notifier = MagicMock()
+        q = resume(self.queue_path, self.tmpdir, notifier=notifier)
+
+        # Should be called with 1 recovered, 1 reset, 2 total
+        notifier.notify_resume_recovery.assert_called_once_with(1, 1, 2)
 
 
 class TestShutdownFlag(unittest.TestCase):

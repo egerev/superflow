@@ -108,5 +108,68 @@ class TestFormatProgress(unittest.TestCase):
         self.assertEqual(n._format_progress(), "")
 
 
+class TestNewNotificationMethods(unittest.TestCase):
+    """Test Sprint 3 notification methods."""
+
+    def _capture(self, func):
+        """Helper to capture stdout output from a notifier call."""
+        from io import StringIO
+        import sys
+        n = Notifier(total_sprints=5)
+        captured = StringIO()
+        old_stdout = sys.stdout
+        sys.stdout = captured
+        try:
+            func(n)
+        finally:
+            sys.stdout = old_stdout
+        return captured.getvalue().strip()
+
+    def test_notify_holistic_start(self):
+        """notify_holistic_review_start prints correct event and message."""
+        output = self._capture(lambda n: n.notify_holistic_review_start())
+        self.assertIn("[holistic_review_start]", output)
+        self.assertIn("Starting Final Holistic Review (all sprints)", output)
+
+    def test_notify_holistic_complete(self):
+        """notify_holistic_review_complete prints verdict."""
+        output = self._capture(lambda n: n.notify_holistic_review_complete("APPROVE"))
+        self.assertIn("[holistic_review_complete]", output)
+        self.assertIn("Holistic Review: APPROVE", output)
+
+    def test_notify_par_failed(self):
+        """notify_par_validation_failed prints sprint progress and errors."""
+        output = self._capture(
+            lambda n: n.notify_par_validation_failed(
+                2, "Validation Sprint", ["missing key 'claude_product'", "invalid verdict"]
+            )
+        )
+        self.assertIn("[par_validation_failed]", output)
+        self.assertIn("Sprint 2/5", output)
+        self.assertIn("Validation Sprint", output)
+        self.assertIn("PAR evidence invalid", output)
+        self.assertIn("missing key 'claude_product'", output)
+
+    def test_notify_baseline_failed(self):
+        """notify_baseline_failed prints sprint progress and failure message."""
+        output = self._capture(
+            lambda n: n.notify_baseline_failed(1, "Foundation Sprint")
+        )
+        self.assertIn("[baseline_failed]", output)
+        self.assertIn("Sprint 1/5", output)
+        self.assertIn("Foundation Sprint", output)
+        self.assertIn("Baseline tests FAILED", output)
+
+    def test_notify_resume_recovery(self):
+        """notify_resume_recovery prints recovery counts."""
+        output = self._capture(
+            lambda n: n.notify_resume_recovery(3, 1, 6)
+        )
+        self.assertIn("[resume_recovery]", output)
+        self.assertIn("Recovered 3 sprints", output)
+        self.assertIn("reset 1 to pending", output)
+        self.assertIn("6 total", output)
+
+
 if __name__ == "__main__":
     unittest.main()
