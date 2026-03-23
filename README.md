@@ -6,11 +6,11 @@ Lightweight Claude Code skill for autonomous product-to-production development. 
 
 ## How It Works
 
-**Phase 0 — Onboarding** (interactive, first run only, 10 steps). 4 parallel Opus agents analyze the project, audit/create `llms.txt` + `CLAUDE.md` (Opus + ultrathink), produce health report, propose permissions. Skipped on subsequent runs (marker detection with backwards compatibility).
+**Phase 0 — Onboarding** (interactive, first run only, 11 steps). 5 parallel agents (4 Claude + 1 Codex) analyze the project, audit/create `llms.txt` + `CLAUDE.md` (agent definitions with effort frontmatter), produce health report, propose permissions. Skipped on subsequent runs (marker detection with backwards compatibility).
 
 **Phase 1 — Discovery** (interactive, 12 steps). Research with parallel agents, brainstorming (STOP GATE), approaches, product summary (APPROVAL GATE), product brief, spec, dual-model spec review, plan, dual-model plan review, user approval (FINAL GATE).
 
-**Phase 2 — Execution** (autonomous, zero interaction, 11 steps per sprint). PR per sprint, git worktrees, internal review + mandatory PAR, sprint completion checklist. Reports results in Demo Day format.
+**Phase 2 — Execution** (autonomous, zero interaction, 10 steps per sprint). PR per sprint, git worktrees, unified 4-agent review (2 Claude + 2 Codex, or 4 Claude split-focus), sprint completion checklist. Reports results in Demo Day format.
 
 **Phase 3 — Merge** (interactive, user-initiated). Pre-merge checklist, doc update, sequential rebase merges with CI failure recovery, post-merge report.
 
@@ -36,13 +36,13 @@ Agent: [Phase 3: update docs → merge PRs → cleanup]
 - **PR per sprint** — small, reviewable, deployable
 - **Git worktrees** — isolated workspace per sprint
 - **TDD** — write failing test → verify fail → implement → verify pass
-- **Dual-model reviews** — Claude + secondary provider (Codex/Gemini/other); split-focus Claude fallback
-- **PAR gate** — Product Acceptance Review before every push, `.par-evidence.json` required
+- **4-agent unified review** — 2 Claude + 2 Codex reviewers (code quality + product), or 4 Claude split-focus fallback
+- **Review gate** — unified review before every push, `.par-evidence.json` required
 - **llms.txt** — standard project documentation for all LLMs (llmstxt.org)
 - **Product brief** — Jobs to be Done + user stories before technical spec
 - **Verification discipline** — no claims without pasted test output
 - **Max parallelism** — parallelize independent tasks, sequentialize dependent ones
-- **Opus + ultrathink for docs** — CLAUDE.md and llms.txt audits use highest quality models to prevent hallucinated documentation
+- **Agent definitions with effort frontmatter** — CLAUDE.md and llms.txt audits use deep-doc-writer agent tier to prevent hallucinated documentation
 
 ## Install
 

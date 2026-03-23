@@ -119,6 +119,10 @@ class TestBuildPrompt(unittest.TestCase):
                 "Claude: {claude_md}\n"
                 "LLMs: {llms_txt}\n"
                 "Branch: {branch}\n"
+                "Complexity: {complexity}\n"
+                "Tier: {implementation_tier}\n"
+                "Model: {impl_model}\n"
+                "Effort: {impl_effort}\n"
             )
         # Create a plan file with sections
         self.plans_dir = os.path.join(self.tmpdir, "plans")
@@ -154,6 +158,31 @@ class TestBuildPrompt(unittest.TestCase):
         self.assertIn("feat/test-sprint-1", result)
         # Should NOT contain sprint 2 content
         self.assertNotIn("Do the second thing.", result)
+        # Default complexity (medium) when not specified
+        self.assertIn("Complexity: medium", result)
+        self.assertIn("Tier: standard-implementer", result)
+        self.assertIn("Model: sonnet", result)
+        self.assertIn("Effort: medium", result)
+
+    def test_build_prompt_complexity_simple(self):
+        """Simple complexity maps to fast-implementer, sonnet, low."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint["complexity"] = "simple"
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("Complexity: simple", result)
+        self.assertIn("Tier: fast-implementer", result)
+        self.assertIn("Model: sonnet", result)
+        self.assertIn("Effort: low", result)
+
+    def test_build_prompt_complexity_complex(self):
+        """Complex complexity maps to deep-implementer, opus, high."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint["complexity"] = "complex"
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("Complexity: complex", result)
+        self.assertIn("Tier: deep-implementer", result)
+        self.assertIn("Model: opus", result)
+        self.assertIn("Effort: high", result)
 
     def test_build_prompt_extracts_correct_section(self):
         sprint = _sprint(sid=2, title="Second Sprint", branch="feat/test-sprint-2",
@@ -191,7 +220,7 @@ class TestExecuteSprint(unittest.TestCase):
         # Create templates
         os.makedirs(os.path.join(self.tmpdir, "templates"))
         with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
-            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n")
+            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n{impl_model}\n{impl_effort}\n")
         # Create plan file
         os.makedirs(os.path.join(self.tmpdir, "plans"))
         with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
@@ -221,7 +250,7 @@ class TestExecuteSprint(unittest.TestCase):
         claude_output = (
             "Working on sprint...\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/1",'
-            '"tests":{"passed":5,"failed":0},"par":{"claude":"ACCEPTED","secondary":"ACCEPTED"}}'
+            '"tests":{"passed":5,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
         )
         claude_result = MagicMock(returncode=0, stdout=claude_output, stderr="")
         # gh pr view subprocess
@@ -276,7 +305,7 @@ class TestExecuteSprint(unittest.TestCase):
         success_output = (
             "Done.\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/2",'
-            '"tests":{"passed":3,"failed":0},"par":{"claude":"ACCEPTED","secondary":"ACCEPTED"}}'
+            '"tests":{"passed":3,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
         )
         success_result = MagicMock(returncode=0, stdout=success_output, stderr="")
         gh_result = MagicMock(returncode=0, stdout="OPEN")
@@ -306,7 +335,7 @@ class TestExecuteSprint(unittest.TestCase):
         good_output = (
             "Done.\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/3",'
-            '"tests":{"passed":1,"failed":0},"par":{"claude":"ACCEPTED","secondary":"ACCEPTED"}}'
+            '"tests":{"passed":1,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
         )
         good_result = MagicMock(returncode=0, stdout=good_output, stderr="")
         gh_result = MagicMock(returncode=0, stdout="OPEN")
@@ -330,7 +359,7 @@ class TestExecuteSprint(unittest.TestCase):
         claude_output = (
             "Log line 1\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/1",'
-            '"tests":{"passed":1,"failed":0},"par":{"claude":"ACCEPTED","secondary":"ACCEPTED"}}'
+            '"tests":{"passed":1,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
         )
         claude_result = MagicMock(returncode=0, stdout=claude_output, stderr="")
         gh_result = MagicMock(returncode=0, stdout="OPEN")
@@ -461,7 +490,7 @@ class TestRunLoop(unittest.TestCase):
         # Create templates
         os.makedirs(os.path.join(self.tmpdir, "templates"))
         with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
-            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n")
+            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n{impl_model}\n{impl_effort}\n")
         # Create plan file
         os.makedirs(os.path.join(self.tmpdir, "plans"))
         with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
@@ -548,7 +577,7 @@ class TestRunLoopParallel(unittest.TestCase):
         self.queue_path = os.path.join(self.tmpdir, "queue.json")
         os.makedirs(os.path.join(self.tmpdir, "templates"))
         with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
-            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n")
+            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n{impl_model}\n{impl_effort}\n")
         os.makedirs(os.path.join(self.tmpdir, "plans"))
         with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
             f.write("## Sprint 1\nStuff 1.\n\n## Sprint 2\nStuff 2.\n\n## Sprint 3\nStuff 3.\n")
@@ -747,7 +776,7 @@ class TestShutdownFlag(unittest.TestCase):
             queue_path = os.path.join(tmpdir, "queue.json")
             os.makedirs(os.path.join(tmpdir, "templates"))
             with open(os.path.join(tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
-                f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n")
+                f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n{impl_model}\n{impl_effort}\n")
             os.makedirs(os.path.join(tmpdir, "plans"))
             with open(os.path.join(tmpdir, "plans", "plan.md"), "w") as f:
                 f.write("## Sprint 1\nStuff 1.\n\n## Sprint 2\nStuff 2.\n")
@@ -808,14 +837,16 @@ class TestCompletionReport(unittest.TestCase):
             "sprint_id": 1, "status": "completed",
             "summary": {
                 "tests": {"passed": 5, "failed": 0},
-                "par": {"claude": "ACCEPTED", "secondary": "ACCEPTED"},
+                "par": {"claude_code_quality": "ACCEPTED", "claude_product": "ACCEPTED",
+                        "codex_code_review": "ACCEPTED", "codex_product": "ACCEPTED"},
             },
         })
         save_checkpoint(self.cp_dir, 2, {
             "sprint_id": 2, "status": "completed",
             "summary": {
                 "tests": {"passed": 10, "failed": 0},
-                "par": {"claude": "ACCEPTED", "secondary": "ACCEPTED"},
+                "par": {"claude_code_quality": "ACCEPTED", "claude_product": "ACCEPTED",
+                        "codex_code_review": "ACCEPTED", "codex_product": "ACCEPTED"},
             },
         })
 
@@ -828,7 +859,8 @@ class TestCompletionReport(unittest.TestCase):
         self.assertIn("completed", report)
         self.assertIn("https://github.com/test/repo/pull/1", report)
         self.assertIn("5 passed, 0 failed", report)
-        self.assertIn("Claude=ACCEPTED", report)
+        self.assertIn("Claude-CQ=ACCEPTED", report)
+        self.assertIn("Codex-CR=ACCEPTED", report)
         self.assertIn("100%", report)
 
     def test_report_with_failures(self):
@@ -846,7 +878,7 @@ class TestCompletionReport(unittest.TestCase):
 
         save_checkpoint(self.cp_dir, 1, {
             "sprint_id": 1, "status": "completed",
-            "summary": {"tests": {"passed": 3, "failed": 0}, "par": {"claude": "ACCEPTED", "secondary": "ACCEPTED"}},
+            "summary": {"tests": {"passed": 3, "failed": 0}, "par": {"claude_code_quality": "ACCEPTED", "claude_product": "ACCEPTED", "codex_code_review": "ACCEPTED", "codex_product": "ACCEPTED"}},
         })
         save_checkpoint(self.cp_dir, 2, {
             "sprint_id": 2, "status": "failed",

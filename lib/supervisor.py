@@ -170,6 +170,17 @@ def build_prompt(sprint: dict, repo_root: str) -> str:
     else:
         sprint_plan = f"(plan file not found: {plan_file})"
 
+    # Extract complexity and derive implementation tier
+    complexity = sprint.get("complexity", "medium")
+    tier_map = {
+        "simple": ("fast-implementer", "sonnet", "low"),
+        "medium": ("standard-implementer", "sonnet", "medium"),
+        "complex": ("deep-implementer", "opus", "high"),
+    }
+    implementation_tier, impl_model, impl_effort = tier_map.get(
+        complexity, tier_map["medium"]
+    )
+
     # Fill placeholders using str.replace() instead of str.format()
     # because templates contain literal JSON braces
     result = template
@@ -179,6 +190,10 @@ def build_prompt(sprint: dict, repo_root: str) -> str:
     result = result.replace("{claude_md}", claude_md)
     result = result.replace("{llms_txt}", llms_txt)
     result = result.replace("{branch}", sprint["branch"])
+    result = result.replace("{complexity}", complexity)
+    result = result.replace("{implementation_tier}", implementation_tier)
+    result = result.replace("{impl_model}", impl_model)
+    result = result.replace("{impl_effort}", impl_effort)
     return result
 
 
@@ -639,9 +654,14 @@ def generate_completion_report(queue, checkpoints_dir, output_path=None):
 
         par = summary.get("par")
         if par:
-            claude_verdict = par.get("claude", "N/A")
-            secondary_verdict = par.get("secondary", "N/A")
-            lines.append(f"- **PAR:** Claude={claude_verdict}, Secondary={secondary_verdict}")
+            claude_cq = par.get("claude_code_quality", par.get("claude", "N/A"))
+            claude_pr = par.get("claude_product", "N/A")
+            codex_cr = par.get("codex_code_review", par.get("secondary", "N/A"))
+            codex_pr = par.get("codex_product", "N/A")
+            lines.append(
+                f"- **PAR:** Claude-CQ={claude_cq}, Claude-Product={claude_pr}, "
+                f"Codex-CR={codex_cr}, Codex-Product={codex_pr}"
+            )
         else:
             lines.append("- **PAR:** N/A")
 

@@ -33,7 +33,7 @@ def _claude_success_output(pr_num=1):
         "Working on sprint implementation...\n"
         "Created branch, made changes, pushed.\n"
         f'{{"status":"completed","pr_url":"https://github.com/test/repo/pull/{pr_num}",'
-        f'"tests":{{"passed":5,"failed":0}},"par":{{"claude":"ACCEPTED","secondary":"ACCEPTED"}}}}'
+        f'"tests":{{"passed":5,"failed":0}},"par":{{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}}}'
     )
 
 
@@ -59,6 +59,10 @@ class IntegrationBase(unittest.TestCase):
                 "Context: {claude_md}\n"
                 "LLMs: {llms_txt}\n"
                 "Branch: {branch}\n"
+                "Complexity: {complexity}\n"
+                "Tier: {implementation_tier}\n"
+                "Model: {impl_model}\n"
+                "Effort: {impl_effort}\n"
             )
 
         # Create plan file with 3 sprint sections

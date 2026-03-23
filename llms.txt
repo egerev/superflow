@@ -6,25 +6,25 @@
 
 Superflow is a 4-phase development workflow skill for Claude Code:
 
-- **Phase 0 (Onboarding):** Analyzes codebase with 4 parallel Opus agents, generates health report, creates/audits llms.txt and CLAUDE.md, sets up permissions
+- **Phase 0 (Onboarding):** Analyzes codebase with 5 parallel agents (4 Claude + 1 Codex), generates health report, creates/audits llms.txt and CLAUDE.md, sets up permissions
 - **Phase 1 (Product Discovery):** 12-step interactive brainstorming with dual-model spec/plan review, JTBD user stories, approval gates
-- **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — git worktrees, TDD, subagent implementers, dual-model PAR (Peer Architecture Review), one PR per sprint
+- **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — git worktrees, TDD, subagent implementers, 4-agent unified review (2 Claude + 2 Codex or 4 Claude split-focus), one PR per sprint
 - **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification and documentation update
 
 Version: v3.0.0 (2026-03-23). MIT License.
 
 ## File Structure
 
-- [SKILL.md](SKILL.md): Entry point — startup checklist, provider detection, supervisor detection, phase routing (85 lines)
+- [SKILL.md](SKILL.md): Entry point — startup checklist, provider detection, supervisor detection, phase routing (89 lines)
 - [superflow-enforcement.md](superflow-enforcement.md): 9 hard rules that survive context compaction — deployed to ~/.claude/rules/ (54 lines)
 - [CLAUDE.md](CLAUDE.md): Project instructions for Claude — architecture, key files table, conventions (75 lines)
 - [README.md](README.md): Installation, usage, supervisor docs, file table, permissions setup (168 lines)
 
 ## Phase References
 
-- [references/phase0-onboarding.md](references/phase0-onboarding.md): First-run onboarding — 10 steps, marker detection, 4 parallel analysis agents, health report, llms.txt/CLAUDE.md audit, python3 check (288 lines)
+- [references/phase0-onboarding.md](references/phase0-onboarding.md): First-run onboarding — 11 steps, marker detection, 5 parallel agents (4 Claude + 1 Codex), health report, llms.txt/CLAUDE.md audit, python3 check (~323 lines)
 - [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — 12 steps, brainstorm STOP GATE, product summary APPROVAL, spec/plan with dual-model review (132 lines)
-- [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — 11 steps, worktree, TDD, implementer dispatch, PAR gate, push+PR, Final Holistic Review (106 lines)
+- [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — 10 steps, worktree, TDD, implementer dispatch, 4-agent unified review, push+PR, Final Holistic Review (166 lines)
 - [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, CI handling, post-merge report (87 lines)
 
 ## Agent Prompts
@@ -36,6 +36,16 @@ Version: v3.0.0 (2026-03-23). MIT License.
 - [prompts/llms-txt-writer.md](prompts/llms-txt-writer.md): llms.txt generation/audit prompt — llmstxt.org standard, verified entries only (156 lines)
 - [prompts/claude-md-writer.md](prompts/claude-md-writer.md): CLAUDE.md generation/audit prompt — verified paths and commands (150 lines)
 - [prompts/testing-guidelines.md](prompts/testing-guidelines.md): Testing reference — TDD cycle, coverage expectations, included in implementer context (68 lines)
+- [prompts/codex/code-reviewer.md](prompts/codex/code-reviewer.md): Codex code quality review prompt
+- [prompts/codex/product-reviewer.md](prompts/codex/product-reviewer.md): Codex product acceptance review prompt
+- [prompts/codex/audit.md](prompts/codex/audit.md): Codex onboarding audit prompt
+
+## Agent Definitions
+
+12 agent definitions in `agents/` with reasoning tier frontmatter (deep/standard/fast):
+- Deep tier (Opus, high effort): deep-implementer, deep-code-reviewer, deep-product-reviewer, deep-spec-reviewer, deep-doc-writer, deep-analyst
+- Standard tier (Sonnet, medium effort): standard-implementer, standard-code-reviewer, standard-product-reviewer, standard-spec-reviewer, standard-doc-writer
+- Fast tier (Sonnet, low effort): fast-implementer
 
 ## Supervisor System
 
@@ -66,8 +76,8 @@ The supervisor is a Python CLI that orchestrates autonomous multi-sprint executi
 
 ## Key Concepts
 
-- **Dual-model review:** Every spec, plan, and PR is reviewed by two models (Claude + secondary provider like Codex/Gemini). If no secondary provider available, two Claude agents with split focus (Technical + Product)
-- **PAR (Peer Architecture Review):** Mandatory gate before every PR push — two reviewers must both return ACCEPTED, evidence written to `.par-evidence.json`
+- **4-agent unified review:** Every PR is reviewed by 4 agents in parallel (2 Claude + 2 Codex, or 4 Claude split-focus if Codex unavailable) — code quality and product acceptance from both providers
+- **Review gate:** Mandatory gate before every PR push — all reviewers must return ACCEPTED, evidence written to `.par-evidence.json`
 - **Final Holistic Review:** After all sprints complete, two Opus reviewers (Technical + Product) review ALL code together to catch cross-module issues
 - **Breakage Scenario:** Every review finding must include a concrete scenario where the issue causes a real problem — no scenario = not a finding
 - **Compaction resilience:** Enforcement rules live in `~/.claude/rules/` (auto-loaded by Claude Code), phase docs are re-read from disk at boundaries
@@ -76,3 +86,4 @@ The supervisor is a Python CLI that orchestrates autonomous multi-sprint executi
 - **Checkpoints:** Per-sprint JSON files storing execution state, enabling crash recovery via `resume` command
 
 <!-- updated-by-superflow:2026-03-23 -->
+
