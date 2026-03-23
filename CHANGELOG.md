@@ -2,6 +2,45 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [3.0.0] - 2026-03-23
+
+### Added — Supervisor System (Long-Running Autonomy)
+- **Python supervisor CLI** (`bin/superflow-supervisor`): orchestrates multi-hour autonomous sprint execution. Each sprint runs as a fresh Claude Code session — no context degradation
+- **Sprint Queue** (`lib/queue.py`): DAG-based dependency resolution, atomic file persistence, concurrent-safe with threading.Lock
+- **Checkpoint System** (`lib/checkpoint.py`): crash recovery via per-sprint checkpoints with atomic writes
+- **Parallel Execution** (`lib/parallel.py`): ThreadPoolExecutor for independent sprints with thread-safe queue access
+- **Adaptive Replanner** (`lib/replanner.py`): LLM-powered replanning after each sprint — adjusts remaining work based on what was learned
+- **Telegram Notifications** (`lib/notifications.py`): 11 event types (start, complete, fail, retry, skip, block, timeout, replan, resume, all_done, preflight) with phone-friendly formatting
+- **Prompt Templates** (`templates/`): supervisor-sprint-prompt.md and replan-prompt.md for supervised Claude sessions
+- **Example queue file** (`examples/sprint-queue-example.json`): template for new users
+- **149 tests**: unit tests for all modules + integration tests for happy path, crash recovery, blocked sprints, retry scenarios
+- **CLI commands**: `run`, `status`, `resume`, `reset` with Telegram integration and adaptive replanning
+
+### Added — Process Improvements
+- **Final Holistic Review** (Phase 2): mandatory full-system review after all sprints — catches cross-module issues that per-sprint PAR misses. Two Opus reviewers (Technical + Product) review ALL code together
+- **Breakage Scenario requirement**: every review finding must include a concrete, realistic scenario where the issue causes a real problem. No scenario = not a finding. Prevents over-engineering fixes
+- **Enforcement rule 9**: holistic review mandatory, with rationalization prevention
+
+### Changed
+- **Project architecture**: evolved from pure Markdown skill to hybrid (Markdown prompts + Python companion CLI)
+- **Phase 0**: added python3 availability check for supervisor features
+- **Phase 2**: added supervisor mode documentation, Final Holistic Review step, breakage scenario test in NEEDS_FIXES handling
+- **SKILL.md**: added supervisor detection to startup checklist
+- **Env handling**: deny-list approach (block known sensitive keys) instead of whitelist
+- **Signal handling**: SIGTERM/SIGINT graceful shutdown with threading.Event
+- **All reviewer prompts**: breakage scenario required for every finding
+
+### Fixed (from Final Holistic Review)
+- Race condition in parallel mode: queue_lock now passed through _attempt_sprint
+- Notification method wiring: correct API calls (notify_sprint_complete vs notify_completed)
+- Resume logic: PR existence alone is sufficient for marking completed (worktree may be cleaned up)
+- Template substitution: str.replace() instead of str.format() (JSON braces in templates)
+- Repo root detection: git rev-parse --show-toplevel with fallback
+- Replanner guards: skip/modify only for pending sprints
+- Checkpoint atomic writes: tmp+rename pattern matching queue.py
+- JSON parser: ANSI escape stripping, scans last 5 lines
+- Plan section extraction: exact heading match (prevents "sprint 1" matching "sprint 12")
+
 ## [2.1.2] - 2026-03-23
 
 ### Changed
