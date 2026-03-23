@@ -975,9 +975,30 @@ class TestCompletionReport(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        # Create holistic review evidence file (required by unconditional gate)
+        self._create_holistic_evidence()
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir)
+
+    def _create_holistic_evidence(self):
+        """Create a .holistic-review-evidence.json in the parent of cp_dir."""
+        evidence_path = os.path.join(
+            os.path.dirname(self.cp_dir),
+            ".holistic-review-evidence.json",
+        )
+        evidence = {
+            "timestamp": "2026-01-01T00:00:00Z",
+            "verdict": "APPROVE",
+            "reviewers": {
+                "claude_code_quality": "APPROVE",
+                "claude_product": "APPROVE",
+                "codex_code_review": "APPROVE",
+                "codex_product": "APPROVE",
+            },
+        }
+        with open(evidence_path, "w") as f:
+            json.dump(evidence, f)
 
     def _make_queue(self, sprints):
         return SprintQueue("test-feature", "2026-01-01T00:00:00Z", sprints)
@@ -1861,6 +1882,228 @@ class TestMilestoneWrites(unittest.TestCase):
         self.assertTrue(milestones.get("implemented", False))
         self.assertTrue(milestones.get("par_validated", False))
         self.assertTrue(milestones.get("pr_created", False))
+
+
+# =====================================================================
+# Sprint 4a: Holistic Review Evidence Gate + Report Blocking
+# =====================================================================
+
+
+class TestHolisticGate(unittest.TestCase):
+    """Sprint 4a: Holistic review evidence gate in generate_completion_report()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints):
+        return SprintQueue("test-feature", "2026-01-01T00:00:00Z", sprints)
+
+    def _create_holistic_evidence(self):
+        """Create holistic evidence file in parent of cp_dir."""
+        evidence_path = os.path.join(
+            os.path.dirname(self.cp_dir),
+            ".holistic-review-evidence.json",
+        )
+        evidence = {
+            "timestamp": "2026-01-01T00:00:00Z",
+            "verdict": "APPROVE",
+            "reviewers": {
+                "claude_code_quality": "APPROVE",
+                "claude_product": "APPROVE",
+                "codex_code_review": "APPROVE",
+                "codex_product": "APPROVE",
+            },
+        }
+        with open(evidence_path, "w") as f:
+            json.dump(evidence, f)
+
+    def test_holistic_gate_blocks_without_evidence(self):
+        """generate_completion_report() raises RuntimeError without evidence file."""
+        sprints = [_sprint(sid=1, title="Sprint 1", status="completed")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = self._make_queue(sprints)
+
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+
+        # No holistic evidence file -> RuntimeError
+        with self.assertRaises(RuntimeError) as ctx:
+            generate_completion_report(q, self.cp_dir)
+        self.assertIn("holistic-review-evidence.json", str(ctx.exception))
+        self.assertIn("blocked", str(ctx.exception).lower())
+
+    def test_holistic_gate_passes_with_evidence(self):
+        """generate_completion_report() succeeds when evidence file exists."""
+        sprints = [_sprint(sid=1, title="Sprint 1", status="completed")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = self._make_queue(sprints)
+
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+
+        # Create evidence file
+        self._create_holistic_evidence()
+
+        report = generate_completion_report(q, self.cp_dir)
+        self.assertIn("# Completion Report", report)
+        self.assertIn("Sprint 1", report)
+
+
+class TestHolisticGateInRun(unittest.TestCase):
+    """Sprint 4a: Holistic gate wiring in run() and checkpoint writes."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(
+                "Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n"
+                "{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n"
+                "{impl_model}\n{impl_effort}\n{frontend_instructions}\n"
+            )
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints):
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    @patch("lib.supervisor.preflight")
+    @patch("lib.supervisor.execute_sprint")
+    def test_run_skips_holistic_when_no_completed_sprints(self, mock_execute, mock_preflight):
+        """run() does not block when all sprints are failed/skipped (no completed)."""
+        sprints = [
+            _sprint(sid=1, title="Sprint 1", status="failed"),
+            _sprint(sid=2, title="Sprint 2", status="skipped"),
+        ]
+        sprints[0]["error_log"] = "crashed"
+        sprints[1]["error_log"] = "dependency failed"
+        q = self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        # Should not block — no completed sprints, queue.is_done() is True
+        # No holistic evidence needed, no report generated
+        run(self.queue_path, repo_root=self.tmpdir)
+
+        # Should not have called execute_sprint (all done already)
+        mock_execute.assert_not_called()
+        # No holistic checkpoint should exist
+        cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        holistic_path = os.path.join(cp_dir, "sprint-holistic.json")
+        self.assertFalse(os.path.exists(holistic_path))
+
+    @patch("lib.supervisor.preflight")
+    @patch("lib.supervisor.execute_sprint")
+    def test_run_blocks_report_on_holistic_failure(self, mock_execute, mock_preflight):
+        """Integration: completed sprints but no evidence -> BLOCKED, no report."""
+        sprints = [
+            _sprint(sid=1, title="Setup", status="completed"),
+            _sprint(sid=2, title="Build", status="completed"),
+        ]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        sprints[1]["pr"] = "https://github.com/test/repo/pull/2"
+        q = self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        # Capture stdout to check for BLOCKED message
+        import io
+        from unittest.mock import patch as _patch
+        with _patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            run(self.queue_path, repo_root=self.tmpdir)
+            output = mock_stdout.getvalue()
+
+        self.assertIn("BLOCKED", output)
+        self.assertNotIn("# Completion Report", output)
+
+        # Holistic checkpoint should exist with pending status
+        cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        holistic_path = os.path.join(cp_dir, "sprint-holistic.json")
+        self.assertTrue(os.path.exists(holistic_path))
+        with open(holistic_path) as f:
+            holistic_cp = json.load(f)
+        self.assertEqual(holistic_cp["phase"], "holistic_review")
+        self.assertEqual(holistic_cp["status"], "pending")
+
+    @patch("lib.supervisor.preflight")
+    @patch("lib.supervisor.execute_sprint")
+    def test_run_generates_report_with_holistic_evidence(self, mock_execute, mock_preflight):
+        """Integration: completed sprints + evidence -> report generated, checkpoint updated."""
+        sprints = [
+            _sprint(sid=1, title="Setup", status="completed"),
+        ]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        # Create holistic evidence
+        evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
+        with open(evidence_path, "w") as f:
+            json.dump({"verdict": "APPROVE", "timestamp": "2026-01-01T00:00:00Z", "reviewers": {"claude_code_quality": "APPROVE", "claude_product": "APPROVE", "codex_code_review": "APPROVE", "codex_product": "APPROVE"}}, f)
+
+        # Create checkpoint for the sprint (so report can read it)
+        cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        save_checkpoint(cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+
+        import io
+        from unittest.mock import patch as _patch
+        with _patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            run(self.queue_path, repo_root=self.tmpdir)
+            output = mock_stdout.getvalue()
+
+        self.assertNotIn("BLOCKED", output)
+        self.assertIn("# Completion Report", output)
+
+        # Holistic checkpoint should be completed
+        holistic_path = os.path.join(cp_dir, "sprint-holistic.json")
+        self.assertTrue(os.path.exists(holistic_path))
+        with open(holistic_path) as f:
+            holistic_cp = json.load(f)
+        self.assertEqual(holistic_cp["status"], "completed")
+        self.assertEqual(holistic_cp["verdict"], "APPROVE")
+
+    @patch("lib.supervisor.preflight")
+    @patch("lib.supervisor.execute_sprint")
+    def test_run_holistic_notifies_start_and_complete(self, mock_execute, mock_preflight):
+        """run() notifies holistic_review_start and holistic_review_complete."""
+        sprints = [_sprint(sid=1, title="Setup", status="completed")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        # Create evidence so it passes (must have valid reviewer verdicts)
+        evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
+        with open(evidence_path, "w") as f:
+            json.dump({"verdict": "APPROVE", "reviewers": {"claude_code_quality": "APPROVE", "claude_product": "APPROVE", "codex_code_review": "APPROVE", "codex_product": "APPROVE"}}, f)
+
+        cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        save_checkpoint(cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+
+        notifier = MagicMock()
+
+        import io
+        from unittest.mock import patch as _patch
+        with _patch("sys.stdout", new_callable=io.StringIO):
+            run(self.queue_path, repo_root=self.tmpdir, notifier=notifier)
+
+        notifier.notify_holistic_review_start.assert_called_once()
+        notifier.notify_holistic_review_complete.assert_called_once_with("APPROVE")
+        notifier.notify_all_done.assert_called_once()
 
 
 if __name__ == "__main__":

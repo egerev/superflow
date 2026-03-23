@@ -937,6 +937,68 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
 
     print_summary(queue)
 
+    # Final Holistic Review gate (mandatory before completion report)
+    completed_count = queue.summary().get("completed", 0)
+    if completed_count > 0:
+        evidence_path = os.path.join(
+            os.path.dirname(checkpoints_dir),
+            ".holistic-review-evidence.json",
+        )
+
+        # Save holistic checkpoint: pending
+        save_checkpoint(checkpoints_dir, "holistic", {
+            "phase": "holistic_review",
+            "status": "pending",
+            "started_at": _now_iso(),
+        })
+
+        if notifier:
+            try:
+                notifier.notify_holistic_review_start()
+            except Exception as e:
+                logger.warning("Notifier error: %s", e)
+
+        # Sprint 4b will add actual run_holistic_review() dispatch here.
+        # For now, check if evidence already exists and is valid.
+        holistic_valid = False
+        if os.path.exists(evidence_path):
+            try:
+                with open(evidence_path) as f:
+                    holistic_data = json.load(f)
+                reviewers = holistic_data.get("reviewers", holistic_data)
+                valid, errors = _validate_evidence_verdicts(
+                    reviewers, REQUIRED_PAR_KEYS, context="Holistic"
+                )
+                holistic_valid = valid
+                if not valid:
+                    logger.warning("Holistic evidence invalid: %s", errors)
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning("Failed to parse holistic evidence: %s", e)
+
+        if not holistic_valid:
+            print("BLOCKED: Holistic review required. Cannot generate completion report.")
+            if notifier:
+                try:
+                    notifier.notify_holistic_review_complete("BLOCKED")
+                except Exception as e:
+                    logger.warning("Notifier error: %s", e)
+            return
+
+        # Update holistic checkpoint: completed with actual verdict
+        save_checkpoint(checkpoints_dir, "holistic", {
+            "phase": "holistic_review",
+            "status": "completed",
+            "completed_at": _now_iso(),
+            "verdict": holistic_data.get("verdict", "APPROVE"),
+        })
+
+        if notifier:
+            try:
+                notifier.notify_holistic_review_complete("APPROVE")
+            except Exception as e:
+                logger.warning("Notifier error: %s", e)
+
+    # Notify all_done AFTER holistic review passes (not before)
     if notifier:
         try:
             summary_data = queue.summary()
@@ -945,10 +1007,15 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
         except Exception as e:
             logger.warning("Notifier error: %s", e)
 
-    # Generate completion report
-    report = generate_completion_report(queue, checkpoints_dir)
-    if report:
-        print(report)
+    # Generate completion report (only if there were completed sprints)
+    if completed_count > 0:
+        report = generate_completion_report(queue, checkpoints_dir)
+        if report:
+            print(report)
+    else:
+        # No completed sprints — skip report generation entirely
+        # (generate_completion_report would raise RuntimeError without evidence)
+        logger.info("No completed sprints — skipping completion report.")
 
 
 def generate_completion_report(queue, checkpoints_dir, output_path=None):
@@ -957,6 +1024,9 @@ def generate_completion_report(queue, checkpoints_dir, output_path=None):
     Reads all checkpoints and formats a markdown report with per-sprint blocks
     (title, status, PR, tests, PAR) and a summary section.
 
+    GATE: Unconditionally requires .holistic-review-evidence.json in the
+    parent directory of checkpoints_dir. Raises RuntimeError if not found.
+
     Args:
         queue: SprintQueue instance with current sprint states.
         checkpoints_dir: Path to directory containing sprint checkpoint files.
@@ -964,7 +1034,37 @@ def generate_completion_report(queue, checkpoints_dir, output_path=None):
 
     Returns:
         The report as a markdown string.
+
+    Raises:
+        RuntimeError: If .holistic-review-evidence.json does not exist.
     """
+    # GATE: unconditional holistic review evidence check (existence + verdict validation)
+    evidence_path = os.path.join(
+        os.path.dirname(checkpoints_dir),
+        ".holistic-review-evidence.json",
+    )
+    if not os.path.exists(evidence_path):
+        raise RuntimeError(
+            "Completion report blocked: .holistic-review-evidence.json not found. "
+            "Run Final Holistic Review first."
+        )
+    # Validate evidence contents — all 4 reviewer verdicts must pass
+    try:
+        with open(evidence_path) as f:
+            holistic_data = json.load(f)
+        reviewers = holistic_data.get("reviewers", holistic_data)
+        valid, errors = _validate_evidence_verdicts(reviewers, REQUIRED_PAR_KEYS,
+                                                     context="Holistic")
+        if not valid:
+            raise RuntimeError(
+                "Completion report blocked: holistic review evidence has invalid verdicts. "
+                f"Errors: {'; '.join(errors)}"
+            )
+    except (json.JSONDecodeError, IOError) as e:
+        raise RuntimeError(
+            f"Completion report blocked: failed to parse holistic evidence: {e}"
+        )
+
     from lib.checkpoint import load_all_checkpoints
 
     checkpoints = load_all_checkpoints(checkpoints_dir)
