@@ -5,3 +5,4 @@
 docs/superflow/checkpoints/
 __pycache__/
 *.pyc
+.worktrees/
