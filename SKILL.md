@@ -49,8 +49,9 @@ superflow/
 4. Detect Telegram MCP: `mcp__plugin_telegram_telegram__reply`
 5. Detect supervisor: `python3 -c "import sys; print(sys.version)" 2>/dev/null`
 6. Detect mode: existing code = Enhancement, empty repo = Greenfield
-7. **Run Phase 0** if first run (see detection in `references/phase0-onboarding.md`)
-8. Read CLAUDE.md and project docs
+7. **Deploy agent definitions** (if missing): `test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null`
+8. **Run Phase 0** if first run (see detection in `references/phase0-onboarding.md`)
+9. Read CLAUDE.md and project docs
 
 ## Secondary Provider Detection
 
