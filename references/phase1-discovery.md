@@ -22,6 +22,8 @@ $TIMEOUT_CMD 600 $SECONDARY_PROVIDER "Analyze [project]. Propose 3-5 concrete pr
 
 Wait for all background tasks to complete. If research yields insufficient results for a domain, note the gap — rely on codebase analysis and user input during brainstorming.
 
+> **Reasoning:** Research agents use inline `Agent(model: opus)` dispatch. No `subagent_type` or `effort` — research tasks are ad-hoc and don't require deep reasoning tier.
+
 **NOT optional.** Synthesize findings before proceeding.
 
 ## Step 3: Present Research Findings
@@ -93,11 +95,13 @@ Create `docs/superflow/specs/` if it doesn't exist.
 
 ## Step 9: Spec Review (dual-model parallel)
 
-Run two reviewers in parallel using `prompts/spec-reviewer.md`:
+Run two reviewers in parallel. Both reviewers receive the product brief AND the spec.
 
-1. **Claude reviewer**: dispatch via Agent tool (`run_in_background: true`). Focus: spec completeness, security, architecture.
-2. **Secondary provider**: `$TIMEOUT_CMD 600 $SECONDARY_PROVIDER "REVIEW_PROMPT" 2>&1` via Bash (`run_in_background: true`).
+1. **Claude reviewer**: `Agent(subagent_type: "deep-spec-reviewer", run_in_background: true, prompt: "Review this spec for completeness, security, architecture. Spec: [SPEC TEXT]")`. Focus: spec completeness, security, architecture.
+2. **Secondary provider**: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=xhigh --ephemeral "Spec review. Check completeness, security, architecture against: [SPEC TEXT]" 2>&1` via Bash (`run_in_background: true`).
    No secondary provider = split-focus Claude: dispatch two background agents (Technical: completeness + security; Product: scope + YAGNI).
+
+> **Reasoning:** Deep tier — spec review is the highest-stakes gate before implementation begins.
 
 Wait for both. If either returns NEEDS_REVISION: fix issues, re-run both reviews.
 Both must return PASS to proceed.
@@ -112,9 +116,11 @@ Break into sprints (independently deployable), 3-8 tasks each, each task 2-5 min
 
 Run two reviewers in parallel (same mechanism as Step 9):
 
-1. **Claude reviewer** (background): Is the plan achievable? Are sprints properly scoped? Are task estimates realistic? Dependencies correct?
-2. **Secondary provider** (background): Are there missing tasks? Over-engineering? Does sprint ordering make sense?
+1. **Claude reviewer**: `Agent(subagent_type: "standard-spec-reviewer", run_in_background: true, prompt: "Review this plan for achievability, scoping, dependencies. Plan: [PLAN TEXT]")`. Is the plan achievable? Are sprints properly scoped? Are task estimates realistic? Dependencies correct?
+2. **Secondary provider**: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high --ephemeral "Plan review. Check achievability, scoping, dependencies against: [PLAN TEXT]" 2>&1` via Bash (`run_in_background: true`). Are there missing tasks? Over-engineering? Does sprint ordering make sense?
    No secondary provider = split-focus Claude (Technical + Product lenses).
+
+> **Reasoning:** Standard tier — plan review checks structure and feasibility, not deep architectural decisions.
 
 Both must APPROVE. If either returns NEEDS_REVISION: fix, re-review.
 
