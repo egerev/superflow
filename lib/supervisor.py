@@ -7,6 +7,7 @@ import signal
 import shutil
 import threading
 import subprocess
+import time
 from contextlib import nullcontext
 from datetime import datetime, timezone
 
@@ -328,6 +329,85 @@ def _validate_sprint_summary(summary):
     return (len(errors) == 0, errors)
 
 
+def _resolve_baseline_cmd(wt_path, sprint, queue):
+    """Resolve baseline test command by priority.
+
+    Priority: sprint config > queue config > heuristic > None.
+    Heuristic: conservative, NO auto-install.
+    Returns command string or None.
+    """
+    # 1. Sprint-level override
+    cmd = sprint.get("baseline_cmd")
+    if cmd:
+        return cmd
+
+    # 2. Queue-level default
+    cmd = getattr(queue, "baseline_cmd", None)
+    if cmd:
+        return cmd
+
+    # 3. Heuristic detection
+    # Python: pytest.ini
+    if os.path.exists(os.path.join(wt_path, "pytest.ini")):
+        return "python -m pytest --tb=short -q"
+
+    # Python: pyproject.toml with [tool.pytest] section
+    pyproject_path = os.path.join(wt_path, "pyproject.toml")
+    if os.path.exists(pyproject_path):
+        try:
+            with open(pyproject_path) as f:
+                content = f.read()
+            if "[tool.pytest" in content:
+                return "python -m pytest --tb=short -q"
+        except (IOError, OSError):
+            pass
+
+    # JavaScript: package.json with "test" script
+    package_json_path = os.path.join(wt_path, "package.json")
+    if os.path.exists(package_json_path):
+        try:
+            with open(package_json_path) as f:
+                pkg = json.load(f)
+            if "test" in pkg.get("scripts", {}):
+                return "npm test"
+        except (json.JSONDecodeError, IOError, OSError):
+            pass
+
+    # Ruby: Gemfile
+    if os.path.exists(os.path.join(wt_path, "Gemfile")):
+        return "bundle exec rspec"
+
+    # Go: go.mod
+    if os.path.exists(os.path.join(wt_path, "go.mod")):
+        return "go test ./..."
+
+    # Elixir: mix.exs
+    if os.path.exists(os.path.join(wt_path, "mix.exs")):
+        return "mix test"
+
+    return None  # No runner found
+
+
+def run_baseline_tests(wt_path, sprint, queue, timeout=300):
+    """Run baseline test suite in worktree.
+
+    Returns (passed: bool, output: str, skipped: bool).
+    """
+    cmd = _resolve_baseline_cmd(wt_path, sprint, queue)
+    if cmd is None:
+        return (True, "No test runner detected — skipped", True)
+
+    try:
+        result = subprocess.run(
+            cmd, shell=True, cwd=wt_path, timeout=timeout,
+            capture_output=True, text=True,
+        )
+        output = result.stdout + "\n" + result.stderr
+        return (result.returncode == 0, output, False)
+    except subprocess.TimeoutExpired:
+        return (False, f"Baseline tests timed out after {timeout}s", False)
+
+
 def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
                    timeout=1800, notifier=None, queue_lock=None):
     """Execute a single sprint: worktree, claude invocation, result handling.
@@ -357,15 +437,43 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         "sprint_id": sid, "status": "in_progress", "started_at": _now_iso(),
     })
 
-    # 3. Create worktree
+    # 4. Create worktree
     wt_path = create_worktree(sprint, repo_root)
 
     try:
+        # 5. Baseline test gate
+        baseline_passed, baseline_output, baseline_skipped = run_baseline_tests(
+            wt_path, sprint, queue, timeout=300
+        )
+        if not baseline_passed:
+            logger.warning("Baseline tests failed for sprint %s", sid)
+            if queue_lock:
+                with queue_lock:
+                    queue.mark_failed(sid, f"Baseline tests failed: {baseline_output[:500]}")
+                    queue.save(queue_path)
+            else:
+                queue.mark_failed(sid, f"Baseline tests failed: {baseline_output[:500]}")
+                queue.save(queue_path)
+            cp = {
+                "sprint_id": sid, "status": "failed",
+                "failed_at": _now_iso(), "error": "baseline_tests_failed",
+                "baseline_output": baseline_output[:2000],
+            }
+            save_checkpoint(checkpoints_dir, sid, cp)
+            return cp
+
+        # 6. Save baseline milestone in checkpoint
+        save_checkpoint(checkpoints_dir, sid, {
+            "sprint_id": sid, "status": "in_progress", "started_at": _now_iso(),
+            "milestones": {"baseline_passed": True, "baseline_skipped": baseline_skipped},
+        })
+
+        # 7. Execute sprint with Claude
         result = _attempt_sprint(sprint, queue, queue_path, checkpoints_dir,
                                  repo_root, wt_path, timeout, queue_lock)
         return result
     finally:
-        # 13. Always cleanup worktree
+        # Always cleanup worktree
         cleanup_worktree(sprint, repo_root)
         if notifier:
             _notify_sprint_result(notifier, sprint)
@@ -373,12 +481,45 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
 
 def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
                     wt_path, timeout, queue_lock=None):
-    """Run claude for a sprint, with retry logic."""
+    """Run claude for a sprint, with retry logic.
+
+    Integrates:
+    - Summary validation (treated as JSON parse error on failure)
+    - PAR evidence validation (separate retry counter, max 2)
+    - Milestone writes at each transition
+    - PR verification retry (3 attempts, 5s delay, separate from Claude retry)
+    """
     sid = sprint["id"]
-    prompt = build_prompt(sprint, repo_root)
     lock = queue_lock or nullcontext()
+    par_retries = 0
+    max_par_retries = 2
+    attempt_counter = 0
+    last_par_errors = None
+    last_summary_errors = None
 
     while True:
+        attempt_counter += 1
+
+        # Rebuild prompt fresh each iteration to avoid unbounded growth
+        prompt = build_prompt(sprint, repo_root)
+
+        # Append retry-specific instructions based on PREVIOUS iteration errors
+        if last_par_errors:
+            prompt += (
+                "\n\nIMPORTANT: PAR evidence validation FAILED. Errors: "
+                + "; ".join(last_par_errors)
+                + ". You MUST write a valid .par-evidence.json with all 4 verdict keys."
+            )
+            last_par_errors = None
+
+        if last_summary_errors:
+            prompt += (
+                "\n\nIMPORTANT: Your JSON summary had validation errors: "
+                + "; ".join(last_summary_errors)
+                + ". Fix the summary and output it as the LAST line."
+            )
+            last_summary_errors = None
+
         # Filter environment
         env = _filtered_env()
 
@@ -395,27 +536,123 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
             })()
 
         # Save output log (per attempt, not overwritten on retry)
-        attempt = sprint.get("retries", 0) + 1
         os.makedirs(checkpoints_dir, exist_ok=True)
-        log_path = os.path.join(checkpoints_dir, f"sprint-{sid}-attempt-{attempt}-output.log")
+        log_path = os.path.join(checkpoints_dir, f"sprint-{sid}-attempt-{attempt_counter}-output.log")
         with open(log_path, "w") as f:
             f.write(result.stdout or "")
 
         # Parse JSON from last line
         summary = _parse_json_summary(result.stdout or "")
         json_parse_error = (result.returncode == 0 and summary is None)
+
+        # Summary validation: if parsed but invalid, treat as json_parse_error
+        if summary is not None:
+            summary_valid, summary_errors = _validate_sprint_summary(summary)
+            if not summary_valid:
+                logger.warning("Summary validation failed: %s", summary_errors)
+                summary = None
+                json_parse_error = True
+                last_summary_errors = summary_errors
+
         success = (result.returncode == 0 and summary is not None)
 
         if success:
-            # Verify PR
+            # Milestone: implemented
+            save_checkpoint(checkpoints_dir, sid, {
+                "sprint_id": sid, "status": "in_progress",
+                "milestones": {"baseline_passed": True, "implemented": True},
+            })
+
+            # PAR evidence validation
+            require_frontend = sprint.get("has_frontend", False)
+            par_valid, par_data, par_errors = _validate_par_evidence(
+                wt_path, require_frontend=require_frontend
+            )
+            if not par_valid:
+                logger.warning("PAR evidence validation failed: %s", par_errors)
+                par_retries += 1
+                if par_retries >= max_par_retries:
+                    error_msg = f"PAR evidence invalid after {par_retries} retries: {'; '.join(par_errors)}"
+                    with lock:
+                        queue.mark_failed(sid, error_msg[:500])
+                        queue.save(queue_path)
+                    cp = {
+                        "sprint_id": sid, "status": "failed",
+                        "failed_at": _now_iso(), "error": error_msg[:500],
+                        "par_retries": par_retries,
+                        "milestones": {"baseline_passed": True, "implemented": True},
+                    }
+                    save_checkpoint(checkpoints_dir, sid, cp)
+                    return cp
+                # Set flag for next iteration's prompt rebuild
+                last_par_errors = par_errors
+                logger.info("PAR retry %d/%d for sprint %d", par_retries, max_par_retries, sid)
+                continue  # Re-invoke Claude
+
+            # Milestone: par_validated
+            save_checkpoint(checkpoints_dir, sid, {
+                "sprint_id": sid, "status": "in_progress",
+                "milestones": {"baseline_passed": True, "implemented": True,
+                               "par_validated": True},
+            })
+
+            # PR verification with retry (separate from Claude retry)
             pr_url = summary.get("pr_url", "")
+            pr_verified = False
             if pr_url:
-                pr_check = subprocess.run(
-                    ["gh", "pr", "view", pr_url],
-                    capture_output=True, text=True, cwd=repo_root,
-                )
-                if pr_check.returncode != 0:
-                    logger.warning("PR verification failed for %s", pr_url)
+                for pr_attempt in range(3):
+                    pr_check = subprocess.run(
+                        ["gh", "pr", "view", pr_url],
+                        capture_output=True, text=True, cwd=repo_root,
+                    )
+                    if pr_check.returncode == 0:
+                        pr_verified = True
+                        break
+                    if pr_attempt < 2:
+                        time.sleep(5)
+
+                if not pr_verified:
+                    logger.error("PR verification failed after 3 attempts: %s", pr_url)
+                    error_msg = f"PR created but verification failed: {pr_url}"
+                    with lock:
+                        queue.mark_failed(sid, error_msg[:500])
+                        queue.save(queue_path)
+                    cp = {
+                        "sprint_id": sid, "status": "failed",
+                        "failed_at": _now_iso(), "error": error_msg[:500],
+                        "milestones": {"baseline_passed": True, "implemented": True,
+                                       "par_validated": True},
+                    }
+                    save_checkpoint(checkpoints_dir, sid, cp)
+                    return cp
+            else:
+                # No PR URL — treat as summary error, retry Claude
+                sprint["retries"] = sprint.get("retries", 0) + 1
+                if sprint["retries"] >= sprint.get("max_retries", 2):
+                    error_msg = "Sprint completed but no PR URL"
+                    with lock:
+                        queue.mark_failed(sid, error_msg)
+                        queue.save(queue_path)
+                    cp = {
+                        "sprint_id": sid, "status": "failed",
+                        "failed_at": _now_iso(), "error": error_msg,
+                        "milestones": {"baseline_passed": True, "implemented": True,
+                                       "par_validated": True},
+                    }
+                    save_checkpoint(checkpoints_dir, sid, cp)
+                    return cp
+                last_summary_errors = [
+                    "Your output had an empty or missing pr_url. "
+                    "You MUST create a PR and include the URL in the JSON summary."
+                ]
+                continue
+
+            # Milestone: pr_created
+            save_checkpoint(checkpoints_dir, sid, {
+                "sprint_id": sid, "status": "in_progress",
+                "milestones": {"baseline_passed": True, "implemented": True,
+                               "par_validated": True, "pr_created": True},
+            })
 
             # Mark completed
             with lock:
@@ -425,6 +662,8 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
                 "sprint_id": sid, "status": "completed",
                 "completed_at": _now_iso(), "pr_url": pr_url,
                 "summary": summary,
+                "milestones": {"baseline_passed": True, "implemented": True,
+                               "par_validated": True, "pr_created": True},
             }
             save_checkpoint(checkpoints_dir, sid, cp)
             return cp
@@ -441,17 +680,18 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
                 "sprint_id": sid, "status": "failed",
                 "failed_at": _now_iso(), "error": error_msg[:500],
                 "retries": sprint["retries"],
+                "milestones": {"baseline_passed": True},
             }
             save_checkpoint(checkpoints_dir, sid, cp)
             return cp
 
-        # Retry — if JSON parse error, append instruction to prompt
+        # Retry — if JSON parse error, set flag for next iteration's prompt rebuild
         if json_parse_error:
-            prompt += (
-                "\n\nIMPORTANT: Your previous output did not include the required "
-                "JSON summary as the LAST line. You MUST output a JSON summary as "
-                "the very last line of your response."
-            )
+            last_summary_errors = [
+                "Your previous output did not include the required JSON summary "
+                "as the LAST line. You MUST output a JSON summary as the very "
+                "last line of your response."
+            ]
         logger.info("Retrying sprint %d (attempt %d)", sid, sprint["retries"] + 1)
 
 
@@ -661,7 +901,7 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
                 runnable, queue, queue_path, checkpoints_dir, repo_root,
                 timeout=timeout, notifier=notifier, max_workers=max_parallel,
             )
-            queue.save(queue_path)
+            queue = SprintQueue.load(queue_path)
 
             # Run replanner after parallel batch
             if not no_replan and plan_path:

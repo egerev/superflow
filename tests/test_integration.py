@@ -63,6 +63,7 @@ class IntegrationBase(unittest.TestCase):
                 "Tier: {implementation_tier}\n"
                 "Model: {impl_model}\n"
                 "Effort: {impl_effort}\n"
+                "{frontend_instructions}\n"
             )
 
         # Create plan file with 3 sprint sections
@@ -105,12 +106,15 @@ def _preflight_subproc_effect(cmd, **kwargs):
 class TestHappyPath(IntegrationBase):
     """End-to-end test — 3 sprints, sprint 1+2 independent, sprint 3 depends on 1."""
 
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor._validate_par_evidence")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_e2e_three_sprints_with_dependencies(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt
+        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt,
+        mock_par, mock_sleep
     ):
         """Full run: sprints 1+2 independent, sprint 3 depends on 1.
 
@@ -132,6 +136,10 @@ class TestHappyPath(IntegrationBase):
         self._create_queue(sprints)
 
         mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
+                                         "claude_product": "APPROVE",
+                                         "codex_code_review": "APPROVE",
+                                         "codex_product": "APPROVE"}, [])
         mock_create_wt.side_effect = lambda sprint, root: os.path.join(
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
@@ -205,12 +213,15 @@ class TestHappyPath(IntegrationBase):
         # Verify: cleanup was called for each sprint
         self.assertEqual(mock_cleanup_wt.call_count, 3)
 
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor._validate_par_evidence")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_e2e_sequential_all_complete(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt
+        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt,
+        mock_par, mock_sleep
     ):
         """Sequential execution (max_parallel=1): all 3 sprints complete in order."""
         sprints = [
@@ -224,6 +235,10 @@ class TestHappyPath(IntegrationBase):
         self._create_queue(sprints)
 
         mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
+                                         "claude_product": "APPROVE",
+                                         "codex_code_review": "APPROVE",
+                                         "codex_product": "APPROVE"}, [])
         mock_create_wt.side_effect = lambda sprint, root: os.path.join(
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
@@ -352,12 +367,13 @@ class TestCrashRecovery(IntegrationBase):
 class TestBlockedSprints(IntegrationBase):
     """Blocked sprints — dependency fails, dependent auto-skipped."""
 
+    @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_dependency_failure_skips_dependent(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt
+        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt, mock_baseline
     ):
         """Sprint 1 fails after retries, sprint 2 (depends on 1) is auto-skipped."""
         sprints = [
@@ -369,6 +385,7 @@ class TestBlockedSprints(IntegrationBase):
         self._create_queue(sprints)
 
         mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        mock_baseline.return_value = (True, "ok", True)
         mock_create_wt.side_effect = lambda sprint, root: os.path.join(
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
@@ -400,12 +417,13 @@ class TestBlockedSprints(IntegrationBase):
                          "Sprint 2 should be skipped (dependency failed)")
         self.assertTrue(q.is_done())
 
+    @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_transitive_dependency_failure_skips_chain(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt
+        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt, mock_baseline
     ):
         """Sprint 1 fails, sprint 2 depends on 1, sprint 3 depends on 2 — both skipped."""
         sprints = [
@@ -419,6 +437,7 @@ class TestBlockedSprints(IntegrationBase):
         self._create_queue(sprints)
 
         mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        mock_baseline.return_value = (True, "ok", True)
         mock_create_wt.side_effect = lambda sprint, root: os.path.join(
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
@@ -451,12 +470,15 @@ class TestBlockedSprints(IntegrationBase):
 class TestRetryScenario(IntegrationBase):
     """Retry — mock claude fails first, succeeds second."""
 
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor._validate_par_evidence")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_retry_succeeds_on_second_attempt(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt
+        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt,
+        mock_par, mock_sleep
     ):
         """Sprint fails on first attempt, succeeds on retry.
         Verify retry count and final success status.
@@ -468,6 +490,10 @@ class TestRetryScenario(IntegrationBase):
         self._create_queue(sprints)
 
         mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
+                                         "claude_product": "APPROVE",
+                                         "codex_code_review": "APPROVE",
+                                         "codex_product": "APPROVE"}, [])
         mock_create_wt.side_effect = lambda sprint, root: os.path.join(
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
@@ -516,12 +542,13 @@ class TestRetryScenario(IntegrationBase):
         self.assertIsNotNone(cp)
         self.assertEqual(cp["status"], "completed")
 
+    @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_retry_exhausted_marks_failed(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt
+        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt, mock_baseline
     ):
         """Sprint fails all attempts, verify it ends as failed with correct retry count."""
         sprints = [
@@ -531,6 +558,7 @@ class TestRetryScenario(IntegrationBase):
         self._create_queue(sprints)
 
         mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        mock_baseline.return_value = (True, "ok", True)
         mock_create_wt.side_effect = lambda sprint, root: os.path.join(
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
