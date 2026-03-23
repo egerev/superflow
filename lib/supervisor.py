@@ -447,6 +447,8 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         )
         if not baseline_passed:
             logger.warning("Baseline tests failed for sprint %s", sid)
+            if notifier:
+                notifier.notify_baseline_failed(sid, sprint.get("title", f"Sprint {sid}"))
             if queue_lock:
                 with queue_lock:
                     queue.mark_failed(sid, f"Baseline tests failed: {baseline_output[:500]}")
@@ -470,7 +472,8 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
 
         # 7. Execute sprint with Claude
         result = _attempt_sprint(sprint, queue, queue_path, checkpoints_dir,
-                                 repo_root, wt_path, timeout, queue_lock)
+                                 repo_root, wt_path, timeout, queue_lock,
+                                 notifier=notifier)
         return result
     finally:
         # Always cleanup worktree
@@ -480,7 +483,7 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
 
 
 def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
-                    wt_path, timeout, queue_lock=None):
+                    wt_path, timeout, queue_lock=None, notifier=None):
     """Run claude for a sprint, with retry logic.
 
     Integrates:
@@ -570,6 +573,9 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
             )
             if not par_valid:
                 logger.warning("PAR evidence validation failed: %s", par_errors)
+                if notifier:
+                    notifier.notify_par_validation_failed(
+                        sid, sprint.get("title", ""), par_errors)
                 par_retries += 1
                 if par_retries >= max_par_retries:
                     error_msg = f"PAR evidence invalid after {par_retries} retries: {'; '.join(par_errors)}"
@@ -1050,57 +1056,102 @@ def generate_completion_report(queue, checkpoints_dir, output_path=None):
     return report
 
 
-def resume(queue_path, repo_root):
-    """Resume execution after a crash.
+def _check_pr_exists(branch, repo_root):
+    """Check if a PR exists for a branch via gh CLI.
 
-    Finds in_progress sprints and either marks them completed (if PR exists)
-    or resets them to pending.
+    Returns (has_pr: bool, pr_url: str).
+    """
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "list", "--head", branch, "--json", "url",
+             "--limit", "1"],
+            capture_output=True, text=True, cwd=repo_root,
+        )
+        pr_output = result.stdout.strip()
+        try:
+            pr_data = json.loads(pr_output)
+            has_pr = bool(pr_data)  # empty list = no PR
+        except (json.JSONDecodeError, TypeError):
+            has_pr = False
+            pr_data = []
+    except Exception:
+        return (False, "")
+
+    if not has_pr:
+        return (False, "")
+
+    try:
+        pr_url = pr_data[0]["url"]
+    except (IndexError, KeyError, TypeError):
+        pr_url = ""
+
+    return (bool(pr_url), pr_url)
+
+
+def resume(queue_path, repo_root, notifier=None):
+    """Resume execution after a crash with milestone-aware recovery.
+
+    Reads checkpoints and milestones for in_progress sprints.
+    If a PR exists, marks completed. Otherwise resets to pending with
+    resume_context annotation in checkpoint.
+    Handles holistic review in_progress checkpoint.
+    Cleans up orphaned worktrees.
     Returns the updated queue.
     """
     from lib.queue import SprintQueue
+    from lib.checkpoint import load_all_checkpoints, load_checkpoint_by_name
 
     queue = SprintQueue.load(queue_path)
+    checkpoints_dir = os.path.join(os.path.dirname(queue_path), "checkpoints")
+    checkpoints = load_all_checkpoints(checkpoints_dir)
+    cp_map = {cp["sprint_id"]: cp for cp in checkpoints}
+
+    recovered = 0
+    reset_count = 0
 
     for sprint in queue.sprints:
         if sprint["status"] != "in_progress":
             continue
 
         sid = sprint["id"]
-        branch = sprint["branch"]
-        wt_path = os.path.join(repo_root, ".worktrees", f"sprint-{sid}")
-        has_worktree = os.path.isdir(wt_path)
+        cp = cp_map.get(sid, {})
+        milestones = cp.get("milestones", {})
 
-        # Check if a PR exists for this branch
-        try:
-            result = subprocess.run(
-                ["gh", "pr", "list", "--head", branch, "--json", "url",
-                 "--limit", "1"],
-                capture_output=True, text=True, cwd=repo_root,
-            )
-            pr_output = result.stdout.strip()
-            has_pr = bool(pr_output and pr_output != "[]")
-        except Exception:
-            has_pr = False
+        # Check if PR exists on GitHub
+        has_pr, pr_url = _check_pr_exists(sprint["branch"], repo_root)
 
         if has_pr:
-            # PR exists — sprint was completed (worktree may already be cleaned up)
-            try:
-                pr_data = json.loads(pr_output)
-                pr_url = pr_data[0]["url"] if pr_data else ""
-            except (json.JSONDecodeError, IndexError, KeyError):
-                pr_url = pr_output.split("\t")[0] if pr_output else ""
             queue.mark_completed(sid, pr_url)
-            logger.info("Sprint %d: found PR, marked completed", sid)
-            # Clean up orphaned worktree if still exists
-            if has_worktree:
-                cleanup_worktree(sprint, repo_root)
+            recovered += 1
+            logger.info("Sprint %s: found PR, marked completed", sid)
         else:
+            # Reset to pending — annotate checkpoint for sprint prompt
             sprint["status"] = "pending"
             sprint["retries"] = 0
-            logger.info("Sprint %d: no PR found, reset to pending", sid)
-            # Clean up orphaned worktree if still exists
-            if has_worktree:
-                cleanup_worktree(sprint, repo_root)
+            reset_count += 1
+            # Save resume context so sprint prompt can skip completed steps
+            save_checkpoint(checkpoints_dir, sid, {
+                "sprint_id": sid, "status": "resumed",
+                "resumed_at": _now_iso(),
+                "resume_context": {
+                    "baseline_was_passing": milestones.get("baseline_passed", False),
+                    "par_was_validated": milestones.get("par_validated", False),
+                },
+            })
+            logger.info("Sprint %s: no PR found, reset to pending", sid)
+
+        # Cleanup orphaned worktree
+        wt_path = os.path.join(repo_root, ".worktrees", f"sprint-{sid}")
+        if os.path.isdir(wt_path):
+            cleanup_worktree(sprint, repo_root)
+
+    # Holistic review recovery
+    holistic_cp = load_checkpoint_by_name(checkpoints_dir, "holistic")
+    if holistic_cp and holistic_cp.get("status") == "in_progress":
+        logger.info("Holistic review was in progress — will re-run")
+
+    if notifier:
+        notifier.notify_resume_recovery(recovered, reset_count, len(queue.sprints))
 
     queue.save(queue_path)
     return queue

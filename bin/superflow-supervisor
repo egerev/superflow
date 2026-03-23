@@ -54,7 +54,8 @@ def cmd_resume(args):
         repo_root = result.stdout.strip()
     except Exception:
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(args.queue)))
-    queue = resume(args.queue, repo_root)
+    notifier = _make_notifier(args)
+    queue = resume(args.queue, repo_root, notifier=notifier)
     print("Resume complete. Current state:")
     print_summary(queue)
 

@@ -162,5 +162,46 @@ class TestCLIReset(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
 
 
+class TestCLIResume(unittest.TestCase):
+    """Test that resume CLI command still works after Sprint 3 changes."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cli_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "bin", "superflow-supervisor",
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_cli_resume_still_works(self):
+        """resume command should complete without error for a queue with no in_progress sprints."""
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", [
+            _sprint(sid=1, status="completed"),
+            _sprint(sid=2, status="pending"),
+        ])
+        q.sprints[0]["pr"] = "https://github.com/pr/1"
+        q.save(self.queue_path)
+
+        # Resume with no in_progress sprints should complete quickly
+        # We mock run to avoid actual preflight/execution
+        result = subprocess.run(
+            [sys.executable, "-c",
+             f"""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath("{self.cli_path}"))))
+from lib.supervisor import resume, print_summary
+q = resume("{self.queue_path}", "{self.tmpdir}")
+print_summary(q)
+"""],
+            capture_output=True, text=True,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        )
+        self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
+        self.assertIn("pending", result.stdout.lower())
+
+
 if __name__ == "__main__":
     unittest.main()

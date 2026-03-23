@@ -132,3 +132,28 @@ class Notifier:
     def notify_all_done(self, summary):
         """All sprints finished."""
         self.notify("all_done", f"All sprints complete. {summary}")
+
+    def notify_holistic_review_start(self):
+        """Final holistic review starting."""
+        self.notify("holistic_review_start", "Starting Final Holistic Review (all sprints)")
+
+    def notify_holistic_review_complete(self, verdict):
+        """Final holistic review complete."""
+        self.notify("holistic_review_complete", f"Holistic Review: {verdict}")
+
+    def notify_par_validation_failed(self, sprint_id, title, errors):
+        """PAR evidence validation failed."""
+        self.notify("par_validation_failed",
+                    f"{title}: PAR evidence invalid — {'; '.join(errors)}",
+                    sprint_id=sprint_id)
+
+    def notify_baseline_failed(self, sprint_id, title):
+        """Baseline tests failed in worktree."""
+        self.notify("baseline_failed",
+                    f"{title}: Baseline tests FAILED — sprint skipped",
+                    sprint_id=sprint_id)
+
+    def notify_resume_recovery(self, recovered, reset, total):
+        """Supervisor recovered state from checkpoints."""
+        self.notify("resume_recovery",
+                    f"Recovered {recovered} sprints, reset {reset} to pending ({total} total)")
