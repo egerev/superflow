@@ -63,8 +63,10 @@ Record: `{"provider":"split-focus","claude_technical":"ACCEPTED","claude_product
 
 ## Handling NEEDS_FIXES from PAR
 
+- **Breakage scenario test:** For each finding, ask "Can I construct a concrete, realistic situation where this breaks?" If yes → fix. If no → skip and record reasoning in PR description.
 - Verify each finding against the codebase before implementing (reviewer may lack context)
 - If a finding is incorrect (reviewer lacked context), record disagreement with technical reasoning in the PR description and skip that fix
+- Do not fix hypothetical edge cases, over-engineering suggestions, or cosmetic issues
 - Fix confirmed issues one at a time, test each
 - Re-run PAR after fixes
 

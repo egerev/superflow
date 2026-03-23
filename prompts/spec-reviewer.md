@@ -42,14 +42,14 @@ Focus on issues that would cause real problems during integration or for end use
 Report your verdict in one of two forms:
 
 - **PASS** — Implementation matches the spec and evidence is provided.
-- **FAIL** — Include: what is missing/extra/wrong, the relevant file:line, and the concrete impact on integration or users.
+- **FAIL** — Include: what is missing/extra/wrong, the relevant file:line, a **breakage scenario** (concrete, realistic situation where this causes a real problem — if you can't construct one, it's not a FAIL), and the concrete impact on integration or users.
 </output_format>
 
 <verification>
 Before submitting your verdict, confirm:
 - [ ] You read the actual source files, not just the implementer report.
 - [ ] Every spec requirement has a corresponding check in your review.
-- [ ] Each FAIL finding includes file:line and concrete impact.
+- [ ] Each FAIL finding includes file:line, breakage scenario, and concrete impact.
 - [ ] You did not flag cosmetic or stylistic issues as failures.
 </verification>
 ```

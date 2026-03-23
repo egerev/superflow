@@ -54,6 +54,7 @@ For each finding, include:
 - **severity:** critical | important | minor
 - **file:line** — exact location
 - **problem** — what is wrong
+- **breakage scenario** — a concrete, realistic situation where this causes a real problem. "User does X, system does Y, result is Z (data loss / crash / wrong behavior)." If you cannot construct a realistic scenario, do not report it.
 - **fix** — concrete suggestion
 
 Organize findings under these headings:
@@ -68,6 +69,7 @@ End with:
 
 <verification>
 Before submitting your verdict, confirm:
+- [ ] Every finding has a concrete breakage scenario (not hypothetical — a realistic user situation).
 - [ ] Every finding passes the 6-month calibration test.
 - [ ] You did not flag style, formatting, or import ordering.
 - [ ] Each finding includes file:line, problem, and a concrete fix.

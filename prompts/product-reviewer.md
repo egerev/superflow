@@ -43,7 +43,7 @@ Skip the following — they are handled by the code quality reviewer:
 <output_format>
 For each finding, include:
 - **severity:** blocker | concern | suggestion
-- **scenario** — user does X, sees Y, expected Z
+- **breakage scenario** — a concrete, realistic situation: "User does X, system does Y, result is Z." The scenario must be plausible in normal usage — not a hypothetical edge case that requires adversarial input or unlikely preconditions. If you cannot construct a realistic scenario, do not report it as a finding.
 - **impact** — who is affected and how
 
 Organize findings under these headings:
@@ -65,7 +65,8 @@ When resolving issues found during review:
 <verification>
 Before submitting your verdict, confirm:
 - [ ] You evaluated all four check areas (spec fit, user scenarios, data correctness, completeness).
-- [ ] Each finding includes a user scenario (does X, sees Y, expected Z) and impact.
+- [ ] Each finding has a realistic breakage scenario (not hypothetical — a plausible user situation).
+- [ ] Each finding includes impact.
 - [ ] You did not flag code style, architecture, or test coverage issues.
 - [ ] Blocker-severity findings have a clear explanation of why the user flow is broken.
 </verification>
