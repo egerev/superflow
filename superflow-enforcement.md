@@ -17,6 +17,7 @@ Survives context compaction. SKILL.md does not.
 6. **Dual-model reviews mandatory.** Use secondary provider for spec review, plan review, and PAR.
 7. **No secondary provider = split-focus Claude.** Two agents (Technical + Product). Never skip the second reviewer.
 8. **One PR per sprint.** Execute silently after plan approval.
+9. **Final Holistic Review after all sprints.** Two Opus reviewers (Technical + Product) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint PAR misses cross-module issues.
 
 ## Secondary Provider Invocation
 
@@ -36,6 +37,7 @@ If you think any of these, STOP and do the thing:
 - "I'll ask the user during Phase 2" → Phase 2 is autonomous
 - "One big PR is easier" → one PR per sprint
 - "This sprint is too small for PAR" → run PAR
+- "Per-sprint PAR is enough" → run Final Holistic Review
 
 ## Product Approval Gate
 

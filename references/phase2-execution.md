@@ -68,6 +68,29 @@ Record: `{"provider":"split-focus","claude_technical":"ACCEPTED","claude_product
 - Fix confirmed issues one at a time, test each
 - Re-run PAR after fixes
 
+## Final Holistic Review (after all sprints)
+
+Per-sprint PAR catches local issues but misses cross-module problems: API mismatches, env handling inconsistencies, notification wiring gaps, concurrency issues between separately-developed components.
+
+**Mandatory after all sprints complete, before writing the Completion Report.**
+
+1. **Dispatch Technical reviewer** (`run_in_background: true`, `model: opus`):
+   - Read ALL implementation files across ALL sprints (not just one sprint)
+   - Focus: cross-module consistency (do all modules use same data format?), data flow integrity (trace full lifecycle), error propagation (silent failures?), concurrency correctness (race conditions between modules?), security (env filtering, subprocess calls)
+   - Verdict: list every issue with severity (CRITICAL/HIGH/MEDIUM/LOW)
+
+2. **Dispatch Product reviewer** (`run_in_background: true`, `model: opus`):
+   - Read ALL files as a user who will run the system overnight
+   - Focus: overnight reliability (what fails at 3am?), recovery (is resume obvious?), monitoring (are notifications useful?), CLI UX (intuitive?), first-time experience (can I start in 5 min?)
+   - Verdict: "Would you trust this for an overnight run?" with specific issues
+
+3. **Wait for both.** Fix CRITICAL and HIGH issues. Re-run tests.
+4. **Push fixes** to the affected sprint PRs.
+
+Only proceed to Completion Report after all CRITICAL/HIGH issues are resolved.
+
+**Why this exists:** In the first project using this flow, all 6 per-sprint PARs passed, but the holistic review found 7 critical/high issues (race conditions, missing notifications, env leaks) that only appeared when looking at the full system.
+
 ## Completion Report (Demo Day Format)
 
 Present a product-oriented summary — like a demo day, not a tech log. For each sprint:
