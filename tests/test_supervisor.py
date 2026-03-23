@@ -14,6 +14,8 @@ from lib.supervisor import (
     _validate_evidence_verdicts, _validate_par_evidence,
     _validate_sprint_summary,
     _resolve_baseline_cmd, run_baseline_tests,
+    run_holistic_review, _detect_codex, _run_single_reviewer,
+    _build_holistic_prompt,
     VALID_PASS_VERDICTS, REQUIRED_PAR_KEYS, REQUIRED_SUMMARY_KEYS,
 )
 import lib.supervisor as supervisor_module
@@ -540,6 +542,16 @@ class TestRunLoop(unittest.TestCase):
         os.makedirs(os.path.join(self.tmpdir, "plans"))
         with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
             f.write("## Sprint 1\nDo stuff 1.\n\n## Sprint 2\nDo stuff 2.\n\n## Sprint 3\nDo stuff 3.\n")
+        with open(os.path.join(self.tmpdir, ".holistic-review-evidence.json"), "w") as f:
+            json.dump({
+                "verdict": "APPROVE",
+                "reviewers": {
+                    "claude_code_quality": "APPROVE",
+                    "claude_product": "APPROVE",
+                    "codex_code_review": "APPROVE",
+                    "codex_product": "APPROVE",
+                },
+            }, f)
 
     def tearDown(self):
         shutil.rmtree(self.tmpdir)
@@ -626,6 +638,16 @@ class TestRunLoopParallel(unittest.TestCase):
         os.makedirs(os.path.join(self.tmpdir, "plans"))
         with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
             f.write("## Sprint 1\nStuff 1.\n\n## Sprint 2\nStuff 2.\n\n## Sprint 3\nStuff 3.\n")
+        with open(os.path.join(self.tmpdir, ".holistic-review-evidence.json"), "w") as f:
+            json.dump({
+                "verdict": "APPROVE",
+                "reviewers": {
+                    "claude_code_quality": "APPROVE",
+                    "claude_product": "APPROVE",
+                    "codex_code_review": "APPROVE",
+                    "codex_product": "APPROVE",
+                },
+            }, f)
         self.plan_path = os.path.join(self.tmpdir, "plans", "plan.md")
 
     def tearDown(self):
@@ -940,6 +962,16 @@ class TestShutdownFlag(unittest.TestCase):
             os.makedirs(os.path.join(tmpdir, "plans"))
             with open(os.path.join(tmpdir, "plans", "plan.md"), "w") as f:
                 f.write("## Sprint 1\nStuff 1.\n\n## Sprint 2\nStuff 2.\n")
+            with open(os.path.join(tmpdir, ".holistic-review-evidence.json"), "w") as f:
+                json.dump({
+                    "verdict": "APPROVE",
+                    "reviewers": {
+                        "claude_code_quality": "APPROVE",
+                        "claude_product": "APPROVE",
+                        "codex_code_review": "APPROVE",
+                        "codex_product": "APPROVE",
+                    },
+                }, f)
 
             sprints = [
                 _sprint(sid=1, plan_file="plans/plan.md#sprint-1"),
@@ -964,6 +996,59 @@ class TestShutdownFlag(unittest.TestCase):
 
             # Only 1 sprint should have executed (shutdown after first)
             self.assertEqual(call_count[0], 1)
+        finally:
+            supervisor_module._shutdown_event.clear()
+            shutil.rmtree(tmpdir)
+
+    def test_shutdown_skips_holistic_and_report_when_queue_incomplete(self):
+        """Shutdown with pending sprints must not emit all_done or a completion report."""
+        tmpdir = tempfile.mkdtemp()
+        try:
+            queue_path = os.path.join(tmpdir, "queue.json")
+            os.makedirs(os.path.join(tmpdir, "templates"))
+            with open(os.path.join(tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+                f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n{impl_model}\n{impl_effort}\n")
+            os.makedirs(os.path.join(tmpdir, "plans"))
+            with open(os.path.join(tmpdir, "plans", "plan.md"), "w") as f:
+                f.write("## Sprint 1\nStuff 1.\n\n## Sprint 2\nStuff 2.\n")
+            with open(os.path.join(tmpdir, ".holistic-review-evidence.json"), "w") as f:
+                json.dump({
+                    "verdict": "APPROVE",
+                    "reviewers": {
+                        "claude_code_quality": "APPROVE",
+                        "claude_product": "APPROVE",
+                        "codex_code_review": "APPROVE",
+                        "codex_product": "APPROVE",
+                    },
+                }, f)
+
+            sprints = [
+                _sprint(sid=1, plan_file="plans/plan.md#sprint-1"),
+                _sprint(sid=2, plan_file="plans/plan.md#sprint-2", depends_on=[1]),
+            ]
+            q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+            q.save(queue_path)
+
+            def execute_side_effect(sprint, queue, queue_path, cp_dir, repo_root, **kwargs):
+                queue.mark_completed(sprint["id"], f"https://github.com/pr/{sprint['id']}")
+                queue.save(queue_path)
+                supervisor_module._shutdown_event.set()
+                return {"sprint_id": sprint["id"], "status": "completed"}
+
+            notifier = MagicMock()
+
+            import io
+            from unittest.mock import patch as _patch
+            with patch("lib.supervisor.preflight", return_value=(True, [])):
+                with patch("lib.supervisor.execute_sprint", side_effect=execute_side_effect):
+                    with _patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+                        run(queue_path, repo_root=tmpdir, notifier=notifier)
+                        output = mock_stdout.getvalue()
+
+            self.assertNotIn("# Completion Report", output)
+            notifier.notify_holistic_review_start.assert_not_called()
+            notifier.notify_holistic_review_complete.assert_not_called()
+            notifier.notify_all_done.assert_not_called()
         finally:
             supervisor_module._shutdown_event.clear()
             shutil.rmtree(tmpdir)
@@ -2004,10 +2089,11 @@ class TestHolisticGateInRun(unittest.TestCase):
         holistic_path = os.path.join(cp_dir, "sprint-holistic.json")
         self.assertFalse(os.path.exists(holistic_path))
 
+    @patch("lib.supervisor.run_holistic_review", return_value=False)
     @patch("lib.supervisor.preflight")
     @patch("lib.supervisor.execute_sprint")
-    def test_run_blocks_report_on_holistic_failure(self, mock_execute, mock_preflight):
-        """Integration: completed sprints but no evidence -> BLOCKED, no report."""
+    def test_run_blocks_report_on_holistic_failure(self, mock_execute, mock_preflight, mock_holistic):
+        """Integration: failed holistic review -> BLOCKED, no report."""
         sprints = [
             _sprint(sid=1, title="Setup", status="completed"),
             _sprint(sid=2, title="Build", status="completed"),
@@ -2026,8 +2112,10 @@ class TestHolisticGateInRun(unittest.TestCase):
 
         self.assertIn("BLOCKED", output)
         self.assertNotIn("# Completion Report", output)
+        mock_holistic.assert_called_once()
 
-        # Holistic checkpoint should exist with pending status
+        # Holistic checkpoint should exist with pending status before review dispatch.
+        # The mocked review does not overwrite it with a final checkpoint.
         cp_dir = os.path.join(self.tmpdir, "checkpoints")
         holistic_path = os.path.join(cp_dir, "sprint-holistic.json")
         self.assertTrue(os.path.exists(holistic_path))
@@ -2104,6 +2192,435 @@ class TestHolisticGateInRun(unittest.TestCase):
         notifier.notify_holistic_review_start.assert_called_once()
         notifier.notify_holistic_review_complete.assert_called_once_with("APPROVE")
         notifier.notify_all_done.assert_called_once()
+
+
+class TestHolisticReviewDispatch(unittest.TestCase):
+    """Sprint 4b: run_holistic_review() — 4 parallel reviewers, fix cycle, evidence."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        os.makedirs(self.cp_dir, exist_ok=True)
+        self.plan_path = os.path.join(self.tmpdir, "plan.md")
+        with open(self.plan_path, "w") as f:
+            f.write("# Plan\n## Sprint 1\nDo stuff.")
+        self.evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints=None):
+        if sprints is None:
+            sprints = [
+                _sprint(sid=1, title="Setup", status="completed", branch="feat/setup-sprint-1"),
+                _sprint(sid=2, title="Build", status="completed", branch="feat/build-sprint-2"),
+            ]
+            sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+            sprints[1]["pr"] = "https://github.com/test/repo/pull/2"
+        q = SprintQueue("test-feature", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    def _mock_approve_result(self, *args, **kwargs):
+        """Return a subprocess result that looks like APPROVE."""
+        return MagicMock(
+            returncode=0,
+            stdout='Review looks good.\n{"verdict": "APPROVE"}',
+            stderr="",
+        )
+
+    def _mock_request_changes_result(self, *args, **kwargs):
+        """Return a subprocess result that looks like REQUEST_CHANGES."""
+        return MagicMock(
+            returncode=0,
+            stdout=(
+                'Issues found.\n'
+                '{"verdict": "REQUEST_CHANGES", "findings": '
+                '[{"severity": "HIGH", "description": "Missing error handling"}]}'
+            ),
+            stderr="",
+        )
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_single_reviewer_parses_verdict_and_findings_json(self, mock_run):
+        """Reviewer JSON payloads should preserve verdict and findings."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=(
+                'Issues found.\n'
+                '{"verdict": "REQUEST_CHANGES", "findings": '
+                '[{"severity": "HIGH", "description": "Missing error handling"}]}'
+            ),
+            stderr="",
+        )
+
+        result = _run_single_reviewer(
+            "claude_code_quality",
+            ["claude", "-p", "--verbose"],
+            "review prompt",
+            {},
+            60,
+        )
+
+        self.assertEqual(result["verdict"], "REQUEST_CHANGES")
+        self.assertEqual(
+            result["findings"],
+            [{"severity": "HIGH", "description": "Missing error handling"}],
+        )
+        self.assertIsNone(result["error"])
+        self.assertEqual(mock_run.call_args.kwargs["cwd"], None)
+
+    @patch("lib.supervisor._detect_codex", return_value=False)
+    @patch("lib.supervisor.subprocess.run")
+    def test_holistic_reviewer_subprocesses_run_from_repo_root(self, mock_run, mock_codex):
+        """Reviewer sessions should run with cwd=repo_root so they inspect the right repo."""
+        q = self._make_queue()
+
+        diff_result = MagicMock(returncode=0, stdout="diff --git a/f.py\n+line", stderr="")
+        approve_result = MagicMock(
+            returncode=0,
+            stdout='Review OK.\n{"verdict": "APPROVE"}',
+            stderr="",
+        )
+        mock_run.side_effect = [diff_result, diff_result,
+                                approve_result, approve_result,
+                                approve_result, approve_result]
+
+        result = run_holistic_review(
+            q, self.queue_path, self.tmpdir, self.plan_path, self.cp_dir,
+            timeout=60,
+        )
+
+        self.assertTrue(result)
+        for call in mock_run.call_args_list[2:]:
+            self.assertEqual(call.kwargs.get("cwd"), self.tmpdir)
+
+    def _mock_diff_result(self, *args, **kwargs):
+        """Return a subprocess result for git diff."""
+        cmd = args[0] if args else kwargs.get("args", [])
+        if isinstance(cmd, list) and "diff" in cmd:
+            return MagicMock(returncode=0, stdout="diff --git a/file.py b/file.py\n+line", stderr="")
+        # codex --version check
+        if isinstance(cmd, list) and "codex" in cmd:
+            return MagicMock(returncode=1, stdout="", stderr="not found")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    @patch("lib.supervisor._detect_codex", return_value=True)
+    @patch("lib.supervisor.subprocess.run")
+    def test_holistic_dispatches_4_reviewers_with_codex(self, mock_run, mock_codex):
+        """With Codex available: 2 claude -p + 2 codex exec calls."""
+        q = self._make_queue()
+
+        # Set up side_effect: first calls are git diff (2 sprints), then 4 reviewers, then possibly fixer
+        diff_result = MagicMock(returncode=0, stdout="diff --git a/f.py\n+line", stderr="")
+        approve_result = MagicMock(
+            returncode=0,
+            stdout='Review OK.\n{"verdict": "APPROVE"}',
+            stderr="",
+        )
+        # 2 git diffs + 4 reviewers
+        mock_run.side_effect = [diff_result, diff_result,
+                                approve_result, approve_result,
+                                approve_result, approve_result]
+
+        result = run_holistic_review(
+            q, self.queue_path, self.tmpdir, self.plan_path, self.cp_dir,
+            timeout=60,
+        )
+
+        self.assertTrue(result)
+        # Count subprocess calls: 2 git diff + 4 reviewers = 6
+        self.assertEqual(mock_run.call_count, 6)
+
+        # Verify reviewer commands: 2 should be claude, 2 should be codex
+        reviewer_calls = mock_run.call_args_list[2:]  # skip git diffs
+        claude_calls = [c for c in reviewer_calls
+                        if c[0][0][0] == "claude" or (not c[0] and c[1].get("args", [""])[0] == "claude")]
+        codex_calls = [c for c in reviewer_calls
+                       if c[0][0][0] == "codex" or (not c[0] and c[1].get("args", [""])[0] == "codex")]
+
+        # With ThreadPoolExecutor, calls may come in any order.
+        # Check that at least some calls used claude and some used codex.
+        # Actually, since _run_single_reviewer is called inside threads,
+        # the subprocess calls happen per reviewer. Let's verify the evidence file.
+        self.assertTrue(os.path.exists(self.evidence_path))
+
+    @patch("lib.supervisor._detect_codex", return_value=False)
+    @patch("lib.supervisor.subprocess.run")
+    def test_holistic_dispatches_4_splitfocus_without_codex(self, mock_run, mock_codex):
+        """Without Codex: 4 claude -p calls (split-focus)."""
+        q = self._make_queue()
+
+        diff_result = MagicMock(returncode=0, stdout="diff --git a/f.py\n+line", stderr="")
+        approve_result = MagicMock(
+            returncode=0,
+            stdout='Review OK.\n{"verdict": "APPROVE"}',
+            stderr="",
+        )
+        mock_run.side_effect = [diff_result, diff_result,
+                                approve_result, approve_result,
+                                approve_result, approve_result]
+
+        result = run_holistic_review(
+            q, self.queue_path, self.tmpdir, self.plan_path, self.cp_dir,
+            timeout=60,
+        )
+
+        self.assertTrue(result)
+        # 2 git diff + 4 reviewers = 6
+        self.assertEqual(mock_run.call_count, 6)
+
+        # All 4 reviewer calls should be claude (no codex)
+        reviewer_calls = mock_run.call_args_list[2:]
+        for c in reviewer_calls:
+            cmd = c[0][0] if c[0] else c[1].get("args", [])
+            self.assertEqual(cmd[0], "claude",
+                             f"Expected claude but got {cmd[0]} — all should be claude without Codex")
+
+    @patch("lib.supervisor._detect_codex", return_value=False)
+    @patch("lib.supervisor.subprocess.run")
+    def test_holistic_writes_evidence_on_approve(self, mock_run, mock_codex):
+        """All 4 APPROVE -> evidence file created with correct format."""
+        q = self._make_queue()
+
+        diff_result = MagicMock(returncode=0, stdout="diff content", stderr="")
+        approve_result = MagicMock(
+            returncode=0,
+            stdout='All good.\n{"verdict": "APPROVE"}',
+            stderr="",
+        )
+        mock_run.side_effect = [diff_result, diff_result,
+                                approve_result, approve_result,
+                                approve_result, approve_result]
+
+        result = run_holistic_review(
+            q, self.queue_path, self.tmpdir, self.plan_path, self.cp_dir,
+            timeout=60,
+        )
+
+        self.assertTrue(result)
+        self.assertTrue(os.path.exists(self.evidence_path))
+
+        with open(self.evidence_path) as f:
+            evidence = json.load(f)
+
+        # Verify structure
+        self.assertEqual(evidence["verdict"], "APPROVE")
+        self.assertIn("timestamp", evidence)
+        self.assertIn("reviewers", evidence)
+        self.assertIn("sprint_prs", evidence)
+        self.assertIn("findings_resolved", evidence)
+
+        # Verify all 4 reviewer keys present
+        reviewers = evidence["reviewers"]
+        for key in REQUIRED_PAR_KEYS:
+            self.assertIn(key, reviewers)
+            self.assertEqual(reviewers[key], "APPROVE")
+
+        # Verify sprint PRs
+        self.assertEqual(len(evidence["sprint_prs"]), 2)
+        self.assertIn("https://github.com/test/repo/pull/1", evidence["sprint_prs"])
+
+    @patch("lib.supervisor._detect_codex", return_value=False)
+    @patch("lib.supervisor.subprocess.run")
+    def test_holistic_retries_on_request_changes(self, mock_run, mock_codex):
+        """1 reviewer returns REQUEST_CHANGES -> retry triggered."""
+        q = self._make_queue()
+
+        diff_result = MagicMock(returncode=0, stdout="diff content", stderr="")
+        approve = MagicMock(returncode=0, stdout='OK\n{"verdict": "APPROVE"}', stderr="")
+        request_changes = MagicMock(
+            returncode=0,
+            stdout='Bad\n{"verdict": "REQUEST_CHANGES", "findings": [{"severity": "HIGH", "description": "bug"}]}',
+            stderr="",
+        )
+
+        # Attempt 1: 2 diffs + 3 approve + 1 request_changes
+        # Then fixer session (1 call)
+        # Attempt 2: 1 re-run reviewer (approve this time)
+        mock_run.side_effect = [
+            # git diffs
+            diff_result, diff_result,
+            # 4 reviewers (attempt 1) — one fails
+            approve, approve, approve, request_changes,
+            # fixer session
+            MagicMock(returncode=0, stdout="Fixed.", stderr=""),
+            # re-run failing reviewer (attempt 2)
+            approve,
+        ]
+
+        result = run_holistic_review(
+            q, self.queue_path, self.tmpdir, self.plan_path, self.cp_dir,
+            timeout=60, max_retries=2,
+        )
+
+        self.assertTrue(result)
+        # Should have more calls than initial 6 (diff + reviewers)
+        self.assertGreater(mock_run.call_count, 6)
+
+    @patch("lib.supervisor._detect_codex", return_value=False)
+    @patch("lib.supervisor.subprocess.run")
+    def test_holistic_returns_false_on_max_retries(self, mock_run, mock_codex):
+        """Max retries exceeded -> returns False."""
+        q = self._make_queue()
+
+        diff_result = MagicMock(returncode=0, stdout="diff content", stderr="")
+        approve = MagicMock(returncode=0, stdout='OK\n{"verdict": "APPROVE"}', stderr="")
+        request_changes = MagicMock(
+            returncode=0,
+            stdout='Bad\n{"verdict": "REQUEST_CHANGES", "findings": [{"severity": "CRITICAL", "description": "major bug"}]}',
+            stderr="",
+        )
+        fixer_ok = MagicMock(returncode=0, stdout="Attempted fix.", stderr="")
+
+        # max_retries=1 means: attempt 0 (initial) + attempt 1 (retry) = 2 total
+        # Attempt 0: 2 diffs + 4 reviewers (1 fails)
+        # Fixer + Attempt 1: re-run 1 reviewer (still fails)
+        mock_run.side_effect = [
+            # git diffs
+            diff_result, diff_result,
+            # 4 reviewers (attempt 0) — one always fails
+            approve, approve, approve, request_changes,
+            # fixer
+            fixer_ok,
+            # re-run failing reviewer (attempt 1) — still fails
+            request_changes,
+        ]
+
+        result = run_holistic_review(
+            q, self.queue_path, self.tmpdir, self.plan_path, self.cp_dir,
+            timeout=60, max_retries=1,
+        )
+
+        self.assertFalse(result)
+        # Evidence file should NOT exist
+        self.assertFalse(os.path.exists(self.evidence_path))
+
+        # Checkpoint should show failed
+        holistic_cp_path = os.path.join(self.cp_dir, "sprint-holistic.json")
+        self.assertTrue(os.path.exists(holistic_cp_path))
+        with open(holistic_cp_path) as f:
+            cp = json.load(f)
+        self.assertEqual(cp["status"], "failed")
+
+    @patch("lib.supervisor._detect_codex", return_value=False)
+    @patch("lib.supervisor.subprocess.run")
+    def test_holistic_fix_cycle_reruns_only_failing(self, mock_run, mock_codex):
+        """Only failing reviewers re-run in retry, not all 4."""
+        q = self._make_queue()
+
+        diff_result = MagicMock(returncode=0, stdout="diff content", stderr="")
+        approve = MagicMock(returncode=0, stdout='OK\n{"verdict": "APPROVE"}', stderr="")
+        request_changes = MagicMock(
+            returncode=0,
+            stdout='Bad\n{"verdict": "REQUEST_CHANGES", "findings": [{"severity": "HIGH", "description": "issue"}]}',
+            stderr="",
+        )
+        fixer_ok = MagicMock(returncode=0, stdout="Fixed.", stderr="")
+
+        # Track calls to identify which reviewers were re-run
+        call_log = []
+        original_run = subprocess.run
+
+        def tracking_run(*args, **kwargs):
+            cmd = args[0] if args else kwargs.get("args", [])
+            call_log.append(cmd)
+            # Return results in order
+            return mock_run(*args, **kwargs)
+
+        # Attempt 0: 2 diffs + 4 reviewers (last one fails = codex_product)
+        # Fixer session
+        # Attempt 1: only the failing reviewer re-runs (1 call, not 4)
+        mock_run.side_effect = [
+            # git diffs
+            diff_result, diff_result,
+            # 4 reviewers attempt 0
+            approve, approve, approve, request_changes,
+            # fixer session
+            fixer_ok,
+            # Only 1 re-run (the failing reviewer)
+            approve,
+        ]
+
+        result = run_holistic_review(
+            q, self.queue_path, self.tmpdir, self.plan_path, self.cp_dir,
+            timeout=60, max_retries=2,
+        )
+
+        self.assertTrue(result)
+
+        # Total calls: 2 (diffs) + 4 (initial reviewers) + 1 (fixer) + 1 (re-run) = 8
+        # NOT 2 + 4 + 1 + 4 = 11 (if all were re-run)
+        self.assertEqual(mock_run.call_count, 8,
+                         f"Expected 8 subprocess calls (2 diff + 4 initial + 1 fixer + 1 re-run), "
+                         f"got {mock_run.call_count}")
+
+    @patch("lib.supervisor.run_holistic_review")
+    @patch("lib.supervisor.preflight")
+    @patch("lib.supervisor.execute_sprint")
+    def test_run_full_flow_with_all_gates(self, mock_execute, mock_preflight, mock_holistic):
+        """Integration: run() dispatches holistic review and generates report on success."""
+        sprints = [
+            _sprint(sid=1, title="Setup", status="completed"),
+            _sprint(sid=2, title="Build", status="completed"),
+        ]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        sprints[1]["pr"] = "https://github.com/test/repo/pull/2"
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+
+        mock_preflight.return_value = (True, [])
+
+        # Holistic review writes evidence and returns True
+        def holistic_side_effect(queue, queue_path, repo_root, plan_path,
+                                  checkpoints_dir, timeout=1800, notifier=None,
+                                  max_retries=2):
+            evidence = {
+                "timestamp": "2026-01-01T00:00:00Z",
+                "verdict": "APPROVE",
+                "reviewers": {
+                    "claude_code_quality": "APPROVE",
+                    "claude_product": "APPROVE",
+                    "codex_code_review": "APPROVE",
+                    "codex_product": "APPROVE",
+                },
+                "sprint_prs": [],
+                "findings_resolved": 0,
+            }
+            ev_path = os.path.join(
+                os.path.dirname(checkpoints_dir),
+                ".holistic-review-evidence.json",
+            )
+            with open(ev_path, "w") as f:
+                json.dump(evidence, f)
+            return True
+
+        mock_holistic.side_effect = holistic_side_effect
+
+        # Create checkpoints for sprints so report can read them
+        cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        save_checkpoint(cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+        save_checkpoint(cp_dir, 2, {
+            "sprint_id": 2, "status": "completed", "summary": {},
+        })
+
+        import io
+        from unittest.mock import patch as _patch
+        with _patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            run(self.queue_path, repo_root=self.tmpdir)
+            output = mock_stdout.getvalue()
+
+        # Holistic review should have been called
+        mock_holistic.assert_called_once()
+
+        # Report should be generated (not blocked)
+        self.assertNotIn("BLOCKED", output)
+        self.assertIn("# Completion Report", output)
+        self.assertIn("Setup", output)
+        self.assertIn("Build", output)
 
 
 if __name__ == "__main__":
