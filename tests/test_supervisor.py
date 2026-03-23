@@ -2,6 +2,7 @@
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch, MagicMock, call
@@ -12,6 +13,7 @@ from lib.supervisor import (
     generate_completion_report,
     _validate_evidence_verdicts, _validate_par_evidence,
     _validate_sprint_summary,
+    _resolve_baseline_cmd, run_baseline_tests,
     VALID_PASS_VERDICTS, REQUIRED_PAR_KEYS, REQUIRED_SUMMARY_KEYS,
 )
 import lib.supervisor as supervisor_module
@@ -239,15 +241,24 @@ class TestExecuteSprint(unittest.TestCase):
         q.save(self.queue_path)
         return q
 
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor._validate_par_evidence")
+    @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
-    def test_execute_sprint_success(self, mock_run, mock_create_wt, mock_cleanup_wt):
+    def test_execute_sprint_success(self, mock_run, mock_create_wt, mock_cleanup_wt,
+                                     mock_baseline, mock_par, mock_sleep):
         """Successful execution: claude returns JSON, exit 0, PR verified."""
         q = self._make_queue()
         sprint = q.sprints[0]
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "ok", False)
+        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
+                                         "claude_product": "APPROVE",
+                                         "codex_code_review": "APPROVE",
+                                         "codex_product": "APPROVE"}, [])
 
         # Claude subprocess
         claude_output = (
@@ -267,10 +278,12 @@ class TestExecuteSprint(unittest.TestCase):
         self.assertEqual(sprint["pr"], "https://github.com/test/repo/pull/1")
         mock_cleanup_wt.assert_called_once()
 
+    @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
-    def test_execute_sprint_failure_marks_failed(self, mock_run, mock_create_wt, mock_cleanup_wt):
+    def test_execute_sprint_failure_marks_failed(self, mock_run, mock_create_wt,
+                                                  mock_cleanup_wt, mock_baseline):
         """After max_retries failures, sprint is marked failed."""
         sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
         sprint_data["max_retries"] = 1
@@ -279,6 +292,7 @@ class TestExecuteSprint(unittest.TestCase):
         sprint = q.sprints[0]
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "ok", False)
 
         # Claude subprocess fails
         claude_result = MagicMock(returncode=1, stdout="Error occurred", stderr="crash")
@@ -290,10 +304,14 @@ class TestExecuteSprint(unittest.TestCase):
         self.assertEqual(sprint["status"], "failed")
         mock_cleanup_wt.assert_called_once()
 
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor._validate_par_evidence")
+    @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
-    def test_execute_sprint_retry_on_failure(self, mock_run, mock_create_wt, mock_cleanup_wt):
+    def test_execute_sprint_retry_on_failure(self, mock_run, mock_create_wt, mock_cleanup_wt,
+                                              mock_baseline, mock_par, mock_sleep):
         """On failure with retries left, should retry and eventually succeed."""
         sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
         sprint_data["max_retries"] = 2
@@ -302,6 +320,11 @@ class TestExecuteSprint(unittest.TestCase):
         sprint = q.sprints[0]
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "ok", False)
+        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
+                                         "claude_product": "APPROVE",
+                                         "codex_code_review": "APPROVE",
+                                         "codex_product": "APPROVE"}, [])
 
         # First attempt fails (exit 1), retry succeeds
         fail_result = MagicMock(returncode=1, stdout="Error", stderr="")
@@ -319,10 +342,15 @@ class TestExecuteSprint(unittest.TestCase):
         self.assertEqual(cp["status"], "completed")
         self.assertEqual(sprint["retries"], 1)
 
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor._validate_par_evidence")
+    @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
-    def test_execute_sprint_json_parse_error_retries(self, mock_run, mock_create_wt, mock_cleanup_wt):
+    def test_execute_sprint_json_parse_error_retries(self, mock_run, mock_create_wt,
+                                                      mock_cleanup_wt, mock_baseline,
+                                                      mock_par, mock_sleep):
         """Exit 0 but no valid JSON on last line should retry with appended instruction."""
         sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
         sprint_data["max_retries"] = 2
@@ -331,6 +359,11 @@ class TestExecuteSprint(unittest.TestCase):
         sprint = q.sprints[0]
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "ok", False)
+        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
+                                         "claude_product": "APPROVE",
+                                         "codex_code_review": "APPROVE",
+                                         "codex_product": "APPROVE"}, [])
 
         # First: exit 0 but no JSON
         no_json = MagicMock(returncode=0, stdout="Done but forgot JSON", stderr="")
@@ -349,15 +382,24 @@ class TestExecuteSprint(unittest.TestCase):
         self.assertEqual(cp["status"], "completed")
         self.assertEqual(sprint["retries"], 1)
 
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor._validate_par_evidence")
+    @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.subprocess.run")
-    def test_execute_sprint_saves_output_log(self, mock_run, mock_create_wt, mock_cleanup_wt):
+    def test_execute_sprint_saves_output_log(self, mock_run, mock_create_wt, mock_cleanup_wt,
+                                              mock_baseline, mock_par, mock_sleep):
         """Output should be saved to sprint-{id}-output.log."""
         q = self._make_queue()
         sprint = q.sprints[0]
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "ok", False)
+        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
+                                         "claude_product": "APPROVE",
+                                         "codex_code_review": "APPROVE",
+                                         "codex_product": "APPROVE"}, [])
 
         claude_output = (
             "Log line 1\n"
@@ -1161,6 +1203,549 @@ class TestBuildPromptFrontend(unittest.TestCase):
         result = build_prompt(sprint, self.tmpdir)
         # Should log a warning
         mock_logger.warning.assert_called()
+
+
+# =====================================================================
+# Sprint 2: Baseline Tests + PAR Gate + Milestone Writes
+# =====================================================================
+
+
+class TestResolveBaselineCmd(unittest.TestCase):
+    """Sprint 2: _resolve_baseline_cmd priority and heuristic detection."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, baseline_cmd=None):
+        return SprintQueue("test", "2026-01-01T00:00:00Z", [], baseline_cmd=baseline_cmd)
+
+    def test_baseline_cmd_from_sprint(self):
+        """Sprint-level baseline_cmd takes highest priority."""
+        sprint = {"baseline_cmd": "make test"}
+        q = self._make_queue(baseline_cmd="pytest")
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertEqual(cmd, "make test")
+
+    def test_baseline_cmd_from_queue(self):
+        """Queue-level baseline_cmd used when sprint has none."""
+        sprint = {}
+        q = self._make_queue(baseline_cmd="pytest --tb=short")
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertEqual(cmd, "pytest --tb=short")
+
+    def test_baseline_heuristic_pytest_ini(self):
+        """Heuristic detects pytest.ini."""
+        with open(os.path.join(self.tmpdir, "pytest.ini"), "w") as f:
+            f.write("[pytest]\n")
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertEqual(cmd, "python -m pytest --tb=short -q")
+
+    def test_baseline_heuristic_pyproject_toml_with_pytest(self):
+        """Heuristic detects pyproject.toml with [tool.pytest] section."""
+        with open(os.path.join(self.tmpdir, "pyproject.toml"), "w") as f:
+            f.write("[tool.pytest.ini_options]\ntestpaths = ['tests']\n")
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertEqual(cmd, "python -m pytest --tb=short -q")
+
+    def test_baseline_heuristic_pyproject_toml_without_pytest(self):
+        """Heuristic skips pyproject.toml without [tool.pytest] section."""
+        with open(os.path.join(self.tmpdir, "pyproject.toml"), "w") as f:
+            f.write("[build-system]\nrequires = ['setuptools']\n")
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertIsNone(cmd)
+
+    def test_baseline_heuristic_package_json(self):
+        """Heuristic detects package.json with 'test' script."""
+        with open(os.path.join(self.tmpdir, "package.json"), "w") as f:
+            json.dump({"scripts": {"test": "jest"}}, f)
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertEqual(cmd, "npm test")
+
+    def test_baseline_heuristic_package_json_no_test_script(self):
+        """Heuristic skips package.json without 'test' script."""
+        with open(os.path.join(self.tmpdir, "package.json"), "w") as f:
+            json.dump({"scripts": {"build": "tsc"}}, f)
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertIsNone(cmd)
+
+    def test_baseline_heuristic_gemfile(self):
+        """Heuristic detects Gemfile."""
+        with open(os.path.join(self.tmpdir, "Gemfile"), "w") as f:
+            f.write("source 'https://rubygems.org'\n")
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertEqual(cmd, "bundle exec rspec")
+
+    def test_baseline_heuristic_go_mod(self):
+        """Heuristic detects go.mod."""
+        with open(os.path.join(self.tmpdir, "go.mod"), "w") as f:
+            f.write("module example.com/project\n")
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertEqual(cmd, "go test ./...")
+
+    def test_baseline_heuristic_mix_exs(self):
+        """Heuristic detects mix.exs."""
+        with open(os.path.join(self.tmpdir, "mix.exs"), "w") as f:
+            f.write("defmodule MyApp.MixProject do\nend\n")
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertEqual(cmd, "mix test")
+
+    def test_baseline_no_runner_returns_none(self):
+        """No test runner detected returns None."""
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertIsNone(cmd)
+
+
+class TestRunBaselineTests(unittest.TestCase):
+    """Sprint 2: run_baseline_tests()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, baseline_cmd=None):
+        return SprintQueue("test", "2026-01-01T00:00:00Z", [], baseline_cmd=baseline_cmd)
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_baseline_pass(self, mock_run):
+        """Baseline cmd returns 0 -> passed=True, skipped=False."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="3 passed\n", stderr="")
+        sprint = {"baseline_cmd": "pytest"}
+        q = self._make_queue()
+        passed, output, skipped = run_baseline_tests(self.tmpdir, sprint, q)
+        self.assertTrue(passed)
+        self.assertFalse(skipped)
+        self.assertIn("3 passed", output)
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_baseline_fail(self, mock_run):
+        """Baseline cmd returns non-0 -> passed=False."""
+        mock_run.return_value = MagicMock(returncode=1, stdout="1 failed\n", stderr="ERRORS")
+        sprint = {"baseline_cmd": "pytest"}
+        q = self._make_queue()
+        passed, output, skipped = run_baseline_tests(self.tmpdir, sprint, q)
+        self.assertFalse(passed)
+        self.assertFalse(skipped)
+
+    def test_baseline_no_runner_skips(self):
+        """No test runner detected -> passed=True, skipped=True."""
+        sprint = {}
+        q = self._make_queue()
+        passed, output, skipped = run_baseline_tests(self.tmpdir, sprint, q)
+        self.assertTrue(passed)
+        self.assertTrue(skipped)
+        self.assertIn("skipped", output.lower())
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_baseline_timeout(self, mock_run):
+        """Timeout -> passed=False."""
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="pytest", timeout=300)
+        sprint = {"baseline_cmd": "pytest"}
+        q = self._make_queue()
+        passed, output, skipped = run_baseline_tests(self.tmpdir, sprint, q)
+        self.assertFalse(passed)
+        self.assertFalse(skipped)
+        self.assertIn("timed out", output.lower())
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_baseline_cmd_from_queue_used(self, mock_run):
+        """Queue-level baseline_cmd is used when sprint has none."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok\n", stderr="")
+        sprint = {}
+        q = self._make_queue(baseline_cmd="make test")
+        passed, output, skipped = run_baseline_tests(self.tmpdir, sprint, q)
+        self.assertTrue(passed)
+        self.assertFalse(skipped)
+        # Verify subprocess.run was called with the queue baseline_cmd
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args
+        self.assertEqual(call_args[0][0], "make test")
+        self.assertTrue(call_args[1].get("shell", False))
+
+
+class TestBaselineGateInExecuteSprint(unittest.TestCase):
+    """Sprint 2: Baseline gate integration in execute_sprint()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n{impl_model}\n{impl_effort}\n{frontend_instructions}\n")
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints=None):
+        if sprints is None:
+            sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.run_baseline_tests")
+    def test_baseline_fail_marks_failed(self, mock_baseline, mock_create_wt, mock_cleanup_wt):
+        """Baseline failure -> mark_failed + checkpoint, no Claude invocation."""
+        q = self._make_queue()
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (False, "2 tests failed\nERROR in test_foo", False)
+
+        cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        self.assertEqual(sprint["status"], "failed")
+        self.assertIn("Baseline tests failed", sprint.get("error_log", ""))
+        # Checkpoint should record baseline failure
+        saved_cp = load_checkpoint(self.cp_dir, 1)
+        self.assertIsNotNone(saved_cp)
+        self.assertEqual(saved_cp["error"], "baseline_tests_failed")
+        self.assertIn("baseline_output", saved_cp)
+        mock_cleanup_wt.assert_called_once()
+
+    @patch("lib.supervisor._attempt_sprint")
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.run_baseline_tests")
+    def test_baseline_pass_proceeds_to_attempt(self, mock_baseline, mock_create_wt,
+                                                mock_cleanup_wt, mock_attempt):
+        """Baseline pass -> proceed to _attempt_sprint, milestone saved."""
+        q = self._make_queue()
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "5 tests passed", False)
+        mock_attempt.return_value = {"sprint_id": 1, "status": "completed"}
+
+        execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        mock_attempt.assert_called_once()
+        # Check baseline milestone was saved
+        saved_cp = load_checkpoint(self.cp_dir, 1)
+        self.assertIsNotNone(saved_cp)
+        milestones = saved_cp.get("milestones", {})
+        self.assertTrue(milestones.get("baseline_passed"))
+
+    @patch("lib.supervisor._attempt_sprint")
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.run_baseline_tests")
+    def test_baseline_no_runner_skips(self, mock_baseline, mock_create_wt,
+                                      mock_cleanup_wt, mock_attempt):
+        """No test runner -> skip baseline, proceed to _attempt_sprint."""
+        q = self._make_queue()
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "No test runner detected — skipped", True)
+        mock_attempt.return_value = {"sprint_id": 1, "status": "completed"}
+
+        execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        mock_attempt.assert_called_once()
+        saved_cp = load_checkpoint(self.cp_dir, 1)
+        milestones = saved_cp.get("milestones", {})
+        self.assertTrue(milestones.get("baseline_passed"))
+        self.assertTrue(milestones.get("baseline_skipped"))
+
+
+class TestPARIntegration(unittest.TestCase):
+    """Sprint 2: PAR validation + summary validation in _attempt_sprint()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n{impl_model}\n{impl_effort}\n{frontend_instructions}\n")
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints=None):
+        if sprints is None:
+            sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    def _good_summary_json(self, pr_url="https://github.com/test/repo/pull/1"):
+        return (
+            '{"status":"completed","pr_url":"' + pr_url + '",'
+            '"tests":{"passed":5,"failed":0},'
+            '"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED",'
+            '"codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
+        )
+
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.run_baseline_tests")
+    @patch("lib.supervisor.subprocess.run")
+    @patch("lib.supervisor._validate_par_evidence")
+    def test_par_integration_retry_separate_counter(self, mock_par, mock_run, mock_baseline,
+                                                     mock_create_wt, mock_cleanup_wt, mock_sleep):
+        """PAR retry uses separate counter from Claude retry. PAR fail doesn't consume Claude retries."""
+        sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint_data["max_retries"] = 2
+        q = self._make_queue([sprint_data])
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "ok", False)
+
+        good_output = "Done.\n" + self._good_summary_json()
+        claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        gh_result = MagicMock(returncode=0, stdout="OPEN")
+        # Claude calls: 1st success, 2nd success (PAR retry re-invokes Claude),
+        # then gh pr view
+        mock_run.side_effect = [claude_result, claude_result, gh_result]
+
+        # First PAR call fails, second PAR call passes
+        mock_par.side_effect = [
+            (False, {}, ["PAR: missing key 'claude_code_quality'"]),
+            (True, {"claude_code_quality": "APPROVE", "claude_product": "APPROVE",
+                     "codex_code_review": "APPROVE", "codex_product": "APPROVE"}, []),
+        ]
+
+        cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        self.assertEqual(cp["status"], "completed")
+        # Claude retry counter should still be 0 — PAR retries are separate
+        # The sprint should have succeeded after 1 PAR retry
+
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.run_baseline_tests")
+    @patch("lib.supervisor.subprocess.run")
+    @patch("lib.supervisor._validate_par_evidence")
+    def test_par_integration_max_retries_fails(self, mock_par, mock_run, mock_baseline,
+                                                mock_create_wt, mock_cleanup_wt, mock_sleep):
+        """2 PAR retries exceeded -> mark_failed."""
+        sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint_data["max_retries"] = 5  # High Claude retries — PAR should fail first
+        q = self._make_queue([sprint_data])
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "ok", False)
+
+        good_output = "Done.\n" + self._good_summary_json()
+        claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        # 3 Claude invocations (initial + 2 PAR retries)
+        mock_run.side_effect = [claude_result, claude_result, claude_result]
+
+        # PAR always fails
+        mock_par.return_value = (False, {}, ["PAR: missing .par-evidence.json"])
+
+        cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        self.assertEqual(cp["status"], "failed")
+        self.assertIn("PAR", sprint.get("error_log", ""))
+
+
+class TestPRValidationRetry(unittest.TestCase):
+    """Sprint 2: PR verification retry with separate counter."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n{impl_model}\n{impl_effort}\n{frontend_instructions}\n")
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints=None):
+        if sprints is None:
+            sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    def _good_summary_json(self, pr_url="https://github.com/test/repo/pull/1"):
+        return (
+            '{"status":"completed","pr_url":"' + pr_url + '",'
+            '"tests":{"passed":5,"failed":0},'
+            '"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED",'
+            '"codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
+        )
+
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.run_baseline_tests")
+    @patch("lib.supervisor.subprocess.run")
+    @patch("lib.supervisor._validate_par_evidence")
+    def test_pr_validation_retry_3_times(self, mock_par, mock_run, mock_baseline,
+                                          mock_create_wt, mock_cleanup_wt, mock_sleep):
+        """Transient gh pr view failure retried up to 3 times, then succeeds."""
+        q = self._make_queue()
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "ok", False)
+        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
+                                         "claude_product": "APPROVE",
+                                         "codex_code_review": "APPROVE",
+                                         "codex_product": "APPROVE"}, [])
+
+        good_output = "Done.\n" + self._good_summary_json()
+        claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        gh_fail = MagicMock(returncode=1, stdout="", stderr="network error")
+        gh_ok = MagicMock(returncode=0, stdout="OPEN")
+        # Claude, then 2 gh fails, 1 gh success
+        mock_run.side_effect = [claude_result, gh_fail, gh_fail, gh_ok]
+
+        cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        self.assertEqual(cp["status"], "completed")
+
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.run_baseline_tests")
+    @patch("lib.supervisor.subprocess.run")
+    @patch("lib.supervisor._validate_par_evidence")
+    def test_pr_validation_hard_fail_after_retries(self, mock_par, mock_run, mock_baseline,
+                                                    mock_create_wt, mock_cleanup_wt, mock_sleep):
+        """3 gh pr view failures -> mark_failed (NOT re-invoke Claude)."""
+        q = self._make_queue()
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "ok", False)
+        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
+                                         "claude_product": "APPROVE",
+                                         "codex_code_review": "APPROVE",
+                                         "codex_product": "APPROVE"}, [])
+
+        good_output = "Done.\n" + self._good_summary_json()
+        claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        gh_fail = MagicMock(returncode=1, stdout="", stderr="network error")
+        # Claude once, then 3 gh failures
+        mock_run.side_effect = [claude_result, gh_fail, gh_fail, gh_fail]
+
+        cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        self.assertEqual(cp["status"], "failed")
+        self.assertIn("PR", sprint.get("error_log", ""))
+        # Claude should only be called ONCE — no re-invocation
+        claude_calls = [c for c in mock_run.call_args_list if "claude" in str(c)]
+        self.assertEqual(len(claude_calls), 1)
+
+
+class TestMilestoneWrites(unittest.TestCase):
+    """Sprint 2: Milestone writes in checkpoint at each transition."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write("Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n{impl_model}\n{impl_effort}\n{frontend_instructions}\n")
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints=None):
+        if sprints is None:
+            sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    def _good_summary_json(self, pr_url="https://github.com/test/repo/pull/1"):
+        return (
+            '{"status":"completed","pr_url":"' + pr_url + '",'
+            '"tests":{"passed":5,"failed":0},'
+            '"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED",'
+            '"codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
+        )
+
+    @patch("lib.supervisor.time.sleep")
+    @patch("lib.supervisor.cleanup_worktree")
+    @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.run_baseline_tests")
+    @patch("lib.supervisor.subprocess.run")
+    @patch("lib.supervisor._validate_par_evidence")
+    def test_milestone_writes_in_checkpoint(self, mock_par, mock_run, mock_baseline,
+                                             mock_create_wt, mock_cleanup_wt, mock_sleep):
+        """Full success path writes all milestones to checkpoint."""
+        q = self._make_queue()
+        sprint = q.sprints[0]
+        wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
+        mock_create_wt.return_value = wt_path
+        mock_baseline.return_value = (True, "ok", False)
+        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
+                                         "claude_product": "APPROVE",
+                                         "codex_code_review": "APPROVE",
+                                         "codex_product": "APPROVE"}, [])
+
+        good_output = "Done.\n" + self._good_summary_json()
+        claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        gh_ok = MagicMock(returncode=0, stdout="OPEN")
+        mock_run.side_effect = [claude_result, gh_ok]
+
+        cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
+
+        self.assertEqual(cp["status"], "completed")
+        # Check final checkpoint has milestones
+        saved_cp = load_checkpoint(self.cp_dir, 1)
+        self.assertIsNotNone(saved_cp)
+        # The completed checkpoint should have milestone info
+        # (milestones may be in intermediate checkpoint or final — we check both)
+        # The key property: baseline_passed, implemented, par_validated, pr_created
+        # should all have been written at some point.
+        # Final completed checkpoint should reflect the full path.
+        self.assertEqual(saved_cp["status"], "completed")
+        milestones = saved_cp.get("milestones", {})
+        self.assertTrue(milestones.get("baseline_passed", False))
+        self.assertTrue(milestones.get("implemented", False))
+        self.assertTrue(milestones.get("par_validated", False))
+        self.assertTrue(milestones.get("pr_created", False))
 
 
 if __name__ == "__main__":
