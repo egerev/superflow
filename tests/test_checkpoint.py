@@ -5,7 +5,10 @@ import shutil
 import tempfile
 import unittest
 
-from lib.checkpoint import save_checkpoint, load_checkpoint, load_all_checkpoints
+from lib.checkpoint import (
+    save_checkpoint, load_checkpoint, load_all_checkpoints,
+    load_checkpoint_by_name,
+)
 
 
 class TestCheckpointSaveLoad(unittest.TestCase):
@@ -81,6 +84,63 @@ class TestLoadAllCheckpoints(unittest.TestCase):
             f.write("not a checkpoint")
         result = load_all_checkpoints(self.cp_dir)
         self.assertEqual(len(result), 1)
+
+
+class TestCheckpointStringIds(unittest.TestCase):
+    """Sprint 1: checkpoint.py supports string IDs (e.g., 'holistic')."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_checkpoint_string_id(self):
+        """save_checkpoint/load_checkpoint work with string IDs like 'holistic'."""
+        data = {"phase": "holistic_review", "status": "in_progress"}
+        save_checkpoint(self.cp_dir, "holistic", data)
+        loaded = load_checkpoint(self.cp_dir, "holistic")
+        self.assertEqual(loaded, data)
+        # Verify file naming
+        expected_path = os.path.join(self.cp_dir, "sprint-holistic.json")
+        self.assertTrue(os.path.exists(expected_path))
+
+    def test_load_checkpoint_by_name(self):
+        """load_checkpoint_by_name loads sprint-{name}.json from directory."""
+        data = {"phase": "holistic_review", "status": "completed"}
+        save_checkpoint(self.cp_dir, "holistic", data)
+        loaded = load_checkpoint_by_name(self.cp_dir, "holistic")
+        self.assertEqual(loaded, data)
+
+    def test_load_checkpoint_by_name_missing(self):
+        """load_checkpoint_by_name returns None when file doesn't exist."""
+        os.makedirs(self.cp_dir, exist_ok=True)
+        loaded = load_checkpoint_by_name(self.cp_dir, "nonexistent")
+        self.assertIsNone(loaded)
+
+    def test_load_all_excludes_named(self):
+        """load_all_checkpoints only loads numeric-ID checkpoints, not named ones."""
+        save_checkpoint(self.cp_dir, 1, {"sprint_id": 1})
+        save_checkpoint(self.cp_dir, 2, {"sprint_id": 2})
+        save_checkpoint(self.cp_dir, "holistic", {"phase": "holistic_review"})
+        result = load_all_checkpoints(self.cp_dir)
+        # Only numeric IDs loaded — holistic excluded
+        self.assertEqual(len(result), 2)
+        ids = [r.get("sprint_id") for r in result]
+        self.assertIn(1, ids)
+        self.assertIn(2, ids)
+
+    def test_named_checkpoint_accessible_by_name(self):
+        """Named checkpoints are accessible via load_checkpoint_by_name, not load_all."""
+        save_checkpoint(self.cp_dir, "holistic", {"phase": "holistic_review"})
+        # Not in load_all
+        all_cp = load_all_checkpoints(self.cp_dir)
+        self.assertEqual(len(all_cp), 0)
+        # But accessible by name
+        loaded = load_checkpoint_by_name(self.cp_dir, "holistic")
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded["phase"], "holistic_review")
 
 
 if __name__ == "__main__":

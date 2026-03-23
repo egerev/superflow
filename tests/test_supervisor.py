@@ -10,6 +10,9 @@ from lib.supervisor import (
     create_worktree, cleanup_worktree, build_prompt, execute_sprint,
     preflight, run, print_summary, resume, _shutdown_event,
     generate_completion_report,
+    _validate_evidence_verdicts, _validate_par_evidence,
+    _validate_sprint_summary,
+    VALID_PASS_VERDICTS, REQUIRED_PAR_KEYS, REQUIRED_SUMMARY_KEYS,
 )
 import lib.supervisor as supervisor_module
 from lib.queue import SprintQueue
@@ -933,6 +936,231 @@ class TestCompletionReport(unittest.TestCase):
 
         self.assertIsInstance(report, str)
         self.assertTrue(len(report) > 0)
+
+
+class TestValidateEvidenceVerdicts(unittest.TestCase):
+    """Sprint 1: _validate_evidence_verdicts and _validate_par_evidence."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_validate_evidence_valid(self):
+        """Valid 4-key PAR with APPROVE/ACCEPTED/PASS verdicts passes."""
+        data = {
+            "claude_code_quality": "APPROVE",
+            "claude_product": "ACCEPTED",
+            "codex_code_review": "PASS",
+            "codex_product": "APPROVE",
+        }
+        valid, errors = _validate_evidence_verdicts(data, REQUIRED_PAR_KEYS)
+        self.assertTrue(valid)
+        self.assertEqual(errors, [])
+
+    def test_validate_evidence_missing_file(self):
+        """Missing .par-evidence.json returns invalid with error."""
+        valid, data, errors = _validate_par_evidence(self.tmpdir)
+        self.assertFalse(valid)
+        self.assertEqual(data, {})
+        self.assertTrue(any("not found" in e for e in errors))
+
+    def test_validate_evidence_missing_keys(self):
+        """PAR evidence with missing keys returns errors."""
+        data = {
+            "claude_code_quality": "APPROVE",
+            # missing claude_product, codex_code_review, codex_product
+        }
+        valid, errors = _validate_evidence_verdicts(data, REQUIRED_PAR_KEYS)
+        self.assertFalse(valid)
+        self.assertEqual(len(errors), 3)  # 3 missing keys
+
+    def test_validate_evidence_invalid_verdict(self):
+        """PAR evidence with invalid verdict value returns error."""
+        data = {
+            "claude_code_quality": "APPROVE",
+            "claude_product": "MAYBE",
+            "codex_code_review": "APPROVE",
+            "codex_product": "APPROVE",
+        }
+        valid, errors = _validate_evidence_verdicts(data, REQUIRED_PAR_KEYS)
+        self.assertFalse(valid)
+        self.assertTrue(any("MAYBE" in e for e in errors))
+
+    def test_validate_evidence_frontend_required(self):
+        """With require_frontend=True and all 5 keys present, passes."""
+        evidence = {
+            "claude_code_quality": "APPROVE",
+            "claude_product": "ACCEPTED",
+            "codex_code_review": "PASS",
+            "codex_product": "APPROVE",
+            "frontend_verification": "PASS",
+        }
+        evidence_path = os.path.join(self.tmpdir, ".par-evidence.json")
+        with open(evidence_path, "w") as f:
+            json.dump(evidence, f)
+        valid, data, errors = _validate_par_evidence(self.tmpdir, require_frontend=True)
+        self.assertTrue(valid)
+        self.assertEqual(errors, [])
+
+    def test_validate_evidence_frontend_missing(self):
+        """With require_frontend=True and missing frontend_verification, fails."""
+        evidence = {
+            "claude_code_quality": "APPROVE",
+            "claude_product": "ACCEPTED",
+            "codex_code_review": "PASS",
+            "codex_product": "APPROVE",
+        }
+        evidence_path = os.path.join(self.tmpdir, ".par-evidence.json")
+        with open(evidence_path, "w") as f:
+            json.dump(evidence, f)
+        valid, data, errors = _validate_par_evidence(self.tmpdir, require_frontend=True)
+        self.assertFalse(valid)
+        self.assertTrue(any("frontend_verification" in e for e in errors))
+
+
+class TestValidateSprintSummary(unittest.TestCase):
+    """Sprint 1: _validate_sprint_summary."""
+
+    def test_summary_validation_missing_keys(self):
+        """Summary missing required keys returns errors."""
+        summary = {"status": "completed"}  # missing pr_url, tests, par
+        valid, errors = _validate_sprint_summary(summary)
+        self.assertFalse(valid)
+        self.assertTrue(any("Missing" in e for e in errors))
+
+    def test_summary_validation_wrong_types(self):
+        """Summary with wrong types returns errors."""
+        summary = {
+            "status": "in_progress",  # wrong — should be "completed"
+            "pr_url": 12345,          # wrong — should be str
+            "tests": "none",          # wrong — should be dict
+            "par": "none",            # wrong — should be dict
+        }
+        valid, errors = _validate_sprint_summary(summary)
+        self.assertFalse(valid)
+        # Should have errors for status, pr_url, tests, par
+        self.assertGreaterEqual(len(errors), 4)
+
+    def test_summary_validation_valid(self):
+        """Valid summary passes all checks."""
+        summary = {
+            "status": "completed",
+            "pr_url": "https://github.com/test/repo/pull/1",
+            "tests": {"passed": 5, "failed": 0},
+            "par": {"claude_code_quality": "ACCEPTED"},
+        }
+        valid, errors = _validate_sprint_summary(summary)
+        self.assertTrue(valid)
+        self.assertEqual(errors, [])
+
+
+class TestPreflightWorktreesGitignore(unittest.TestCase):
+    """Sprint 1: .worktrees gitignore check in preflight()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nStuff\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self):
+        return SprintQueue("test", "2026-01-01T00:00:00Z",
+                           [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")])
+
+    @patch("lib.supervisor.shutil.disk_usage")
+    @patch("lib.supervisor.subprocess.run")
+    def test_preflight_worktrees_gitignore(self, mock_run, mock_disk):
+        """If .worktrees is not gitignored, preflight should fail with critical issue."""
+        def side_effect(cmd, **kwargs):
+            if "claude" in cmd:
+                return MagicMock(returncode=0, stdout="claude 1.0\n", stderr="")
+            if "status" in cmd and "--porcelain" in cmd:
+                return MagicMock(returncode=0, stdout="", stderr="")
+            if "auth" in cmd:
+                return MagicMock(returncode=0, stdout="Logged in\n", stderr="")
+            if "check-ignore" in cmd:
+                return MagicMock(returncode=1, stdout="", stderr="")  # NOT ignored
+            return MagicMock(returncode=0, stdout="", stderr="")
+        mock_run.side_effect = side_effect
+        mock_disk.return_value = MagicMock(free=10 * 1024**3)
+        q = self._make_queue()
+        passed, issues = preflight(q, self.tmpdir)
+        self.assertFalse(passed)
+        self.assertTrue(any(".worktrees" in i for i in issues))
+
+
+class TestBuildPromptFrontend(unittest.TestCase):
+    """Sprint 1: build_prompt() frontend_instructions injection."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.templates_dir = os.path.join(self.tmpdir, "templates")
+        os.makedirs(self.templates_dir)
+        # Write the updated template with {frontend_instructions} placeholder
+        with open(os.path.join(self.templates_dir, "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(
+                "Sprint {sprint_id}: {sprint_title}\n"
+                "Plan: {sprint_plan}\n"
+                "Claude: {claude_md}\n"
+                "LLMs: {llms_txt}\n"
+                "Branch: {branch}\n"
+                "Complexity: {complexity}\n"
+                "Tier: {implementation_tier}\n"
+                "Model: {impl_model}\n"
+                "Effort: {impl_effort}\n"
+                "{frontend_instructions}\n"
+                "JSON output here\n"
+            )
+        self.plans_dir = os.path.join(self.tmpdir, "plans")
+        os.makedirs(self.plans_dir)
+        with open(os.path.join(self.plans_dir, "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_build_prompt_frontend_placeholder_no_frontend(self):
+        """When has_frontend is not set, placeholder is replaced with empty string."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertNotIn("{frontend_instructions}", result)
+        self.assertNotIn("FRONTEND VERIFICATION", result)
+
+    def test_build_prompt_frontend_placeholder_with_frontend(self):
+        """When has_frontend=True, placeholder is replaced with frontend instructions."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint["has_frontend"] = True
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertNotIn("{frontend_instructions}", result)
+        self.assertIn("FRONTEND VERIFICATION", result)
+        self.assertIn("webapp-testing", result)
+
+    @patch("lib.supervisor.logger")
+    def test_build_prompt_frontend_missing_placeholder_warns(self, mock_logger):
+        """When has_frontend=True but template lacks placeholder, log warning."""
+        # Write template WITHOUT {frontend_instructions}
+        with open(os.path.join(self.templates_dir, "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(
+                "Sprint {sprint_id}: {sprint_title}\n"
+                "Plan: {sprint_plan}\n"
+                "Claude: {claude_md}\n"
+                "LLMs: {llms_txt}\n"
+                "Branch: {branch}\n"
+                "Complexity: {complexity}\n"
+                "Tier: {implementation_tier}\n"
+                "Model: {impl_model}\n"
+                "Effort: {impl_effort}\n"
+            )
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint["has_frontend"] = True
+        result = build_prompt(sprint, self.tmpdir)
+        # Should log a warning
+        mock_logger.warning.assert_called()
 
 
 if __name__ == "__main__":

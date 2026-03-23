@@ -367,5 +367,44 @@ class TestConcurrentQueueWrites(unittest.TestCase):
         self.assertEqual(summary["skipped"], 4)
 
 
+class TestQueueBaselineCmd(unittest.TestCase):
+    """Sprint 1: baseline_cmd support in SprintQueue."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmpdir, "queue.json")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+
+    def test_queue_baseline_cmd_roundtrip(self):
+        """baseline_cmd is saved to JSON and loaded back correctly."""
+        data = _make_queue_data()
+        data["baseline_cmd"] = "python -m pytest --tb=short -q"
+        with open(self.path, "w") as f:
+            json.dump(data, f)
+        q = SprintQueue.load(self.path)
+        self.assertEqual(q.baseline_cmd, "python -m pytest --tb=short -q")
+
+        # Save and reload
+        q.save(self.path)
+        q2 = SprintQueue.load(self.path)
+        self.assertEqual(q2.baseline_cmd, "python -m pytest --tb=short -q")
+
+        # Verify it's in the JSON file
+        with open(self.path) as f:
+            raw = json.load(f)
+        self.assertEqual(raw["baseline_cmd"], "python -m pytest --tb=short -q")
+
+    def test_queue_baseline_cmd_default_none(self):
+        """When baseline_cmd is not in JSON, it defaults to None."""
+        data = _make_queue_data()
+        with open(self.path, "w") as f:
+            json.dump(data, f)
+        q = SprintQueue.load(self.path)
+        self.assertIsNone(q.baseline_cmd)
+
+
 if __name__ == "__main__":
     unittest.main()
