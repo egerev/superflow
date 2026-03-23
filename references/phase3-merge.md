@@ -20,6 +20,8 @@ Before the first merge, create a dedicated documentation commit on the last spri
 2. Update `llms.txt` if project structure changed
 3. Push the doc update, wait for CI to pass again
 
+> **Reasoning:** Dispatch doc update agents with `subagent_type: "standard-doc-writer"` (opus, effort: medium). Lower than Phase 0's deep tier because Phase 3 is incremental update, not first-time generation.
+
 ## Merge Order
 
 Use the PR list and merge order from the Phase 2 Completion Report. If the report is unavailable (context compaction), enumerate open PRs: `gh pr list --state open --author @me --json number,title,headRefName --jq 'sort_by(.number)'`
