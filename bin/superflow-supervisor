@@ -2,6 +2,7 @@
 """Superflow Supervisor CLI — orchestrates autonomous sprint execution."""
 import argparse
 import os
+import subprocess
 import sys
 
 # Add parent directory to sys.path so lib imports work
@@ -46,7 +47,13 @@ def cmd_status(args):
 
 def cmd_resume(args):
     """Resume execution after a crash."""
-    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(args.queue)))
+    try:
+        result = subprocess.run(["git", "rev-parse", "--show-toplevel"],
+                               capture_output=True, text=True,
+                               cwd=os.path.dirname(os.path.abspath(args.queue)))
+        repo_root = result.stdout.strip()
+    except Exception:
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(args.queue)))
     queue = resume(args.queue, repo_root)
     print("Resume complete. Current state:")
     print_summary(queue)
@@ -81,6 +88,12 @@ def cmd_reset(args):
 
 
 def main():
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+    )
+
     parser = argparse.ArgumentParser(
         prog="superflow-supervisor",
         description="Superflow Supervisor — autonomous sprint execution orchestrator",

@@ -6,6 +6,7 @@ import re
 import signal
 import shutil
 import subprocess
+from contextlib import nullcontext
 from datetime import datetime, timezone
 
 from lib.checkpoint import save_checkpoint
@@ -199,10 +200,17 @@ def _parse_json_summary(output: str) -> dict | None:
     return None
 
 
-_FILTERED_ENV_KEYS = {
-    "ANTHROPIC_API_KEY", "PATH", "HOME", "LANG",
-    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+_DENIED_ENV_KEYS = {
+    "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+    "DATABASE_URL", "DB_PASSWORD",
+    "OPENAI_API_KEY", "GOOGLE_API_KEY",
+    "HCLOUD_TOKEN",
 }
+
+
+def _filtered_env():
+    """Filter env vars: pass everything except known sensitive keys."""
+    return {k: v for k, v in os.environ.items() if k not in _DENIED_ENV_KEYS}
 
 
 def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
@@ -239,7 +247,7 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
 
     try:
         result = _attempt_sprint(sprint, queue, queue_path, checkpoints_dir,
-                                 repo_root, wt_path, timeout)
+                                 repo_root, wt_path, timeout, queue_lock)
         return result
     finally:
         # 13. Always cleanup worktree
@@ -249,14 +257,15 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
 
 
 def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
-                    wt_path, timeout):
+                    wt_path, timeout, queue_lock=None):
     """Run claude for a sprint, with retry logic."""
     sid = sprint["id"]
     prompt = build_prompt(sprint, repo_root)
+    lock = queue_lock or nullcontext()
 
     while True:
         # Filter environment
-        env = {k: v for k, v in os.environ.items() if k in _FILTERED_ENV_KEYS}
+        env = _filtered_env()
 
         # Launch claude subprocess
         try:
@@ -293,8 +302,9 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
                     logger.warning("PR verification failed for %s", pr_url)
 
             # Mark completed
-            queue.mark_completed(sid, pr_url)
-            queue.save(queue_path)
+            with lock:
+                queue.mark_completed(sid, pr_url)
+                queue.save(queue_path)
             cp = {
                 "sprint_id": sid, "status": "completed",
                 "completed_at": _now_iso(), "pr_url": pr_url,
@@ -308,8 +318,9 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         if sprint["retries"] >= sprint.get("max_retries", 2):
             # Max retries reached — mark failed
             error_msg = result.stderr or result.stdout or "Unknown error"
-            queue.mark_failed(sid, error_msg[:500])
-            queue.save(queue_path)
+            with lock:
+                queue.mark_failed(sid, error_msg[:500])
+                queue.save(queue_path)
             cp = {
                 "sprint_id": sid, "status": "failed",
                 "failed_at": _now_iso(), "error": error_msg[:500],
@@ -478,7 +489,14 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
     queue = SprintQueue.load(queue_path)
 
     if repo_root is None:
-        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(queue_path)))
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(queue_path)),
+            )
+            repo_root = result.stdout.strip()
+        except Exception:
+            repo_root = os.path.dirname(os.path.dirname(os.path.abspath(queue_path)))
 
     # Determine checkpoints dir
     checkpoints_dir = os.path.join(os.path.dirname(queue_path), "checkpoints")
@@ -503,6 +521,11 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
         if not runnable:
             queue.skip_blocked_sprints()
             queue.save(queue_path)
+            if notifier:
+                try:
+                    notifier.notify_blocked("All remaining sprints depend on failed dependencies")
+                except Exception:
+                    pass
             break
 
         # Parallel execution when multiple runnable sprints and max_parallel > 1
@@ -537,6 +560,14 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
                     break
 
     print_summary(queue)
+
+    if notifier:
+        try:
+            summary_data = queue.summary()
+            summary_text = ", ".join(f"{k}: {v}" for k, v in summary_data.items() if v > 0)
+            notifier.notify_all_done(summary_text)
+        except Exception as e:
+            logger.warning("Notifier error: %s", e)
 
     # Generate completion report
     report = generate_completion_report(queue, checkpoints_dir)

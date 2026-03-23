@@ -5,6 +5,7 @@ import os
 import subprocess
 
 from lib.checkpoint import load_all_checkpoints
+from lib.supervisor import _filtered_env
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def replan(queue, queue_path, plan_path, repo_root, checkpoints_dir):
         result = subprocess.run(
             ["claude", "-p", "--verbose"],
             input=prompt, capture_output=True, text=True,
-            timeout=300, cwd=repo_root,
+            timeout=300, cwd=repo_root, env=_filtered_env(),
         )
     except subprocess.TimeoutExpired:
         logger.warning("Replan subprocess timed out")
@@ -138,6 +139,18 @@ def _validate_change(change):
 def _apply_change(queue, change):
     """Apply a single validated change to the queue. Returns True if applied."""
     change_type = change["type"]
+
+    # For skip and modify, only apply to pending sprints
+    if change_type in ("skip", "modify"):
+        sid = change["sprint_id"]
+        try:
+            sprint = queue._find_sprint(sid)
+            if sprint["status"] != "pending":
+                logger.warning("Skipping %s on sprint %d: status is %s, not pending",
+                               change_type, sid, sprint["status"])
+                return False
+        except KeyError:
+            pass  # Will be caught in the specific handler below
 
     if change_type == "skip":
         sid = change["sprint_id"]
