@@ -225,7 +225,11 @@ def _now_iso() -> str:
 
 
 def _parse_json_summary(output: str) -> dict | None:
-    """Parse JSON summary from the last lines of claude output."""
+    """Parse a trailing JSON object from model output.
+
+    Supports both sprint summaries (`status`) and reviewer verdict payloads
+    (`verdict`) because both are emitted as the final line of model output.
+    """
     if not output:
         return None
     # Strip ANSI escape sequences
@@ -239,7 +243,7 @@ def _parse_json_summary(output: str) -> dict | None:
             continue
         try:
             data = json.loads(line)
-            if isinstance(data, dict) and "status" in data:
+            if isinstance(data, dict) and ("status" in data or "verdict" in data):
                 return data
         except (json.JSONDecodeError, ValueError):
             continue
@@ -406,6 +410,390 @@ def run_baseline_tests(wt_path, sprint, queue, timeout=300):
         return (result.returncode == 0, output, False)
     except subprocess.TimeoutExpired:
         return (False, f"Baseline tests timed out after {timeout}s", False)
+
+
+def _detect_codex():
+    """Detect if Codex CLI is available. Returns True if available."""
+    try:
+        result = subprocess.run(
+            ["codex", "--version"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _build_holistic_prompt(role, focus, diffs, plan_content):
+    """Build a holistic review prompt for a specific reviewer role.
+
+    Args:
+        role: Reviewer role name (e.g., 'Technical', 'Product').
+        focus: Focus description for the reviewer.
+        diffs: Combined diff string from all sprint branches.
+        plan_content: The plan/spec content for reference.
+
+    Returns:
+        Prompt string for the reviewer.
+    """
+    return (
+        f"You are a {role} reviewer performing a Final Holistic Review of ALL sprint changes.\n\n"
+        f"## Focus\n{focus}\n\n"
+        f"## Plan/Spec\n{plan_content}\n\n"
+        f"## Combined Diffs (all sprints)\n```diff\n{diffs}\n```\n\n"
+        f"## Instructions\n"
+        f"Review ALL changes as a unified system. Per-sprint reviews already passed — "
+        f"you are looking for cross-module issues that individual reviews missed.\n\n"
+        f"Focus areas:\n"
+        f"- Cross-module integration issues\n"
+        f"- Inconsistent patterns across sprints\n"
+        f"- Missing error handling at module boundaries\n"
+        f"- Security issues that only appear when modules interact\n"
+        f"- Performance issues from combined changes\n\n"
+        f"## Output\n"
+        f"Output your review, then on the LAST LINE output exactly one JSON object:\n"
+        f'{{"verdict": "APPROVE"}} or {{"verdict": "REQUEST_CHANGES", '
+        f'"findings": [{{"severity": "CRITICAL|HIGH|MEDIUM|LOW", "description": "..."}}]}}\n'
+    )
+
+
+def _run_single_reviewer(name, cmd, prompt, env, timeout, is_codex=False, cwd=None):
+    """Run a single reviewer subprocess and parse its verdict.
+
+    Args:
+        name: Reviewer name (for logging/identification).
+        cmd: Command list (e.g., ["claude", "-p", "--verbose"]).
+        prompt: Prompt string to send.
+        env: Environment dict.
+        timeout: Timeout in seconds.
+        is_codex: If True, prompt is passed as last argument, not via stdin.
+        cwd: Working directory for the reviewer subprocess.
+
+    Returns:
+        dict with keys: name, verdict, findings, raw_output, error.
+    """
+    result_dict = {"name": name, "verdict": None, "findings": [], "raw_output": "", "error": None}
+    try:
+        if is_codex:
+            proc = subprocess.run(
+                cmd + [prompt],
+                capture_output=True, text=True, env=env, timeout=timeout, cwd=cwd,
+            )
+        else:
+            proc = subprocess.run(
+                cmd,
+                input=prompt, capture_output=True, text=True, env=env,
+                timeout=timeout, cwd=cwd,
+            )
+        result_dict["raw_output"] = proc.stdout or ""
+
+        # Parse verdict from last line
+        parsed = _parse_json_summary(proc.stdout or "")
+        if parsed and "verdict" in parsed:
+            result_dict["verdict"] = parsed["verdict"]
+            result_dict["findings"] = parsed.get("findings", [])
+        else:
+            # Try to extract verdict from output text as fallback
+            output_text = proc.stdout or ""
+            if "APPROVE" in output_text and "REQUEST_CHANGES" not in output_text:
+                result_dict["verdict"] = "APPROVE"
+            elif "REQUEST_CHANGES" in output_text:
+                result_dict["verdict"] = "REQUEST_CHANGES"
+            else:
+                result_dict["error"] = "Could not parse verdict from reviewer output"
+
+    except subprocess.TimeoutExpired:
+        result_dict["error"] = f"Reviewer {name} timed out after {timeout}s"
+    except Exception as e:
+        result_dict["error"] = f"Reviewer {name} failed: {str(e)[:200]}"
+
+    return result_dict
+
+
+def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir,
+                        timeout=1800, notifier=None, max_retries=2):
+    """Execute Final Holistic Review — 4 parallel reviewers on all sprint diffs.
+
+    Dispatches 4 reviewer sessions:
+      1. Technical (deep-code-reviewer focus)
+      2. Product (deep-product-reviewer focus)
+      3. Codex Technical / split-focus Architecture (if no Codex)
+      4. Codex Product / split-focus UX (if no Codex)
+
+    Each returns {"verdict": "APPROVE|REQUEST_CHANGES", "findings": [...]}.
+    Aggregates verdicts into .holistic-review-evidence.json.
+    Returns True if all 4 pass, False after max_retries.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # Save holistic checkpoint: in_progress
+    save_checkpoint(checkpoints_dir, "holistic", {
+        "phase": "holistic_review",
+        "status": "in_progress",
+        "started_at": _now_iso(),
+    })
+
+    # 1. Collect completed sprint branches and PR URLs
+    completed_sprints = [s for s in queue.sprints if s["status"] == "completed"]
+    sprint_prs = [s.get("pr", "") for s in completed_sprints if s.get("pr")]
+
+    # 2. Generate combined diffs
+    diffs_parts = []
+    for sprint in completed_sprints:
+        branch = sprint.get("branch", "")
+        if not branch:
+            continue
+        try:
+            diff_result = subprocess.run(
+                ["git", "diff", f"main...{branch}"],
+                capture_output=True, text=True, cwd=repo_root, timeout=60,
+            )
+            if diff_result.returncode == 0 and diff_result.stdout.strip():
+                diffs_parts.append(
+                    f"# Sprint {sprint['id']}: {sprint.get('title', '')}\n"
+                    f"{diff_result.stdout}"
+                )
+        except (subprocess.TimeoutExpired, Exception) as e:
+            logger.warning("Failed to get diff for branch %s: %s", branch, e)
+    combined_diffs = "\n".join(diffs_parts) if diffs_parts else "(no diffs available)"
+
+    # 3. Read plan content
+    plan_content = ""
+    if plan_path and os.path.exists(plan_path):
+        try:
+            with open(plan_path) as f:
+                plan_content = f.read()
+        except IOError:
+            plan_content = "(plan file not readable)"
+
+    # 4. Detect Codex availability
+    has_codex = _detect_codex()
+    env = _filtered_env()
+
+    # 5. Define reviewer configurations
+    if has_codex:
+        reviewers = [
+            {
+                "name": "claude_code_quality",
+                "cmd": ["claude", "-p", "--verbose"],
+                "is_codex": False,
+                "role": "Technical Code Quality",
+                "focus": (
+                    "Correctness, security, error handling, performance. "
+                    "Focus on cross-module integration bugs and race conditions."
+                ),
+            },
+            {
+                "name": "claude_product",
+                "cmd": ["claude", "-p", "--verbose"],
+                "is_codex": False,
+                "role": "Product Acceptance",
+                "focus": (
+                    "Spec compliance, user scenarios, data correctness, completeness. "
+                    "Focus on cross-sprint user flow gaps."
+                ),
+            },
+            {
+                "name": "codex_code_review",
+                "cmd": ["codex", "exec", "--full-auto"],
+                "is_codex": True,
+                "role": "Architecture",
+                "focus": (
+                    "Architecture patterns, API consistency, module boundaries. "
+                    "Focus on design debt introduced across sprints."
+                ),
+            },
+            {
+                "name": "codex_product",
+                "cmd": ["codex", "exec", "--full-auto"],
+                "is_codex": True,
+                "role": "UX & Edge Cases",
+                "focus": (
+                    "User experience, edge cases, error states, accessibility. "
+                    "Focus on gaps between sprint boundaries."
+                ),
+            },
+        ]
+    else:
+        # Split-focus: 4 Claude sessions with different perspectives
+        reviewers = [
+            {
+                "name": "claude_code_quality",
+                "cmd": ["claude", "-p", "--verbose"],
+                "is_codex": False,
+                "role": "Technical Code Quality",
+                "focus": (
+                    "Correctness, security, error handling, performance. "
+                    "Focus on cross-module integration bugs and race conditions."
+                ),
+            },
+            {
+                "name": "claude_product",
+                "cmd": ["claude", "-p", "--verbose"],
+                "is_codex": False,
+                "role": "Product Acceptance",
+                "focus": (
+                    "Spec compliance, user scenarios, data correctness, completeness. "
+                    "Focus on cross-sprint user flow gaps."
+                ),
+            },
+            {
+                "name": "codex_code_review",
+                "cmd": ["claude", "-p", "--verbose"],
+                "is_codex": False,
+                "role": "Architecture (split-focus)",
+                "focus": (
+                    "Architecture patterns, API consistency, module boundaries. "
+                    "Focus on design debt introduced across sprints."
+                ),
+            },
+            {
+                "name": "codex_product",
+                "cmd": ["claude", "-p", "--verbose"],
+                "is_codex": False,
+                "role": "UX & Edge Cases (split-focus)",
+                "focus": (
+                    "User experience, edge cases, error states, accessibility. "
+                    "Focus on gaps between sprint boundaries."
+                ),
+            },
+        ]
+
+    # 6. Run review-fix cycles
+    findings_resolved = 0
+    evidence_path = os.path.join(
+        os.path.dirname(checkpoints_dir),
+        ".holistic-review-evidence.json",
+    )
+
+    reviewer_results = {}
+    failing_reviewers = [rev["name"] for rev in reviewers]
+
+    for attempt in range(max_retries + 1):
+        # Build prompts and dispatch all reviewers in parallel
+        attempt_results = dict(reviewer_results)
+
+        # On retry, only re-run failing reviewers
+        reviewers_to_run = reviewers if attempt == 0 else [
+            r for r in reviewers if r["name"] in failing_reviewers
+        ]
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {}
+            for rev in reviewers_to_run:
+                prompt = _build_holistic_prompt(
+                    rev["role"], rev["focus"], combined_diffs, plan_content
+                )
+                future = executor.submit(
+                    _run_single_reviewer,
+                    rev["name"], rev["cmd"], prompt, env, timeout,
+                    is_codex=rev["is_codex"], cwd=repo_root,
+                )
+                futures[future] = rev["name"]
+
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    result = future.result()
+                    attempt_results[name] = result
+                except Exception as e:
+                    attempt_results[name] = {
+                        "name": name, "verdict": None, "findings": [],
+                        "raw_output": "", "error": str(e)[:200],
+                    }
+
+        # 7. Evaluate verdicts
+        all_approve = True
+        next_failing_reviewers = []
+        for rev in reviewers:
+            name = rev["name"]
+            res = attempt_results.get(name)
+            if not res or res.get("error") or res.get("verdict") not in VALID_PASS_VERDICTS:
+                all_approve = False
+                next_failing_reviewers.append(name)
+                # Check if findings have CRITICAL/HIGH severity
+                if res and res.get("findings"):
+                    for f in res["findings"]:
+                        sev = f.get("severity", "").upper()
+                        if sev in ("CRITICAL", "HIGH"):
+                            logger.warning(
+                                "Holistic review %s: %s finding: %s",
+                                name, sev, f.get("description", "")[:100]
+                            )
+
+        if all_approve:
+            # Write evidence file
+            evidence = {
+                "timestamp": _now_iso(),
+                "verdict": "APPROVE",
+                "reviewers": {
+                    rev["name"]: attempt_results.get(rev["name"], {}).get("verdict", "UNKNOWN")
+                    for rev in reviewers
+                },
+                "sprint_prs": sprint_prs,
+                "findings_resolved": findings_resolved,
+            }
+            with open(evidence_path, "w") as f:
+                json.dump(evidence, f, indent=2)
+
+            # Update checkpoint
+            save_checkpoint(checkpoints_dir, "holistic", {
+                "phase": "holistic_review",
+                "status": "completed",
+                "completed_at": _now_iso(),
+                "verdict": "APPROVE",
+            })
+            return True
+
+        # Not all approved — attempt fix cycle if not last attempt
+        if attempt < max_retries:
+            logger.info(
+                "Holistic review attempt %d/%d: %d reviewers need fixes: %s",
+                attempt + 1, max_retries + 1, len(next_failing_reviewers), next_failing_reviewers
+            )
+
+            # Collect findings from failing reviewers for the fixer
+            all_findings = []
+            for name in next_failing_reviewers:
+                res = attempt_results.get(name, {})
+                for f in res.get("findings", []):
+                    all_findings.append(f"[{name}] {f.get('severity', 'UNKNOWN')}: {f.get('description', '')}")
+
+            findings_resolved += len(all_findings)
+
+            # Launch fixer session
+            if all_findings:
+                fixer_prompt = (
+                    "Fix the following issues found during holistic review:\n\n"
+                    + "\n".join(f"- {f}" for f in all_findings)
+                    + "\n\nApply minimal targeted fixes. Do NOT refactor unrelated code."
+                )
+                try:
+                    subprocess.run(
+                        ["claude", "-p", "--verbose"],
+                        input=fixer_prompt, capture_output=True, text=True,
+                        env=env, timeout=timeout, cwd=repo_root,
+                    )
+                except (subprocess.TimeoutExpired, Exception) as e:
+                    logger.warning("Fixer session failed: %s", e)
+        else:
+            logger.error(
+                "Holistic review failed after %d attempts. Failing reviewers: %s",
+                max_retries + 1, next_failing_reviewers
+            )
+
+        reviewer_results = attempt_results
+        failing_reviewers = next_failing_reviewers
+
+    # Max retries exceeded
+    save_checkpoint(checkpoints_dir, "holistic", {
+        "phase": "holistic_review",
+        "status": "failed",
+        "failed_at": _now_iso(),
+        "verdict": "REQUEST_CHANGES",
+        "failing_reviewers": failing_reviewers,
+    })
+    return False
 
 
 def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
@@ -937,6 +1325,13 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
 
     print_summary(queue)
 
+    if not queue.is_done():
+        logger.info(
+            "Queue not complete (%s) — skipping holistic review and completion report.",
+            queue.summary(),
+        )
+        return
+
     # Final Holistic Review gate (mandatory before completion report)
     completed_count = queue.summary().get("completed", 0)
     if completed_count > 0:
@@ -958,39 +1353,47 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
             except Exception as e:
                 logger.warning("Notifier error: %s", e)
 
-        # Sprint 4b will add actual run_holistic_review() dispatch here.
-        # For now, check if evidence already exists and is valid.
+        # Check if evidence already exists and is valid (skip re-run)
         holistic_valid = False
+        holistic_verdict = None
         if os.path.exists(evidence_path):
             try:
                 with open(evidence_path) as f:
                     holistic_data = json.load(f)
-                reviewers = holistic_data.get("reviewers", holistic_data)
+                reviewers_data = holistic_data.get("reviewers", holistic_data)
                 valid, errors = _validate_evidence_verdicts(
-                    reviewers, REQUIRED_PAR_KEYS, context="Holistic"
+                    reviewers_data, REQUIRED_PAR_KEYS, context="Holistic"
                 )
                 holistic_valid = valid
                 if not valid:
-                    logger.warning("Holistic evidence invalid: %s", errors)
+                    logger.warning("Holistic evidence invalid, will re-run: %s", errors)
+                else:
+                    holistic_verdict = holistic_data.get("verdict", "APPROVE")
             except (json.JSONDecodeError, IOError) as e:
-                logger.warning("Failed to parse holistic evidence: %s", e)
+                logger.warning("Failed to parse holistic evidence, will re-run: %s", e)
 
         if not holistic_valid:
-            print("BLOCKED: Holistic review required. Cannot generate completion report.")
-            if notifier:
-                try:
-                    notifier.notify_holistic_review_complete("BLOCKED")
-                except Exception as e:
-                    logger.warning("Notifier error: %s", e)
-            return
+            # Dispatch actual holistic review
+            holistic_passed = run_holistic_review(
+                queue, queue_path, repo_root, plan_path, checkpoints_dir,
+                timeout=timeout, notifier=notifier,
+            )
 
-        # Update holistic checkpoint: completed with actual verdict
-        save_checkpoint(checkpoints_dir, "holistic", {
-            "phase": "holistic_review",
-            "status": "completed",
-            "completed_at": _now_iso(),
-            "verdict": holistic_data.get("verdict", "APPROVE"),
-        })
+            if not holistic_passed:
+                print("BLOCKED: Holistic review failed. Cannot generate completion report.")
+                if notifier:
+                    try:
+                        notifier.notify_holistic_review_complete("BLOCKED")
+                    except Exception as e:
+                        logger.warning("Notifier error: %s", e)
+                return
+        else:
+            save_checkpoint(checkpoints_dir, "holistic", {
+                "phase": "holistic_review",
+                "status": "completed",
+                "completed_at": _now_iso(),
+                "verdict": holistic_verdict or "APPROVE",
+            })
 
         if notifier:
             try:
