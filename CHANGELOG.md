@@ -2,6 +2,20 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [2.1.2] - 2026-03-23
+
+### Changed
+- **llms.txt writer**: removed artificial 10KB size limit — per llmstxt.org spec there is no hard cap. For large projects (50k+ LOC), 15-25KB is normal. Completeness over brevity.
+- **All 7 prompts**: rewritten following Anthropic Claude 4.6 best practices
+  - XML tags for all sections (`<role>`, `<context>`, `<instructions>`, `<constraints>`, `<verification>`)
+  - Removed aggressive language ("CRITICAL", "YOU MUST", "NEVER") — Claude 4.6 overtriggers on forceful tone
+  - Added WHY for every non-obvious rule
+  - Positive framing ("Do Y" instead of "Don't do X")
+  - Context at top, instructions at bottom (~30% quality improvement per Anthropic)
+  - Self-verification checklist at end of each prompt
+  - `<anti_overengineering>` block in Opus prompts (writers)
+  - `ultrathink` trigger in writer prompts
+
 ## [2.1.1] - 2026-03-23
 
 ### Fixed

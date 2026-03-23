@@ -1,4 +1,4 @@
-# superflow v2.1.1
+# superflow v2.1.2
 
 Lightweight Claude Code skill for autonomous product-to-production development. Designed for modern models (Opus 4.6+) — minimal instructions, maximum autonomy.
 
