@@ -15,7 +15,7 @@ Superflow is a Claude Code skill (hybrid: Markdown prompts + Python companion CL
 SKILL.md (entry point, 85 lines)
   ├── superflow-enforcement.md (durable rules → ~/.claude/rules/)
   ├── references/
-  │   ├── phase0-onboarding.md (first-run, 10 steps)
+  │   ├── phase0-onboarding.md (first-run, 10 steps, interactive interview)
   │   ├── phase1-discovery.md (interactive, 12 steps)
   │   ├── phase2-execution.md (autonomous, 11 steps/sprint + holistic review)
   │   └── phase3-merge.md (user-initiated merge)
@@ -53,7 +53,7 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 |------|-------|---------|
 | `SKILL.md` | 85 | Entry point — startup checklist, provider detection, supervisor detection, phase routing |
 | `superflow-enforcement.md` | 54 | 9 hard rules, rationalization prevention, phase gates, holistic review |
-| `references/phase0-onboarding.md` | 288 | First-run: 4 parallel Opus agents, health report, doc audit, python3 check |
+| `references/phase0-onboarding.md` | ~450 | First-run: mini-interview, 4 parallel Opus agents, health report, doc audit, hooks setup, skills recommendation, expanded permissions |
 | `references/phase1-discovery.md` | 132 | Brainstorm, spec, plan with dual-model review |
 | `references/phase2-execution.md` | 106 | Sprint loop: worktree, TDD, PAR, PR + Final Holistic Review |
 | `references/phase3-merge.md` | 87 | Sequential rebase merge with CI gate |

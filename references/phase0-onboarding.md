@@ -29,10 +29,26 @@ Phase 0 leaves an **exact marker** in each file it touches:
 
 ---
 
-## Step 1: Greet & Announce
+## Step 1: Greet, Announce & Mini-Interview
 
 Tell the user (in their language):
-> "This is the first Superflow run on this project. Give me a moment — I'll explore the codebase."
+> "This is the first Superflow run on this project. Before I dive in — a couple of quick questions so I can tailor the setup."
+
+Ask the user **3 short questions** (adapt wording to their language):
+
+1. **"Working solo or in a team?"**
+   → Affects: CI/hooks recommendations, review process emphasis
+2. **"How comfortable are you with [detected stack]?"** (beginner / intermediate / advanced)
+   → Affects: report detail level, how much to explain recommendations
+3. **"Do you have CI/CD set up?"** (yes / no / not sure)
+   → Affects: DevOps analysis depth, hook recommendations
+
+Store answers as `$USER_CONTEXT` — pass to analysis agents in Step 2 so they adjust focus:
+- **Beginner**: more explanation, flag basics (missing linter, no tests), recommend learning resources
+- **Solo**: skip team-oriented suggestions (branch protection, code owners)
+- **No CI**: flag as P1 recommendation, suggest simple GitHub Actions starter
+
+> **Keep it lightweight.** If the user seems impatient or says "just go", skip remaining questions and use sensible defaults (solo, intermediate, no CI). The interview must not feel like a blocker.
 
 Then proceed to analysis.
 
@@ -42,7 +58,7 @@ Dispatch **4 parallel agents** using the Agent tool (`run_in_background: true`, 
 
 **Critical: use Opus for analysis, not Sonnet.** Wrong documentation is worse than no documentation — a Sonnet agent may hallucinate framework names based on directory structure (e.g., calling pydantic_graph "LangGraph" because the directory is named `graph/`). Analysis agents must verify by reading actual imports and code, not guessing from names.
 
-Each agent prompt MUST include `ultrathink` and the **mandatory checks** below. Agents must show evidence (file paths, counts, code snippets) for every finding — no unsupported claims.
+Each agent prompt MUST include `ultrathink`, the **mandatory checks** below, AND the `$USER_CONTEXT` from Step 1 (experience level, solo/team, CI status). Agents must show evidence (file paths, counts, code snippets) for every finding — no unsupported claims. Agents should adjust depth based on user context — for beginners, flag basics that experts wouldn't need called out.
 
 ```
 Agent(description: "Architecture analysis", run_in_background: true, model: opus)
@@ -226,20 +242,29 @@ python3 --version 2>/dev/null && echo "SUPERVISOR_AVAILABLE" || echo "SUPERVISOR
 **Do NOT skip this step.** Check if `~/.claude/settings.json` has the required allow permissions for Superflow.
 
 If missing, propose to the user:
-> "Phase 2 runs autonomously — dozens of commands without human approval. To enable this, I need to add permissions for git, GitHub CLI, and secondary providers to your settings. Without this, you'll get prompted on every command. Add permissions?"
+> "Phase 2 runs autonomously — dozens of commands without human approval. To enable this, I need to add broad permissions for git, GitHub CLI, build tools, and secondary providers. Without this, you'll get prompted constantly. Add permissions?"
 
-If user agrees, add to `~/.claude/settings.json` (merge with existing, don't overwrite). **Adapt to this project's toolchain** — use npm/yarn/bun/pnpm as appropriate:
+**Explain the safety model** (especially for beginners):
+> "These permissions only apply inside Claude Code sessions. They allow Claude to run git, tests, and build commands without asking each time. Destructive commands like `rm -rf` or `git push --force` are NOT included."
 
+If user agrees, add to `~/.claude/settings.json` (merge with existing, don't overwrite). **Adapt to this project's toolchain** — detect package manager and test runner, then build the permissions list:
+
+### Core Permissions (always include)
 ```json
 {
   "permissions": {
     "allow": [
-      "Bash(git worktree *)", "Bash(git checkout *)", "Bash(git add *)",
-      "Bash(git commit *)", "Bash(git push *)", "Bash(git push --force-with-lease *)",
-      "Bash(git rebase *)", "Bash(git pull *)", "Bash(git check-ignore *)",
-      "Bash(git log *)", "Bash(git diff *)",
-      "Bash(gh pr *)",
-      "Bash(npm test *)", "Bash(npm run *)",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(wc *)", "Bash(sort *)", "Bash(head *)", "Bash(tail *)",
+      "Bash(which *)", "Bash(command *)", "Bash(type *)",
+      "Bash(ls *)", "Bash(pwd)", "Bash(dirname *)", "Bash(basename *)", "Bash(realpath *)",
+      "Bash(mkdir *)", "Bash(cp *)", "Bash(mv *)", "Bash(touch *)",
+      "Bash(cat *)", "Bash(less *)", "Bash(diff *)",
+      "Bash(jq *)", "Bash(xargs *)",
+      "Bash(chmod *)",
+      "Bash(python3 *)", "Bash(python *)",
+      "Bash(node *)",
       "Bash(codex *)", "Bash(gemini *)", "Bash(aider *)",
       "Bash(gtimeout *)", "Bash(timeout *)"
     ]
@@ -247,9 +272,252 @@ If user agrees, add to `~/.claude/settings.json` (merge with existing, don't ove
 }
 ```
 
+### Stack-Specific Permissions (add based on detection)
+
+**Node.js / npm:**
+```json
+"Bash(npm *)", "Bash(npx *)"
+```
+
+**Node.js / yarn:**
+```json
+"Bash(yarn *)"
+```
+
+**Node.js / pnpm:**
+```json
+"Bash(pnpm *)", "Bash(pnpx *)"
+```
+
+**Node.js / bun:**
+```json
+"Bash(bun *)", "Bash(bunx *)"
+```
+
+**Python:**
+```json
+"Bash(pip *)", "Bash(pip3 *)", "Bash(uv *)",
+"Bash(pytest *)", "Bash(ruff *)", "Bash(black *)", "Bash(mypy *)",
+"Bash(poetry *)", "Bash(pdm *)"
+```
+
+**Ruby / Rails:**
+```json
+"Bash(bundle *)", "Bash(rake *)", "Bash(rails *)", "Bash(ruby *)",
+"Bash(rubocop *)", "Bash(rspec *)"
+```
+
+**Go:**
+```json
+"Bash(go *)", "Bash(gofmt *)", "Bash(golint *)", "Bash(golangci-lint *)"
+```
+
+**Rust:**
+```json
+"Bash(cargo *)", "Bash(rustfmt *)", "Bash(clippy *)"
+```
+
+**Docker (if detected):**
+```json
+"Bash(docker *)", "Bash(docker-compose *)"
+```
+
+### Detection Logic
+```bash
+# Detect package manager
+[ -f "package-lock.json" ] && PM="npm"
+[ -f "yarn.lock" ] && PM="yarn"
+[ -f "pnpm-lock.yaml" ] && PM="pnpm"
+[ -f "bun.lockb" ] && PM="bun"
+[ -f "Gemfile.lock" ] && PM="bundler"
+[ -f "requirements.txt" ] || [ -f "pyproject.toml" ] && PM="python"
+[ -f "go.mod" ] && PM="go"
+[ -f "Cargo.toml" ] && PM="rust"
+[ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ] && HAS_DOCKER=true
+```
+
+Build the final permissions array by combining Core + detected Stack-Specific. **Do not add permissions for stacks not present in the project.**
+
 If user declines: continue, but warn that Phase 2 will require manual approval for each command.
 
 > **Note on restart:** Permissions changes in `settings.json` may require restarting Claude Code to take effect. If so, tell the user: "Permissions added. Please restart Claude Code and run `/superflow` again — Phase 0 will detect the markers and skip straight to Phase 1."
+
+## Step 7.5: Hooks Setup
+
+**Hooks automate quality checks** — especially valuable for beginners who forget to format/lint. Based on the detected stack from Step 2, propose a hooks configuration.
+
+Tell the user (in their language):
+> "I can set up auto-formatting and quality hooks so Claude automatically formats code after every edit. This catches style issues instantly. Set up hooks?"
+
+If user agrees, add to `.claude/settings.json` (project-level, shareable via git). **Choose hooks based on detected stack:**
+
+### JavaScript / TypeScript (prettier detected)
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.(js|ts|jsx|tsx|json|css|md)$' | xargs -I{} npx prettier --write '{}' 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### JavaScript / TypeScript (eslint detected, no prettier)
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.(js|ts|jsx|tsx)$' | xargs -I{} npx eslint --fix '{}' 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Python (ruff or black detected)
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.py$' | xargs -I{} ruff format '{}' 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Ruby (rubocop detected)
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.rb$' | xargs -I{} rubocop -a '{}' 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Go
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | grep -E '\\.go$' | xargs -I{} gofmt -w '{}' 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Desktop Notification (all platforms — useful for autonomous Phase 2)
+```json
+{
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "permission_prompt|idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "osascript -e 'display notification \"Claude needs your attention\" with title \"Superflow\"' 2>/dev/null || notify-send 'Superflow' 'Claude needs your attention' 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Detection logic** — check for formatter presence before proposing:
+```bash
+# JS/TS: check package.json for prettier/eslint
+jq -r '.devDependencies // {} | keys[]' package.json 2>/dev/null | grep -E 'prettier|eslint'
+# Python: check for ruff.toml, pyproject.toml [tool.ruff], or .flake8
+ls ruff.toml pyproject.toml .flake8 2>/dev/null
+# Ruby: check for .rubocop.yml
+ls .rubocop.yml 2>/dev/null
+# Go: always available with Go toolchain
+go version 2>/dev/null
+```
+
+If no formatter is detected and user is a **beginner**, recommend installing one:
+> "No code formatter detected. For [stack], I recommend [prettier/ruff/rubocop]. Want me to add it to the project?"
+
+If user declines hooks: continue without them. Not a blocker.
+
+## Step 7.7: Skills Recommendation
+
+Based on detected stack and user experience level from Step 1, recommend relevant Claude Code skills. **Show only skills that match the project's stack** — don't overwhelm with the full list.
+
+Tell the user (in their language):
+> "Based on your stack, these skills could be useful. They're already available — just use the slash command when needed:"
+
+### Recommendation Map
+
+| Stack | Skills | When to Use |
+|-------|--------|-------------|
+| React / Next.js | `/review-react-best-practices` | After writing React components — catches waterfalls, re-renders, bundle issues |
+| React / Next.js | `/webapp-testing` | Test UI with Playwright — take screenshots, fill forms, check behavior |
+| TypeScript | `kieran-typescript-reviewer` (via CE review) | Type safety, modern patterns, maintainability review |
+| Python | `kieran-python-reviewer` (via CE review) | Pythonic patterns, type hints, best practices |
+| Rails / Ruby | `dhh-rails-style` (via CE review) | REST purity, fat models, Hotwire patterns |
+| Any web project | `/frontend-design` | Generate polished, non-generic UI components |
+| Any project | `/tool-systematic-debugging` | Structured approach to any bug — before guessing fixes |
+| Any project | `/webapp-testing` | Browser automation for testing web UIs |
+
+### For Beginners (experience = beginner)
+Add extra context:
+> "As you're getting started with [stack], I especially recommend:
+> - `/review-react-best-practices` — it catches common mistakes that are hard to spot as a beginner
+> - `/tool-systematic-debugging` — when something breaks, this gives you a step-by-step method instead of guessing
+> - `/webapp-testing` — lets you test your app in a real browser automatically"
+
+### For Advanced Users
+Keep it brief — just list the slash commands without explanation. They know what they need.
+
+> **Note:** Skills don't require installation — they're built into Claude Code. Just mention them so the user knows they exist.
 
 ## Step 8: Leave Markers
 
@@ -269,6 +537,7 @@ All three must exist for Phase 0 to be fully skipped on next run.
 
 **Walk through each item below. For each, verify it was completed. If not, go back to the relevant step.**
 
+- [ ] Mini-interview completed — user context captured (Step 1)
 - [ ] Health report saved to `docs/superflow/project-health-report.md` (Step 3)
 - [ ] llms.txt audited — created if missing, updated if stale (Step 4)
 - [ ] CLAUDE.md audited — created if missing, updated if stale (Step 5)
@@ -276,6 +545,8 @@ All three must exist for Phase 0 to be fully skipped on next run.
 - [ ] `.worktrees/` is in `.gitignore` (Step 6)
 - [ ] Python3 availability checked (Step 6.5)
 - [ ] **Permissions proposed to user** — accepted or declined, but MUST be asked (Step 7)
+- [ ] **Hooks proposed to user** — set up or declined, but MUST be asked (Step 7.5)
+- [ ] **Skills recommended** based on detected stack (Step 7.7)
 - [ ] Markers `<!-- updated-by-superflow:YYYY-MM-DD -->` written in CLAUDE.md, llms.txt, and health report (Step 8)
 
 If any item is unchecked, go back to the referenced step and complete it before proceeding.
