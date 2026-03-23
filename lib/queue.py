@@ -6,10 +6,11 @@ import os
 class SprintQueue:
     """Manages a queue of sprints with dependency tracking."""
 
-    def __init__(self, feature: str, created: str, sprints: list):
+    def __init__(self, feature: str, created: str, sprints: list, baseline_cmd=None):
         self.feature = feature
         self.created = created
         self.sprints = sprints
+        self.baseline_cmd = baseline_cmd
 
     @classmethod
     def load(cls, path: str) -> "SprintQueue":
@@ -20,6 +21,7 @@ class SprintQueue:
             feature=data["feature"],
             created=data["created"],
             sprints=data["sprints"],
+            baseline_cmd=data.get("baseline_cmd"),
         )
 
     def save(self, path: str) -> None:
@@ -27,6 +29,7 @@ class SprintQueue:
         data = {
             "feature": self.feature,
             "created": self.created,
+            "baseline_cmd": self.baseline_cmd,
             "sprints": self.sprints,
         }
         tmp_path = path + ".tmp"

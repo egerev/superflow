@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 # Global shutdown event — set by signal handler
 _shutdown_event = threading.Event()
 
+# --- Validation constants ---
+VALID_PASS_VERDICTS = {"APPROVE", "ACCEPTED", "PASS"}
+REQUIRED_PAR_KEYS = {"claude_code_quality", "claude_product", "codex_code_review", "codex_product"}
+REQUIRED_SUMMARY_KEYS = {"status", "pr_url", "tests", "par"}
+
 
 def _signal_handler(signum, frame):
     """Handle SIGTERM/SIGINT by setting the shutdown event."""
@@ -194,6 +199,22 @@ def build_prompt(sprint: dict, repo_root: str) -> str:
     result = result.replace("{implementation_tier}", implementation_tier)
     result = result.replace("{impl_model}", impl_model)
     result = result.replace("{impl_effort}", impl_effort)
+
+    # Frontend instructions injection
+    frontend_instructions = ""
+    if sprint.get("has_frontend", False):
+        frontend_instructions = (
+            "7. FRONTEND VERIFICATION (MANDATORY — this sprint has frontend changes):\n"
+            "   After unified review and post-review tests, use webapp-testing skill (Playwright)\n"
+            "   to walk user flows from the spec. Take screenshots, capture console errors.\n"
+            "   Write `frontend_verification` key in .par-evidence.json (PASS/FAIL).\n"
+            "   If FAIL → fix → re-verify. Include `frontend_evidence` dict with screenshots and error count.\n"
+        )
+        if "{frontend_instructions}" not in result:
+            logger.warning(
+                "has_frontend=True but template lacks {frontend_instructions} placeholder"
+            )
+    result = result.replace("{frontend_instructions}", frontend_instructions)
     return result
 
 
@@ -235,6 +256,76 @@ _DENIED_ENV_KEYS = {
 def _filtered_env():
     """Filter env vars: pass everything except known sensitive keys."""
     return {k: v for k, v in os.environ.items() if k not in _DENIED_ENV_KEYS}
+
+
+def _validate_evidence_verdicts(data, required_keys, context="PAR"):
+    """Validate evidence dict has required keys with valid pass verdicts.
+
+    Shared by PAR validation and holistic review validation.
+    Returns (valid: bool, errors: list[str]).
+    """
+    errors = []
+    for key in required_keys:
+        if key not in data:
+            errors.append(f"{context}: missing key '{key}'")
+        elif data[key] not in VALID_PASS_VERDICTS:
+            errors.append(f"{context}: invalid verdict '{data[key]}' for key '{key}'")
+    return (len(errors) == 0, errors)
+
+
+def _validate_par_evidence(wt_path, require_frontend=False):
+    """Read and validate .par-evidence.json from worktree.
+
+    Args:
+        wt_path: Path to worktree root.
+        require_frontend: If True, 'frontend_verification' key is mandatory.
+
+    Returns (valid: bool, data: dict, errors: list[str]).
+    """
+    evidence_path = os.path.join(wt_path, ".par-evidence.json")
+    if not os.path.exists(evidence_path):
+        return (False, {}, ["File .par-evidence.json not found in worktree"])
+
+    try:
+        with open(evidence_path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        return (False, {}, [f"Failed to parse .par-evidence.json: {e}"])
+
+    if not isinstance(data, dict):
+        return (False, {}, [f"PAR evidence must be a JSON object, got {type(data).__name__}"])
+
+    required = set(REQUIRED_PAR_KEYS)
+    if require_frontend:
+        required.add("frontend_verification")
+
+    valid, errors = _validate_evidence_verdicts(data, required, context="PAR")
+    return (valid, data, errors)
+
+
+def _validate_sprint_summary(summary):
+    """Validate sprint JSON summary has required keys and valid types.
+
+    Returns (valid: bool, errors: list[str]).
+    """
+    errors = []
+
+    # Key presence
+    missing = REQUIRED_SUMMARY_KEYS - set(summary.keys())
+    if missing:
+        errors.append(f"Missing keys: {missing}")
+
+    # Type checks
+    if "status" in summary and summary["status"] != "completed":
+        errors.append(f"Status is '{summary['status']}', expected 'completed'")
+    if "pr_url" in summary and not isinstance(summary["pr_url"], str):
+        errors.append("pr_url must be a string")
+    if "tests" in summary and not isinstance(summary["tests"], dict):
+        errors.append("tests must be a dict")
+    if "par" in summary and not isinstance(summary["par"], dict):
+        errors.append("par must be a dict")
+
+    return (len(errors) == 0, errors)
 
 
 def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
@@ -440,6 +531,18 @@ def preflight(queue, repo_root, notifier=None):
         if not os.path.exists(plan_path):
             issues.append(f"Plan file not found: {file_part}")
             critical = True
+
+    # Check .worktrees is gitignored
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", ".worktrees"],
+            capture_output=True, text=True, cwd=repo_root,
+        )
+        if result.returncode != 0:
+            issues.append(".worktrees/ is not in .gitignore — worktrees could be committed")
+            critical = True
+    except FileNotFoundError:
+        pass  # git not found — already caught above
 
     # Check disk space
     try:

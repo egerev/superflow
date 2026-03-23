@@ -4,7 +4,7 @@ import os
 import re
 
 
-def save_checkpoint(checkpoints_dir: str, sprint_id: int, data: dict) -> None:
+def save_checkpoint(checkpoints_dir: str, sprint_id: int | str, data: dict) -> None:
     """Save checkpoint data as JSON to sprint-{id}.json, creating dir if needed."""
     os.makedirs(checkpoints_dir, exist_ok=True)
     path = os.path.join(checkpoints_dir, f"sprint-{sprint_id}.json")
@@ -14,7 +14,7 @@ def save_checkpoint(checkpoints_dir: str, sprint_id: int, data: dict) -> None:
     os.rename(tmp_path, path)
 
 
-def load_checkpoint(checkpoints_dir: str, sprint_id: int) -> dict | None:
+def load_checkpoint(checkpoints_dir: str, sprint_id: int | str) -> dict | None:
     """Load checkpoint for a sprint. Returns None if file doesn't exist."""
     path = os.path.join(checkpoints_dir, f"sprint-{sprint_id}.json")
     if not os.path.exists(path):
@@ -23,8 +23,23 @@ def load_checkpoint(checkpoints_dir: str, sprint_id: int) -> dict | None:
         return json.load(f)
 
 
+def load_checkpoint_by_name(checkpoints_dir: str, name: str) -> dict | None:
+    """Load checkpoint by name. Loads sprint-{name}.json. Returns None if missing."""
+    path = os.path.join(checkpoints_dir, f"sprint-{name}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
 def load_all_checkpoints(checkpoints_dir: str) -> list[dict]:
-    """Load all checkpoint files (sprint-*.json) from the directory."""
+    """Load all sprint checkpoint files (sprint-{N}.json) from the directory.
+
+    Only loads numeric-ID checkpoints (sprint-1.json, sprint-2.json, etc.).
+    Named checkpoints (sprint-holistic.json) are excluded to avoid breaking
+    downstream consumers that assume cp["sprint_id"] exists.
+    Use load_checkpoint_by_name() for named checkpoints.
+    """
     if not os.path.isdir(checkpoints_dir):
         return []
     results = []
