@@ -5,6 +5,7 @@ import os
 import re
 import signal
 import shutil
+import threading
 import subprocess
 from contextlib import nullcontext
 from datetime import datetime, timezone
@@ -13,14 +14,13 @@ from lib.checkpoint import save_checkpoint
 
 logger = logging.getLogger(__name__)
 
-# Global shutdown flag — set by signal handler
-_shutdown_requested = False
+# Global shutdown event — set by signal handler
+_shutdown_event = threading.Event()
 
 
 def _signal_handler(signum, frame):
-    """Handle SIGTERM/SIGINT by setting the shutdown flag."""
-    global _shutdown_requested
-    _shutdown_requested = True
+    """Handle SIGTERM/SIGINT by setting the shutdown event."""
+    _shutdown_event.set()
     logger.info("Shutdown requested (signal %d). Will stop after current sprint.", signum)
 
 
@@ -108,7 +108,8 @@ def _extract_plan_section(content: str, fragment: str) -> str:
             title = match.group(2).strip().lower()
             # Normalize title for comparison
             title_normalized = re.sub(r"[:\-_]", " ", title).strip()
-            if normalized in title_normalized or title_normalized in normalized:
+            # Match exact heading (avoid "sprint 1" matching "sprint 12")
+            if normalized == title_normalized or normalized == title_normalized.rstrip(':'):
                 start_idx = i
                 heading_level = level
                 break
@@ -187,16 +188,24 @@ def _now_iso() -> str:
 
 
 def _parse_json_summary(output: str) -> dict | None:
-    """Parse JSON summary from the last non-empty line of output."""
+    """Parse JSON summary from the last lines of claude output."""
+    if not output:
+        return None
+    # Strip ANSI escape sequences
+    ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
+    output = ansi_escape.sub('', output)
     lines = output.strip().splitlines()
-    for line in reversed(lines):
+    # Try last 5 lines (in case of trailing whitespace/logs)
+    for line in reversed(lines[-5:]):
         line = line.strip()
         if not line:
             continue
         try:
-            return json.loads(line)
+            data = json.loads(line)
+            if isinstance(data, dict) and "status" in data:
+                return data
         except (json.JSONDecodeError, ValueError):
-            return None
+            continue
     return None
 
 
@@ -279,9 +288,10 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
                 "returncode": 1, "stdout": "Timeout expired", "stderr": ""
             })()
 
-        # Save output log
+        # Save output log (per attempt, not overwritten on retry)
+        attempt = sprint.get("retries", 0) + 1
         os.makedirs(checkpoints_dir, exist_ok=True)
-        log_path = os.path.join(checkpoints_dir, f"sprint-{sid}-output.log")
+        log_path = os.path.join(checkpoints_dir, f"sprint-{sid}-attempt-{attempt}-output.log")
         with open(log_path, "w") as f:
             f.write(result.stdout or "")
 
@@ -479,9 +489,8 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
     When max_parallel > 1 and multiple sprints are runnable, uses parallel
     execution via ThreadPoolExecutor. After each sprint (or batch), runs
     the adaptive replanner unless no_replan is set.
-    Checks _shutdown_requested after each sprint for graceful shutdown.
+    Checks _shutdown_event after each sprint for graceful shutdown.
     """
-    global _shutdown_requested
     from lib.queue import SprintQueue
     from lib.parallel import execute_parallel
 
@@ -512,7 +521,7 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
 
     # Main loop
     while not queue.is_done():
-        if _shutdown_requested:
+        if _shutdown_event.is_set():
             print("Shutdown requested. Saving state and exiting.")
             queue.save(queue_path)
             break
@@ -543,6 +552,9 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
         else:
             # Sequential execution
             for sprint in runnable:
+                print(f"\n{'='*60}")
+                print(f"Sprint {sprint['id']}/{len(queue.sprints)}: {sprint.get('title', '')}")
+                print(f"{'='*60}")
                 execute_sprint(
                     sprint, queue, queue_path, checkpoints_dir, repo_root,
                     timeout=timeout, notifier=notifier,
@@ -554,7 +566,7 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
                     _run_replan(queue, queue_path, plan_path, repo_root,
                                 checkpoints_dir, notifier)
 
-                if _shutdown_requested:
+                if _shutdown_event.is_set():
                     print("Shutdown requested after sprint. Saving state and exiting.")
                     queue.save(queue_path)
                     break

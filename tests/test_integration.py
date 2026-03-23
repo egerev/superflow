@@ -76,7 +76,7 @@ class IntegrationBase(unittest.TestCase):
 
     def tearDown(self):
         # Reset shutdown flag
-        supervisor_module._shutdown_requested = False
+        supervisor_module._shutdown_event.clear()
         shutil.rmtree(self.tmpdir)
 
     def _create_queue(self, sprints):

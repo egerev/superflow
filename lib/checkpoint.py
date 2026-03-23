@@ -8,8 +8,10 @@ def save_checkpoint(checkpoints_dir: str, sprint_id: int, data: dict) -> None:
     """Save checkpoint data as JSON to sprint-{id}.json, creating dir if needed."""
     os.makedirs(checkpoints_dir, exist_ok=True)
     path = os.path.join(checkpoints_dir, f"sprint-{sprint_id}.json")
-    with open(path, "w") as f:
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w") as f:
         json.dump(data, f, indent=2)
+    os.rename(tmp_path, path)
 
 
 def load_checkpoint(checkpoints_dir: str, sprint_id: int) -> dict | None:

@@ -193,7 +193,7 @@ def _apply_change(queue, change):
     if change_type == "add":
         # Add a new sprint — needs at minimum id, title, branch
         new_sprint = {
-            "id": change.get("sprint_id", max(s["id"] for s in queue.sprints) + 1),
+            "id": change.get("sprint_id", max((s["id"] for s in queue.sprints), default=0) + 1),
             "title": change.get("title", "Added by replanner"),
             "status": "pending",
             "plan_file": change.get("plan_file", ""),
@@ -201,6 +201,10 @@ def _apply_change(queue, change):
             "depends_on": change.get("depends_on", []),
             "pr": None, "retries": 0, "max_retries": 2, "error_log": None,
         }
+        existing_ids = {s["id"] for s in queue.sprints}
+        if new_sprint.get("id") in existing_ids:
+            logger.warning("Skipping add: sprint ID %s already exists", new_sprint.get("id"))
+            return False
         queue.sprints.append(new_sprint)
         logger.info("Replan: added sprint %d: %s", new_sprint["id"], new_sprint["title"])
         return True

@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock, call
 
 from lib.supervisor import (
     create_worktree, cleanup_worktree, build_prompt, execute_sprint,
-    preflight, run, print_summary, resume, _shutdown_requested,
+    preflight, run, print_summary, resume, _shutdown_event,
     generate_completion_report,
 )
 import lib.supervisor as supervisor_module
@@ -338,7 +338,7 @@ class TestExecuteSprint(unittest.TestCase):
 
         execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
 
-        log_path = os.path.join(self.cp_dir, "sprint-1-output.log")
+        log_path = os.path.join(self.cp_dir, "sprint-1-attempt-1-output.log")
         self.assertTrue(os.path.exists(log_path))
         with open(log_path) as f:
             content = f.read()
@@ -741,7 +741,7 @@ class TestResume(unittest.TestCase):
 
 class TestShutdownFlag(unittest.TestCase):
     def test_shutdown_flag_stops_run_loop(self):
-        """Setting _shutdown_requested should stop the run loop after current sprint."""
+        """Setting _shutdown_event should stop the run loop after current sprint."""
         tmpdir = tempfile.mkdtemp()
         try:
             queue_path = os.path.join(tmpdir, "queue.json")
@@ -766,7 +766,7 @@ class TestShutdownFlag(unittest.TestCase):
                 queue.mark_completed(sprint["id"], f"https://github.com/pr/{sprint['id']}")
                 queue.save(queue_path)
                 # Set shutdown after first sprint
-                supervisor_module._shutdown_requested = True
+                supervisor_module._shutdown_event.set()
                 return {"sprint_id": sprint["id"], "status": "completed"}
 
             with patch("lib.supervisor.preflight", return_value=(True, [])):
@@ -776,7 +776,7 @@ class TestShutdownFlag(unittest.TestCase):
             # Only 1 sprint should have executed (shutdown after first)
             self.assertEqual(call_count[0], 1)
         finally:
-            supervisor_module._shutdown_requested = False
+            supervisor_module._shutdown_event.clear()
             shutil.rmtree(tmpdir)
 
 

@@ -96,6 +96,7 @@ docker run -it --rm -v $(pwd):/workspace -w /workspace node:22 bash
 
 ## Requirements
 
+- **Python 3.10+** (for supervisor features)
 - **Claude Code CLI**
 - **Secondary provider** (optional): Codex (`npm i -g @openai/codex`), Gemini CLI, or other
 - **GitHub CLI** (`gh`)

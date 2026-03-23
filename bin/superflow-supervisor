@@ -66,6 +66,7 @@ def cmd_resume(args):
             plan_path=args.plan,
             max_parallel=args.parallel,
             timeout=args.timeout,
+            no_replan=args.no_replan,
             notifier=notifier,
         )
 
@@ -98,6 +99,7 @@ def main():
         prog="superflow-supervisor",
         description="Superflow Supervisor — autonomous sprint execution orchestrator",
     )
+    parser.add_argument("--version", action="version", version="superflow-supervisor 1.0.0")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # run
@@ -122,6 +124,7 @@ def main():
     resume_parser.add_argument("--plan", default=None, help="Path to plan file")
     resume_parser.add_argument("--parallel", type=int, default=1, help="Max parallel sprints")
     resume_parser.add_argument("--timeout", type=int, default=1800, help="Timeout per sprint (seconds)")
+    resume_parser.add_argument("--no-replan", action="store_true", help="Disable adaptive replanning")
     resume_parser.add_argument("--telegram-token", default=None, help="Telegram bot token")
     resume_parser.add_argument("--telegram-chat", default=None, help="Telegram chat ID")
     resume_parser.set_defaults(func=cmd_resume)
