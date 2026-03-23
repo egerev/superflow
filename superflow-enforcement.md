@@ -19,7 +19,7 @@ Survives context compaction. SKILL.md does not.
 6. **Dual-model reviews mandatory.** Use secondary provider for spec review, plan review, and PAR.
 7. **No secondary provider = four split-focus Claude agents.** Technical (code-quality-reviewer), Product (product-reviewer), Architecture (spec compliance), UX (user scenarios). Never skip the second pair.
 8. **One PR per sprint.** Execute silently after plan approval.
-9. **Final Holistic Review after all sprints.** Two Opus reviewers (Technical + Product) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint PAR misses cross-module issues.
+9. **Final Holistic Review after all sprints.** Four reviewers (2 Claude deep-tier + 2 Codex xhigh, or 4 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint review misses cross-module issues.
 
 ## Secondary Provider Invocation
 

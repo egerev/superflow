@@ -8,49 +8,94 @@ Execute continuously. Never ask, never pause. Orchestrator never writes code dir
 2. **Telegram update** (if MCP connected): "Starting sprint N: [title]"
 3. **Worktree**: verify `.worktrees/` is gitignored (`git check-ignore -q .worktrees || echo '.worktrees/' >> .gitignore`), then `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`
 4. **Baseline tests** in worktree: run full test suite, record output. If tests fail on baseline, stop and report — do not build on a broken base.
-5. **Dispatch implementers** via Agent tool (`model: sonnet` for mechanical tasks; permissions are handled by `settings.json` from Phase 0 Step 7). Use `prompts/implementer.md`. Include `llms.txt` content in agent context (if exists) — this gives implementers project architecture understanding.
-   - **Parallelize** when tasks are independent (different files, no shared state, no dependencies)
-   - **Sequentialize** when tasks share files, state, or depend on each other's output
-6. **Internal review** (pre-PAR, scale by complexity — see Review Optimization below):
-   - Dispatch spec reviewer (`prompts/spec-reviewer.md`, `run_in_background: true`)
-   - Dispatch code quality reviewer (`prompts/code-quality-reviewer.md`, `run_in_background: true`) — skip for Simple sprints
-   - Both run in parallel. Wait for both. Fix any FAIL/REQUEST_CHANGES findings before proceeding.
-   - Verify tests still pass after fixes.
-7. **Post-review test verification**: run full test suite after all review fixes are applied. Paste actual output as evidence (enforcement rule 4). All tests must pass before proceeding to PAR.
-8. **PAR** (see enforcement rules for algorithm):
-   - Claude reviewer: use `prompts/spec-reviewer.md` focus (spec compliance, security, architecture). `run_in_background: true`
-   - Secondary provider: use `prompts/product-reviewer.md` focus (product fit, UX gaps, edge cases). `$TIMEOUT_CMD 600`
-   - Both receive the SPEC. Wait for both. Fix NEEDS_FIXES, re-review.
-   - Write `.par-evidence.json` in the worktree root after both ACCEPTED.
-9. **Push + PR**: verify `.par-evidence.json` exists. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
-10. **Cleanup**: verify PR was created successfully (`gh pr view` returns data), then `git worktree remove .worktrees/sprint-N`
-11. **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." Then next sprint.
+5. **Dispatch implementers** — model from plan's sprint complexity tag:
+   - `simple` → `Agent(subagent_type: "fast-implementer")` (sonnet, effort: low)
+   - `medium` → `Agent(subagent_type: "standard-implementer")` (sonnet, effort: medium). Orchestrator may escalate to `deep-implementer` (opus) on 2+ failures.
+   - `complex` → `Agent(subagent_type: "deep-implementer")` (opus, effort: high)
+   - If `complexity` is absent in plan, default to `medium`.
+   Include `llms.txt` content in agent context (if exists) — this gives implementers project architecture understanding.
+   Parallelize independent tasks, sequentialize dependent ones.
+6. **Unified Review** (4 agents parallel, Reasoning: Standard tier):
+   All agents receive: the SPEC, the product brief, and the relevant git diff.
+
+   First, check Codex availability: `codex --version 2>/dev/null`
+
+   If Codex available:
+   a. Claude code-quality reviewer: `Agent(subagent_type: "standard-code-reviewer", run_in_background: true, prompt: "[SPEC + diff context]")`
+   b. Claude product reviewer: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "[SPEC + brief + diff context]")`
+   c. Codex code reviewer: `$TIMEOUT_CMD 600 codex exec review -c model_reasoning_effort=high --ephemeral - < <(echo "SPEC_CONTEXT" | cat - prompts/codex/code-reviewer.md) 2>&1` (run_in_background)
+   d. Codex product reviewer: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high --ephemeral "$(cat prompts/codex/product-reviewer.md) SPEC: [spec content]" 2>&1` (run_in_background)
+
+   If Codex NOT available (split-focus fallback):
+   a. Claude code-quality: `Agent(subagent_type: "standard-code-reviewer", run_in_background: true)`
+   b. Claude product: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true)`
+   c. Claude architecture: `Agent(subagent_type: "standard-spec-reviewer", run_in_background: true, prompt: "Focus: spec compliance, architecture")`
+   d. Claude UX: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "Focus: user scenarios, edge cases")`
+   Record `"provider": "split-focus"` in .par-evidence.json.
+
+   Wait for all 4. Aggregate findings:
+   - CRITICAL/REQUEST_CHANGES from any agent = fix required
+   - Deduplicate: if multiple agents flag the same file:line, keep the most severe, note consensus
+   - Fix confirmed issues. Re-run only the agents that flagged issues.
+   - If a finding is incorrect (reviewer lacked context), record disagreement with reasoning and skip.
+7. **Post-review test verification + PAR evidence**:
+   Run full test suite after all review fixes. Paste actual output as evidence (enforcement rule 4).
+   Write `.par-evidence.json` in worktree root:
+   ```json
+   {
+     "sprint": N,
+     "claude_code": "APPROVE",
+     "claude_product": "ACCEPTED",
+     "codex_code": "APPROVE",
+     "codex_product": "ACCEPTED",
+     "provider": "codex",
+     "ts": "ISO-8601"
+   }
+   ```
+   All 4 verdicts must be APPROVE/ACCEPTED/PASS. If any agent returned issues, they must be fixed and the agent re-run before evidence is written.
+8. **Push + PR**: verify `.par-evidence.json` exists with 4 passing verdicts. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
+9. **Cleanup**: verify PR was created successfully (`gh pr view` returns data), then `git worktree remove .worktrees/sprint-N`
+10. **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." Then next sprint.
 
 ## Sprint Completion Checklist
 
 Before creating the PR, verify ALL:
 - [ ] Worktree created and work done in isolation
 - [ ] Implementation dispatched to subagents (not written by orchestrator)
-- [ ] Internal review completed (per Review Optimization tier)
+- [ ] Unified review completed: 4 agents, all APPROVE/ACCEPTED
 - [ ] Full test suite passes with pasted evidence
-- [ ] PAR completed: `.par-evidence.json` written with both ACCEPTED
+- [ ] `.par-evidence.json` written with 4 passing verdicts
 - [ ] PR created with `--base main`
 - [ ] Worktree cleaned up
 
-## Review Optimization (Pre-PAR)
+## Adaptive Implementation Model
 
-This controls the internal review chain BEFORE PAR. **PAR itself is always mandatory** (see enforcement rules).
+Sprint complexity drives model selection. Tag each sprint in the plan:
 
-- Simple (1-2 files, <50 lines): spec review only, then PAR
-- Medium (2-5 files): spec review + code quality review, then PAR
-- Complex (5+ files): spec review + code quality review + product review, then PAR
+| Complexity | Agent | Model | Effort | When |
+|-----------|-------|-------|--------|------|
+| simple | fast-implementer | sonnet | low | 1-2 files, CRUD/template, <50 lines |
+| medium | standard-implementer | sonnet | medium | 2-5 files, some new logic. Default if untagged. |
+| complex | deep-implementer | opus | high | 5+ files, new architecture, security-sensitive |
+
+## Review Optimization (Unified Review)
+
+All sprints receive the full 4-agent unified review. The agent count is always 4.
+What changes by sprint complexity is the SCOPE each reviewer examines:
+
+- Simple (1-2 files, <50 lines): reviewers check only changed files + their tests
+- Medium (2-5 files): reviewers check changed files + integration points with unchanged code
+- Complex (5+ files): reviewers check changed files + cross-module impact + architectural fit
 
 ## No Secondary Provider
 
-Dispatch two Claude agents (enforcement rule 7):
-- Agent A (Technical): spec compliance, security, architecture, correctness (`prompts/spec-reviewer.md`, `run_in_background: true`)
-- Agent B (Product): product fit, UX gaps, edge cases, data integrity (`prompts/product-reviewer.md`, `run_in_background: true`)
-Record: `{"provider":"split-focus","claude_technical":"ACCEPTED","claude_product":"ACCEPTED","ts":"..."}`
+When Codex/secondary is unavailable, dispatch 4 Claude agents with split focus:
+- Agent A (Technical): `subagent_type: "standard-code-reviewer"` — correctness, security, performance
+- Agent B (Product): `subagent_type: "standard-product-reviewer"` — spec fit, user scenarios, data integrity
+- Agent C (Architecture): `subagent_type: "standard-spec-reviewer"` — spec compliance, architecture, cross-module consistency
+- Agent D (UX): `subagent_type: "standard-product-reviewer"` — focus prompt on user scenarios, edge states, error handling
+
+Record: `{"provider":"split-focus","claude_code":"APPROVE","claude_product":"ACCEPTED","claude_architecture":"PASS","claude_ux":"ACCEPTED","ts":"..."}`
 
 ## Failure & Debugging
 
@@ -61,12 +106,27 @@ Record: `{"provider":"split-focus","claude_technical":"ACCEPTED","claude_product
 5. Agent blocked: re-dispatch with more context. 2 fails on same agent task = implement manually.
 6. Never stop to ask the user. Accumulate issues, report at end.
 
-## Handling NEEDS_FIXES from PAR
+## Handling NEEDS_FIXES from Unified Review
 
 - Verify each finding against the codebase before implementing (reviewer may lack context)
 - If a finding is incorrect (reviewer lacked context), record disagreement with technical reasoning in the PR description and skip that fix
 - Fix confirmed issues one at a time, test each
-- Re-run PAR after fixes
+- Re-run only the agents that flagged issues, not all 4
+
+## Final Holistic Review (after all sprints)
+
+After all sprint PRs created, before Completion Report. Reasoning: Deep tier.
+All agents review ALL code across ALL sprints as a unified system.
+
+Check Codex availability first. If available:
+a. Claude Technical: `Agent(subagent_type: "deep-code-reviewer", run_in_background: true, prompt: "Review ALL sprint changes. Focus: cross-module dependencies, architectural consistency, security across the full feature.")`
+b. Claude Product: `Agent(subagent_type: "deep-product-reviewer", run_in_background: true, prompt: "Review ALL sprint changes. Focus: end-to-end user flows, data integrity across sprints.")`
+c. Codex Technical: `$TIMEOUT_CMD 900 codex exec review -c model_reasoning_effort=xhigh --ephemeral "Review all changes across all sprints for cross-module issues, architecture, security." 2>&1`
+d. Codex Product: `$TIMEOUT_CMD 900 codex exec --full-auto -c model_reasoning_effort=xhigh --ephemeral "Product review all changes. Check end-to-end flows, data integrity, UX across all sprints." 2>&1`
+
+If no Codex: 4 split-focus Claude agents (Technical-Architecture, Technical-Security, Product-UX, Product-Data), all using deep-tier agent definitions.
+
+Fix CRITICAL/HIGH issues before Completion Report.
 
 ## Supervisor Mode (Long-Running)
 
@@ -75,7 +135,7 @@ For tasks with 3+ sprints that should run unattended (overnight, multi-hour):
 1. Phase 1 creates the sprint queue: `docs/superflow/sprint-queue.json`
 2. User launches supervisor in a separate terminal: `./bin/superflow-supervisor run --queue docs/superflow/sprint-queue.json --plan docs/superflow/plans/<plan-file>.md`
 3. Supervisor executes each sprint as a fresh Claude Code session (no context degradation)
-4. Each sprint follows the same Per-Sprint Flow above, but orchestrated by the supervisor
+4. Each sprint follows the same Per-Sprint Flow above (the 10-step flow), but orchestrated by the supervisor
 5. Supervisor handles: retries, parallel execution, adaptive replanning, checkpoint/resume
 
 **When to use supervisor vs single-session:**
@@ -94,7 +154,7 @@ Present a product-oriented summary — like a demo day, not a tech log. For each
   - What it does for the user (1-2 sentences, product language)
   - Key changes: bullet list of user-visible features/improvements
   - PR: `#NNN` — link, status (open/merged), CI status
-  - PAR: ACCEPTED/NEEDS_FIXES/BLOCKED (if blocked: reason + evidence)
+  - Unified Review: all 4 agents APPROVE/ACCEPTED (if issues: reason + evidence)
   - Tests: count (passed/failed/skipped)
 
 ### Summary Section
