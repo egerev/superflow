@@ -271,7 +271,7 @@ Based on the analysis, here's what I'm planning to do. Review and approve before
 - [ ] **Desktop notifications**: [Add Notification hook for permission_prompt/idle_prompt]
 
 ### Infrastructure
-- [ ] **Enforcement rules**: [Install to ~/.claude/rules/ | Already up to date]
+- [ ] **Workflow guardrails**: Install persistent coding discipline rules (ensures reviews, tests, proper git workflow)
 - [ ] **.gitignore**: [Add .worktrees/, CLAUDE.local.md, .superflow-state.json | Already present]
 - [ ] **Supervisor**: [python3 available | python3 not found — single-session only]
 
@@ -297,8 +297,10 @@ AskUserQuestion(
 **Handling each option:**
 - **approve**: proceed with all items
 - **skip_hooks**: skip Steps 7.5, Notification hook. Proceed with everything else
-- **skip_optional**: only Steps 4-5 (llms.txt + CLAUDE.md). Skip Steps 5.5, 7.5, 7.7, 9.5
+- **skip_optional**: only Steps 4-5 (llms.txt + CLAUDE.md). Skip Steps 5.5, 7, 7.5, 7.7, 8.5
 - **edit**: ask free text "What would you like to change?", adjust plan, re-present
+
+**Express path:** If `$USER_CONTEXT.dismissed == true` (user said "just go" in Step 1), auto-approve the proposal with all defaults and skip the AskUserQuestion gate. Log: "Auto-approved proposal (express mode)." Proceed directly to Step 4.
 
 **Skip individual confirmations:** Items approved in this proposal do NOT need individual AskUserQuestion calls later. The proposal replaces per-step approval.
 
@@ -396,6 +398,7 @@ Check if `~/.claude/rules/superflow-enforcement.md` exists:
 Check `.worktrees/` is in `.gitignore`:
 ```bash
 git check-ignore -q .worktrees || echo ".worktrees/" >> .gitignore
+git check-ignore -q .superflow-state.json || echo ".superflow-state.json" >> .gitignore
 ```
 
 This file survives context compaction and is critical for Phase 2 discipline.
@@ -505,10 +508,10 @@ If user agrees, add to `~/.claude/settings.json` (merge with existing, don't ove
 [ -f "pnpm-lock.yaml" ] && PM="pnpm"
 [ -f "bun.lockb" ] && PM="bun"
 [ -f "Gemfile.lock" ] && PM="bundler"
-[ -f "requirements.txt" ] || [ -f "pyproject.toml" ] && PM="python"
+{ [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; } && PM="python"
 [ -f "go.mod" ] && PM="go"
 [ -f "Cargo.toml" ] && PM="rust"
-[ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ] && HAS_DOCKER=true
+{ [ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ]; } && HAS_DOCKER=true
 ```
 
 Build the final permissions array by combining Core + detected Stack-Specific. **Do not add permissions for stacks not present in the project.**
@@ -675,7 +678,7 @@ Check: exit code 0, no errors. If fails: wrong jq path, missing tool, bad quotin
 
 **Stage 2: Settings validation** — verify the JSON is well-formed:
 ```bash
-jq -e '.hooks.PostToolUse[] | select(.matcher == "Write|Edit") | .hooks[] | select(.type == "command") | .command' .claude/settings.json
+jq -e '.hooks.PostToolUse[] | select(.matcher == "Edit|Write") | .hooks[] | select(.type == "command") | .command' .claude/settings.json
 ```
 Check: exit 0 + prints the command string. Exit 4/5 = malformed JSON. A broken settings.json silently disables ALL settings from that file.
 
@@ -799,7 +802,7 @@ After all steps above, write the **same marker** in every file you touched:
 
 All three must exist for Phase 0 to be fully skipped on next run.
 
-## Step 9.5: Plugin Recommendations
+## Step 8.5: Plugin Recommendations
 
 Based on detected stack and available MCP tools, recommend relevant Claude Code plugins.
 
@@ -837,7 +840,7 @@ Based on detected stack and available MCP tools, recommend relevant Claude Code 
 - [ ] **Hooks set up and verified** — 4-stage pipeline passed (pipe-test + jq + live proof + e2e) (Step 7.5)
 - [ ] **/verify skill created** in `<project>/.claude/skills/verify/SKILL.md` (Step 7.7)
 - [ ] **Skills recommended** based on detected stack (Step 7.7)
-- [ ] **Plugin recommendations shown** (Step 9.5)
+- [ ] **Plugin recommendations shown** (Step 8.5)
 - [ ] Markers `<!-- updated-by-superflow:YYYY-MM-DD -->` written in CLAUDE.md, llms.txt, and health report (Step 8)
 
 If any item is unchecked, go back to the referenced step and complete it before proceeding.
