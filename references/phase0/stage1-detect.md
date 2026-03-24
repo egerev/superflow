@@ -159,7 +159,16 @@ python3 -c "
 import json, datetime
 s = json.load(open('.superflow-state.json'))
 s['stage'] = 'detect'
-s['context'] = {'preflight': $PREFLIGHT_JSON}
+pf = $PREFLIGHT_JSON
+s['context'] = {
+    'preflight': pf,
+    'user_context': {
+        'team': 'solo' if int(pf.get('team_size','1')) <= 1 else 'small_team',
+        'experience': 'intermediate',
+        'ci': pf.get('ci','no'),
+        'dismissed': False
+    }
+}
 s['last_updated'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 json.dump(s, open('.superflow-state.json', 'w'), indent=2)
 "

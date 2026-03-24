@@ -33,9 +33,11 @@ Both `<!-- updated-by-superflow:` (v2.0.3+) and `<!-- superflow:onboarded` (v2.0
 **Check in order, stop at first match:**
 
 1. `CLAUDE.md` does NOT contain either marker → **full Phase 0** from Stage 1
-2. `llms.txt` does NOT contain either marker → **partial**: Stage 4 Branch A only
-3. `docs/superflow/project-health-report.md` does NOT exist → **partial**: Stage 3 only
+2. `llms.txt` does NOT contain either marker → **partial**: Stage 1 (repopulate preflight) → Stage 4 Branch A only (create llms.txt)
+3. `docs/superflow/project-health-report.md` does NOT exist → **partial**: Stage 1 (repopulate preflight) → Stage 2 → Stage 3 (generate report) → Stage 5
 4. All present → **skip Phase 0**, proceed to Phase 1
+
+> **Note:** Partial paths always start with Stage 1 (fast — just detection, no analysis) to populate `context.preflight` needed by downstream stages. Stage 1 is idempotent.
 
 **NOT valid markers** (these can exist without Superflow):
 - The word "superflow" in CLAUDE.md (could be mentioned casually)
@@ -50,8 +52,8 @@ Both `<!-- updated-by-superflow:` (v2.0.3+) and `<!-- superflow:onboarded` (v2.0
 |----------|--------|
 | (a) No markers + no `.superflow-state.json` | Full Phase 0 from Stage 1 |
 | (b) No markers + `state.stage_index=N` | Resume from Stage N+1 |
-| (c) CLAUDE.md marker only, no llms.txt marker | Partial: Stage 4 Branch A only |
-| (d) All markers + health report missing | Partial: Stage 3 only |
+| (c) CLAUDE.md marker only, no llms.txt marker | Partial: Stage 1 → Stage 4 Branch A only |
+| (d) All markers + health report missing | Partial: Stage 1 → Stage 2 → Stage 3 → Stage 5 |
 | (e) All markers + all artifacts present | Skip Phase 0, proceed to Phase 1 |
 | (f) Markers exist + `state.stage_index=3` (Stage 4 crash) | Rerun Stage 4 (idempotent) |
 
