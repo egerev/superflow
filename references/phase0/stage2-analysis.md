@@ -253,4 +253,4 @@ The bundle is **not shown to the user yet** — Stage 3 (Proposal) reads it and 
 TaskUpdate(id: <task_id>, status: "completed")
 ```
 
-Proceed to Stage 3: re-read `references/phase0/stage3-proposal.md`.
+Proceed to Stage 3: re-read `references/phase0/stage3-report.md`.

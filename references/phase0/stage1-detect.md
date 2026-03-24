@@ -98,13 +98,13 @@ Compile results into a dict. Example shape:
   "file_count": 42,
   "source_count": 18,
   "commit_count": 37,
-  "team_size": 2,
+  "team_size": "2",
   "ci": "yes",
   "python3": "yes",
   "stack": "Python",
   "framework": "FastAPI",
   "pm": "pip",
-  "formatters": ["ruff"],
+  "formatters": "ruff",
   "has_llms_txt": false,
   "has_claude_md": true,
   "has_health_report": false
@@ -124,9 +124,9 @@ Compile results into a dict. Example shape:
 
 ## Step 4: Greenfield Routing
 
-If `file_count=0` AND `source_count=0` AND `commit_count≤2`:
+If (`file_count=0` AND `source_count=0`) OR (`file_count≤5` AND `commit_count≤2` AND `source_count=0`):
 
-Tell the user: "This looks like a new project! I'll help set up the foundation." → load and follow `references/phase0/greenfield.md`. Do not proceed with the steps below.
+This is a greenfield or near-empty project (e.g., only README.md + LICENSE). Tell the user: "This looks like a new project! I'll help set up the foundation." → load and follow `references/phase0/greenfield.md`. Do not proceed with the steps below.
 
 ---
 

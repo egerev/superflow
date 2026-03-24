@@ -203,7 +203,7 @@ After dispatching, wait for all background agents to complete. Then validate:
 2. **Markers present** — llms.txt and CLAUDE.md contain `<!-- updated-by-superflow:` marker
 3. **Settings valid** — if Branch B ran, verify `~/.claude/settings.json` is valid JSON:
    ```bash
-   python3 -c "import json; json.load(open(open('$HOME/.claude/settings.json')))" 2>&1
+   python3 -c "import json; json.load(open('$HOME/.claude/settings.json'))" 2>&1
    ```
 4. **Report branch results** to user (brief, one line per branch)
 
