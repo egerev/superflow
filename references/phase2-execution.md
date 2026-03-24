@@ -125,28 +125,24 @@ When a sprint has multiple tasks, analyze them for parallelism before dispatchin
    - 5d. For subsequent waves: same pattern
    - 5e. After all waves: verify no file conflicts with `git status`
    Include `llms.txt` content in agent context (if exists).
-6. <!-- Stage 3: Review, Todos 1-3 --> **Unified Review** (4 agents parallel, Reasoning: Standard tier):
-   All agents receive: the SPEC, the product brief, and the relevant git diff.
+6. <!-- Stage 3: Review, Todos 1-3 --> **Unified Review** (2 specialized agents parallel, Reasoning: Standard tier):
+   Both agents receive: the SPEC, the product brief, and the relevant git diff.
+   Principle: **specialize, don't duplicate** — Claude = Product lens, secondary = Technical lens.
 
    First, check Codex availability: `codex --version 2>/dev/null`
 
    If Codex available:
-   a. Claude code-quality reviewer: `Agent(subagent_type: "standard-code-reviewer", run_in_background: true, prompt: "[SPEC + diff context]")`
-   b. Claude product reviewer: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "[SPEC + brief + diff context]")`
-   c. Codex code reviewer: `$TIMEOUT_CMD 600 codex exec review -c model_reasoning_effort=high --ephemeral - < <(echo "SPEC_CONTEXT" | cat - prompts/codex/code-reviewer.md) 2>&1` (run_in_background)
-   d. Codex product reviewer: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high --ephemeral "$(cat prompts/codex/product-reviewer.md) SPEC: [spec content]" 2>&1` (run_in_background)
+   a. Claude product reviewer: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "[SPEC + brief + diff context]")`
+   b. Codex technical reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=high --ephemeral - < <(echo "SPEC_CONTEXT" | cat - prompts/codex/code-reviewer.md) 2>&1` (run_in_background)
 
-   If Codex NOT available (split-focus fallback):
-   a. Claude code-quality: `Agent(subagent_type: "standard-code-reviewer", run_in_background: true)`
-   b. Claude product: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true)`
-   c. Claude architecture: `Agent(subagent_type: "standard-spec-reviewer", run_in_background: true, prompt: "Focus: spec compliance, architecture")`
-   d. Claude UX: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "Focus: user scenarios, edge cases")`
+   If Codex NOT available (split-focus fallback — 2 Claude agents):
+   a. Claude product: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "Focus: spec fit, user scenarios, data integrity")`
+   b. Claude technical: `Agent(subagent_type: "standard-code-reviewer", run_in_background: true, prompt: "Focus: correctness, security, architecture, performance")`
    Record `"provider": "split-focus"` in .par-evidence.json.
 
-   Wait for all 4. Aggregate findings:
-   - CRITICAL/REQUEST_CHANGES from any agent = fix required
-   - Deduplicate: if multiple agents flag the same file:line, keep the most severe, note consensus
-   - Fix confirmed issues. Re-run only the agents that flagged issues.
+   Wait for both. Aggregate findings:
+   - CRITICAL/REQUEST_CHANGES from either agent = fix required
+   - Fix confirmed issues. Re-run only the agent that flagged issues.
    - If a finding is incorrect (reviewer lacked context), record disagreement with reasoning and skip.
 7. <!-- Stage 4: PAR, Todos 1-4 --> **Post-review test verification + PAR evidence**:
    Run full test suite after all review fixes. Paste actual output as evidence (enforcement rule 4).
@@ -154,16 +150,14 @@ When a sprint has multiple tasks, analyze them for parallelism before dispatchin
    ```json
    {
      "sprint": N,
-     "claude_code_quality": "APPROVE",
      "claude_product": "ACCEPTED",
-     "codex_code_review": "APPROVE",
-     "codex_product": "ACCEPTED",
+     "technical_review": "APPROVE",
      "provider": "codex",
      "ts": "ISO-8601"
    }
    ```
-   All 4 verdicts must be APPROVE/ACCEPTED/PASS. If any agent returned issues, they must be fixed and the agent re-run before evidence is written.
-8. <!-- Stage 5: Ship, Todos 1-2 --> **Push + PR**: verify `.par-evidence.json` exists with 4 passing verdicts. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
+   Both verdicts must be APPROVE/ACCEPTED/PASS. If either agent returned issues, they must be fixed and the agent re-run before evidence is written.
+8. <!-- Stage 5: Ship, Todos 1-2 --> **Push + PR**: verify `.par-evidence.json` exists with both verdicts passing. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
 9. <!-- Stage 5: Ship, Todo 3 --> **Cleanup**: verify PR was created successfully (`gh pr view` returns data), then `git worktree remove .worktrees/sprint-N`
 10. <!-- Stage 5: Ship, Todo 4 --> **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." Then next sprint.
 
@@ -172,9 +166,9 @@ When a sprint has multiple tasks, analyze them for parallelism before dispatchin
 Before creating the PR, verify ALL:
 - [ ] Worktree created and work done in isolation
 - [ ] Implementation dispatched to subagents (not written by orchestrator)
-- [ ] Unified review completed: 4 agents, all APPROVE/ACCEPTED
+- [ ] Unified review completed: 2 agents (Product + Technical), both APPROVE/ACCEPTED
 - [ ] Full test suite passes with pasted evidence
-- [ ] `.par-evidence.json` written with 4 passing verdicts
+- [ ] `.par-evidence.json` written with both verdicts passing
 - [ ] PR created with `--base main`
 - [ ] Worktree cleaned up
 
@@ -190,7 +184,7 @@ Sprint complexity drives model selection. Tag each sprint in the plan:
 
 ## Review Optimization (Unified Review)
 
-All sprints receive the full 4-agent unified review. The agent count is always 4.
+All sprints receive the full 2-agent unified review. The agent count is always 2 (Product + Technical).
 What changes by sprint complexity is the SCOPE each reviewer examines:
 
 - Simple (1-2 files, <50 lines): reviewers check only changed files + their tests
@@ -199,15 +193,11 @@ What changes by sprint complexity is the SCOPE each reviewer examines:
 
 ## No Secondary Provider
 
-When Codex/secondary is unavailable, dispatch 4 Claude agents with split focus:
-- Agent A (Technical): `subagent_type: "standard-code-reviewer"` — correctness, security, performance
-- Agent B (Product): `subagent_type: "standard-product-reviewer"` — spec fit, user scenarios, data integrity
-- Agent C (Architecture): `subagent_type: "standard-spec-reviewer"` — spec compliance, architecture, cross-module consistency
-- Agent D (UX): `subagent_type: "standard-product-reviewer"` — focus prompt on user scenarios, edge states, error handling
+When Codex/secondary is unavailable, dispatch 2 Claude agents with split focus:
+- Agent A (Product): `subagent_type: "standard-product-reviewer"` — spec fit, user scenarios, data integrity
+- Agent B (Technical): `subagent_type: "standard-code-reviewer"` — correctness, security, architecture, performance
 
-Record: `{"provider":"split-focus","claude_code_quality":"APPROVE","claude_product":"ACCEPTED","codex_code_review":"APPROVE","codex_product":"ACCEPTED","ts":"..."}`
-
-Agent-to-key mapping: Agent A (Technical) -> `claude_code_quality`, Agent B (Product) -> `claude_product`, Agent C (Architecture) -> `codex_code_review`, Agent D (UX) -> `codex_product`. This ensures the gate always checks the same 4 keys regardless of provider.
+Record: `{"provider":"split-focus","claude_product":"ACCEPTED","technical_review":"APPROVE","ts":"..."}`
 
 ## Test Execution Discipline
 
@@ -240,20 +230,18 @@ Codex and other external reviewers see only committed code (they extract HEAD in
 - Verify each finding against the codebase before implementing (reviewer may lack context)
 - If a finding is incorrect (reviewer lacked context), record disagreement with technical reasoning in the PR description and skip that fix
 - Fix confirmed issues one at a time, test each
-- Re-run only the agents that flagged issues, not all 4
+- Re-run only the agent that flagged issues, not both
 
 ## Final Holistic Review (after all sprints)
 
 After all sprint PRs created, before Completion Report. Reasoning: Deep tier.
-All agents review ALL code across ALL sprints as a unified system.
+Both agents review ALL code across ALL sprints as a unified system. Same principle: Claude = Product, secondary = Technical.
 
 Check Codex availability first. If available:
-a. Claude Technical: `Agent(subagent_type: "deep-code-reviewer", run_in_background: true, prompt: "Review ALL sprint changes. Focus: cross-module dependencies, architectural consistency, security across the full feature.")`
-b. Claude Product: `Agent(subagent_type: "deep-product-reviewer", run_in_background: true, prompt: "Review ALL sprint changes. Focus: end-to-end user flows, data integrity across sprints.")`
-c. Codex Technical: `$TIMEOUT_CMD 900 codex exec review -c model_reasoning_effort=xhigh --ephemeral "Review all changes across all sprints for cross-module issues, architecture, security." 2>&1`
-d. Codex Product: `$TIMEOUT_CMD 900 codex exec --full-auto -c model_reasoning_effort=xhigh --ephemeral "Product review all changes. Check end-to-end flows, data integrity, UX across all sprints." 2>&1`
+a. Claude Product: `Agent(subagent_type: "deep-product-reviewer", run_in_background: true, prompt: "Review ALL sprint changes. Focus: end-to-end user flows, data integrity across sprints, spec compliance.")`
+b. Codex Technical: `$TIMEOUT_CMD 900 codex exec review -c model_reasoning_effort=high --ephemeral "Review all changes across all sprints for cross-module issues, architecture, security." 2>&1`
 
-If no Codex: 4 split-focus Claude agents (Technical-Architecture, Technical-Security, Product-UX, Product-Data), all using deep-tier agent definitions.
+If no Codex: 2 split-focus Claude agents (Product: deep-product-reviewer, Technical: deep-code-reviewer), both using deep-tier agent definitions.
 
 Fix CRITICAL/HIGH issues before Completion Report.
 

@@ -1,4 +1,4 @@
-# superflow v3.2.0
+# superflow v3.3.0
 
 Lightweight Claude Code skill for autonomous product-to-production development. Designed for modern models (Opus 4.6+) — minimal instructions, maximum autonomy.
 
@@ -6,11 +6,11 @@ Lightweight Claude Code skill for autonomous product-to-production development. 
 
 ## How It Works
 
-**Phase 0 — Onboarding** (interactive, first run only). Mini-interview via AskUserQuestion, 5 parallel agents (4 Claude + 1 Codex) analyze the project, greenfield scaffolding for empty repos, health report, audit/create llms.txt + CLAUDE.md, propose permissions and hooks.
+**Phase 0 — Onboarding** (interactive, first run only). Mini-interview via AskUserQuestion, 5 parallel agents (4 Claude + Codex security audit or Claude security fallback), greenfield scaffolding for empty repos, health report, audit/create llms.txt + CLAUDE.md, propose permissions and hooks.
 
-**Phase 1 — Discovery** (interactive, 12 steps). Research with parallel agents, brainstorming (STOP GATE), approaches, product summary (APPROVAL GATE), product brief, spec, dual-model spec review, plan, dual-model plan review, user approval (FINAL GATE).
+**Phase 1 — Discovery** (interactive, 12 steps). Research with parallel agents, brainstorming (STOP GATE), approaches, product summary (APPROVAL GATE), product brief, spec, specialized dual-model spec review (Claude=Product, Codex=Technical), plan, dual-model plan review, user approval (FINAL GATE).
 
-**Phase 2 — Execution** (autonomous, zero interaction, 10 steps per sprint). PR per sprint, git worktrees, baseline test gate, unified 4-agent review (2 Claude + 2 Codex, or 4 Claude split-focus), PAR evidence validation with retry, milestone checkpoints, holistic review gate before completion report. Reports results in Demo Day format.
+**Phase 2 — Execution** (autonomous, zero interaction, 10 steps per sprint). PR per sprint, git worktrees, baseline test gate, specialized 2-agent review (Claude Product + Codex Technical — no duplication), PAR evidence validation with retry, milestone checkpoints, holistic review gate before completion report. Reports results in Demo Day format.
 
 **Phase 3 — Merge** (interactive, user-initiated). 3-stage process: pre-merge checklist with doc updates, sequential rebase merges with CI failure recovery, post-merge report with cleanup.
 

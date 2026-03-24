@@ -1,12 +1,12 @@
 # Superflow — Claude Instructions
 
 ## Project Overview
-Superflow is a Claude Code skill (hybrid: Markdown prompts + Python companion CLI) that orchestrates a 4-phase dev workflow: onboarding, product discovery, autonomous execution, merge. The Python supervisor enables multi-hour autonomous sprint execution outside Claude's context window. v3.2.0, MIT License.
+Superflow is a Claude Code skill (hybrid: Markdown prompts + Python companion CLI) that orchestrates a 4-phase dev workflow: onboarding, product discovery, autonomous execution, merge. The Python supervisor enables multi-hour autonomous sprint execution outside Claude's context window. v3.3.0, MIT License.
 
 ## Key Rules
 - All documentation output in English — user communication follows their language preference
 - Dispatch subagents for all code/analysis — orchestrator reads, plans, reviews, dispatches
-- Use `model: opus` + `ultrathink` for documentation agents (llms.txt, CLAUDE.md) — Sonnet hallucinates framework names from directory structure
+- Use `subagent_type: deep-doc-writer` for documentation agents — effort controlled via agent definition frontmatter, not prompt keywords
 - Verify framework names by reading actual `import` statements, never guess from directory names
 - Every claim in generated docs needs evidence (file path, count, command output)
 
@@ -27,6 +27,7 @@ SKILL.md (entry point, ~108 lines)
   │   ├── llms-txt-writer.md (llms.txt generation)
   │   ├── claude-md-writer.md (CLAUDE.md generation)
   │   ├── testing-guidelines.md (TDD reference)
+  │   ├── security-audit.md (Claude security fallback for Phase 0)
   │   └── codex/ (Codex-specific prompts: code-reviewer, product-reviewer, audit)
   ├── agents/ (12 agent definitions — deep/standard/fast tiers with effort frontmatter)
   ├── bin/
@@ -57,10 +58,10 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 | File | Lines | Purpose |
 |------|-------|---------|
 | `SKILL.md` | 108 | Entry point — startup checklist, provider detection, state management, phase routing |
-| `superflow-enforcement.md` | 54 | 9 hard rules, rationalization prevention, phase gates, holistic review |
-| `references/phase0-onboarding.md` | ~1384 | First-run: AskUserQuestion interview, greenfield path (G1-G6), 4 parallel Opus agents, health report, proposal gate, doc audit, hooks + verification, /verify skill, plugins, state management |
-| `references/phase1-discovery.md` | 257 | 11 steps, 5 stages, merged Product Approval gate, AskUserQuestion in brainstorming |
-| `references/phase2-execution.md` | 219 | Per-sprint stages, wave-based parallel dispatch, state management, step verification |
+| `superflow-enforcement.md` | 83 | 9 hard rules, specialized 2-agent reviews (Claude=Product, secondary=Technical), rationalization prevention, phase gates |
+| `references/phase0-onboarding.md` | ~1384 | First-run: AskUserQuestion interview, greenfield path (G1-G6), 5 parallel agents (4 Claude + Codex/Claude security), health report, proposal gate, doc audit, hooks + verification, /verify skill, plugins, state management |
+| `references/phase1-discovery.md` | 257 | 11 steps, 5 stages, merged Product Approval gate, specialized reviews (Claude=Product, Codex=Technical) |
+| `references/phase2-execution.md` | 219 | Per-sprint stages, 2-agent specialized review (Claude Product + Codex Technical), holistic review |
 | `references/phase3-merge.md` | 167 | 3 stages, sequential rebase merge with CI gate |
 | `prompts/implementer.md` | 81 | Red-Green-Refactor TDD cycle for code agents |
 | `prompts/llms-txt-writer.md` | 156 | llmstxt.org standard, no hard size limit |
