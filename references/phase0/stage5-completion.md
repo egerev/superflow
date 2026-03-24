@@ -24,6 +24,18 @@ TaskCreate(
 
 ---
 
+## Todo 0: Ensure .gitignore (always runs, regardless of approval mode)
+
+```bash
+git check-ignore -q .worktrees 2>/dev/null || echo ".worktrees/" >> .gitignore
+git check-ignore -q .superflow-state.json 2>/dev/null || echo ".superflow-state.json" >> .gitignore
+git check-ignore -q CLAUDE.local.md 2>/dev/null || echo "CLAUDE.local.md" >> .gitignore
+```
+
+This runs in Stage 5 (not Stage 4 Branch C) to guarantee execution even if Branch C was skipped via "skip" or "custom" approval modes.
+
+---
+
 ## Todo 1: Write Markers
 
 Append the exact marker to every file Phase 0 touched. Use today's date (ISO 8601).
