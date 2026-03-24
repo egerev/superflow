@@ -193,18 +193,36 @@ AskUserQuestion(
 Update `$PREFLIGHT` with the correction, re-display the confirmation (Step 5), repeat.
 
 ### "skip"
-Write markers with defaults, transition state to phase=1, proceed to Phase 1 immediately:
+Write markers in ALL required files so next run detects Phase 0 as complete. Transition state to phase=1:
 
 ```bash
-# Append marker to CLAUDE.md (create minimal if absent)
-echo "" >> CLAUDE.md
-echo "<!-- updated-by-superflow:$(date +%Y-%m-%d) -->" >> CLAUDE.md
+# Write markers in all 3 detection files
+MARKER="<!-- updated-by-superflow:$(date +%Y-%m-%d) -->"
 
+# CLAUDE.md — create minimal if absent, append marker
+[ ! -f CLAUDE.md ] && echo "# Project" > CLAUDE.md
+echo "" >> CLAUDE.md && echo "$MARKER" >> CLAUDE.md
+
+# llms.txt — create minimal if absent, append marker
+[ ! -f llms.txt ] && echo "# Project" > llms.txt
+echo "" >> llms.txt && echo "$MARKER" >> llms.txt
+
+# Health report — create minimal, append marker
+mkdir -p docs/superflow
+echo "# Project Health Report" > docs/superflow/project-health-report.md
+echo "Skipped — Phase 0 was skipped by user." >> docs/superflow/project-health-report.md
+echo "$MARKER" >> docs/superflow/project-health-report.md
+
+# Ensure .gitignore
+git check-ignore -q .worktrees 2>/dev/null || echo ".worktrees/" >> .gitignore
+git check-ignore -q .superflow-state.json 2>/dev/null || echo ".superflow-state.json" >> .gitignore
+
+# Update state
 python3 -c "
 import json, datetime
 s = json.load(open('.superflow-state.json'))
 s['phase'] = 1
-s['phase_label'] = 'Discovery'
+s['phase_label'] = 'Product Discovery'
 s['stage'] = 'research'
 s['stage_index'] = 0
 s['context'] = {'preflight': {'skipped': True}, 'skip_phase0': True}
