@@ -1,8 +1,8 @@
 {
-  "sprint": 1,
+  "sprint": 2,
   "claude_product": "ACCEPTED",
   "technical_review": "APPROVE",
   "provider": "codex",
-  "ts": "2026-03-25T01:25:00Z",
-  "notes": "Both reviewers found issues, all fixed: stage2→stage3 handoff, greenfield routing, approval state, schema types, validation command"
+  "ts": "2026-03-25T01:50:00Z",
+  "notes": "Both approved after fixes: partial recovery routes through Stage 1, stale step references, line counts"
 }
