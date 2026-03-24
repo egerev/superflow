@@ -11,7 +11,7 @@ Superflow is a 4-phase development workflow skill for Claude Code:
 - **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — git worktrees, TDD, subagent implementers, 4-agent unified review (2 Claude + 2 Codex or 4 Claude split-focus), one PR per sprint
 - **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification and documentation update
 
-Version: v3.0.0 (2026-03-23). MIT License.
+Version: v3.2.0 (2026-03-24). MIT License.
 
 ## File Structure
 
@@ -52,23 +52,23 @@ Version: v3.0.0 (2026-03-23). MIT License.
 The supervisor is a Python CLI that orchestrates autonomous multi-sprint execution outside of Claude Code's context window.
 
 - [bin/superflow-supervisor](bin/superflow-supervisor): CLI entry point — argparse-based with run/status/resume/reset commands (147 lines)
-- [lib/supervisor.py](lib/supervisor.py): Core supervisor — worktree lifecycle, prompt building, sprint execution with retry, run loop, completion report generation (743 lines, ~572 LOC)
+- [lib/supervisor.py](lib/supervisor.py): Core supervisor — worktree lifecycle, prompt building, sprint execution with retry, run loop, completion report, validation gates, holistic review, enforcement hardening (1733 lines, ~1350 LOC)
 - [lib/queue.py](lib/queue.py): Sprint queue — JSON-based queue with DAG dependency resolution, atomic saves, status tracking (114 lines, ~98 LOC)
-- [lib/checkpoint.py](lib/checkpoint.py): Checkpoint system — save/load sprint execution state for crash recovery with atomic writes (37 lines, ~31 LOC)
-- [lib/parallel.py](lib/parallel.py): Parallel execution — ThreadPoolExecutor-based concurrent sprint execution with queue locking (38 lines, ~31 LOC)
+- [lib/checkpoint.py](lib/checkpoint.py): Checkpoint system — save/load sprint execution state for crash recovery with atomic writes, string IDs, named checkpoints (52 lines, ~44 LOC)
+- [lib/parallel.py](lib/parallel.py): Parallel execution — ThreadPoolExecutor-based concurrent sprint execution with queue locking (47 lines, ~38 LOC)
 - [lib/replanner.py](lib/replanner.py): Adaptive replanner — analyzes completed sprints, adjusts remaining plans via Claude subprocess (212 lines, ~168 LOC)
-- [lib/notifications.py](lib/notifications.py): Notifications — Telegram Bot API integration with stdout fallback, 11 event types (134 lines, ~110 LOC)
-- [templates/supervisor-sprint-prompt.md](templates/supervisor-sprint-prompt.md): Sprint execution prompt template with placeholders for sprint plan, CLAUDE.md, llms.txt (25 lines)
+- [lib/notifications.py](lib/notifications.py): Notifications — Telegram Bot API integration with stdout fallback, 16 event types (159 lines, ~130 LOC)
+- [templates/supervisor-sprint-prompt.md](templates/supervisor-sprint-prompt.md): Sprint execution prompt template with placeholders for sprint plan, CLAUDE.md, llms.txt, baseline_status, enforcement (42 lines)
 - [templates/replan-prompt.md](templates/replan-prompt.md): Replanner prompt template with placeholders for completed/remaining sprints (26 lines)
 - [examples/sprint-queue-example.json](examples/sprint-queue-example.json): Queue file template for new users (42 lines)
 
 ## Tests
 
-149 tests across 8 test files (2948 lines total):
+228 tests across 8 test files (~4780 lines total):
 - [tests/test_supervisor.py](tests/test_supervisor.py): Core supervisor tests — sprint execution, worktree lifecycle, run loop (907 lines)
 - [tests/test_integration.py](tests/test_integration.py): Integration tests — happy path, crash recovery, blocked sprints, retry scenarios (565 lines)
 - [tests/test_queue.py](tests/test_queue.py): Queue tests — DAG resolution, atomic saves, status transitions (371 lines)
-- [tests/test_notifications.py](tests/test_notifications.py): Notification tests — all 11 event types, Telegram API, stdout fallback (337 lines)
+- [tests/test_notifications.py](tests/test_notifications.py): Notification tests — all 16 event types, Telegram API, stdout fallback (337 lines)
 - [tests/test_replanner.py](tests/test_replanner.py): Replanner tests — JSON parsing, sprint modification, guard conditions (296 lines)
 - [tests/test_parallel.py](tests/test_parallel.py): Parallel execution tests — concurrency, queue locking, dependency handling (219 lines)
 - [tests/test_cli.py](tests/test_cli.py): CLI argument parsing and command dispatch tests (166 lines)
@@ -84,6 +84,8 @@ The supervisor is a Python CLI that orchestrates autonomous multi-sprint executi
 - **Markers:** `<!-- updated-by-superflow:YYYY-MM-DD -->` in generated files — used to detect whether Phase 0 has run
 - **Sprint queue:** JSON file defining sprints with DAG dependencies, processed by the supervisor CLI
 - **Checkpoints:** Per-sprint JSON files storing execution state, enabling crash recovery via `resume` command
+- **Enforcement gates:** Validation gates (PAR evidence, sprint summary, verdict) that block progression until evidence is valid
+- **Baseline test gate:** Heuristic test command detection per language — fails fast on broken baseline before implementation begins
 
-<!-- updated-by-superflow:2026-03-23 -->
+<!-- updated-by-superflow:2026-03-24 -->
 
