@@ -31,8 +31,8 @@ Stage 3: "Post-merge"
 
 At the start of Phase 3, write `.superflow-state.json`:
 ```bash
-cat > .superflow-state.json << 'STATEEOF'
-{"version":1,"phase":3,"phase_label":"Merge","stage":"pre-merge","stage_index":0,"last_updated":"..."}
+cat > .superflow-state.json << STATEEOF
+{"version":1,"phase":3,"phase_label":"Merge","stage":"pre-merge","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 STATEEOF
 ```
 

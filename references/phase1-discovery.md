@@ -40,8 +40,8 @@ Stage 5: "Planning"
 
 At the start of Phase 1, write `.superflow-state.json`:
 ```bash
-cat > .superflow-state.json << 'STATEEOF'
-{"version":1,"phase":1,"phase_label":"Product Discovery","stage":"research","stage_index":0,"last_updated":"..."}
+cat > .superflow-state.json << STATEEOF
+{"version":1,"phase":1,"phase_label":"Product Discovery","stage":"research","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 STATEEOF
 ```
 
@@ -166,11 +166,11 @@ Present Product Summary + Product Brief together as a single document for approv
 - Key decisions + rationale
 
 ### Product Brief
-- Problem statement (1-2 sentences)
-- Jobs to be Done
-- User stories (3-5)
-- Success criteria
-- Edge cases
+- **Problem statement**: What user pain are we solving? (1-2 sentences)
+- **Jobs to be Done**: When [situation], I want to [motivation], so I can [outcome]
+- **User stories**: As a [role], I want [action] so that [benefit] (3-5 key stories)
+- **Success criteria**: How do we know this worked? (measurable outcomes)
+- **Edge cases**: What happens when things go wrong? (happy path + 2-3 failure modes)
 
 Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-brief.md`. Create `docs/superflow/specs/` if it doesn't exist.
 

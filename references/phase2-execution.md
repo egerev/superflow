@@ -42,10 +42,19 @@ Stage 5: "Ship"
 
 ### State Management
 
-During Phase 2 with supervisor, the supervisor writes `.superflow-state.json` — the Claude session does NOT write it directly. During Phase 2 without supervisor (single-session), the Claude session writes state at each stage transition:
+During Phase 2 with supervisor, the supervisor writes `.superflow-state.json` — the Claude session does NOT write it directly. During Phase 2 without supervisor (single-session), initialize state at the start of Phase 2:
 
 ```bash
-python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s['stage']='implementation'; s['stage_index']=1; s['sprint']=N; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
+cat > .superflow-state.json << STATEEOF
+{"version":1,"phase":2,"phase_label":"Autonomous Execution","stage":"setup","stage_index":0,"sprint":1,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+STATEEOF
+```
+
+Then update at each stage transition:
+
+```bash
+python3 -c "import json,datetime,sys; s=json.load(open('.superflow-state.json')); s['stage']='implementation'; s['stage_index']=1; s['sprint']=int(sys.argv[1]); s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)" "$SPRINT_NUM"
+# Replace $SPRINT_NUM with the actual sprint number (e.g., 1, 2, 3)
 ```
 
 ### TaskCreate/TaskUpdate Pattern

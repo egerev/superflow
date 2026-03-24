@@ -16,7 +16,7 @@ SKILL.md (entry point, 85 lines)
   ├── superflow-enforcement.md (durable rules → ~/.claude/rules/)
   ├── references/
   │   ├── phase0-onboarding.md (first-run, 10 steps, interactive interview)
-  │   ├── phase1-discovery.md (interactive, 12 steps)
+  │   ├── phase1-discovery.md (interactive, 11 steps)
   │   ├── phase2-execution.md (autonomous, 11 steps/sprint + holistic review)
   │   └── phase3-merge.md (user-initiated merge)
   ├── prompts/

@@ -69,11 +69,11 @@ Stage 5: "Environment Setup"
   - "Set up hooks"
   - "Verify hooks"
   - "Recommend skills"
-  - "Recommend plugins"
 
 Stage 6: "Completion"
   Todos:
   - "Write markers"
+  - "Recommend plugins"
   - "Run completion checklist"
   - "Show restart instruction"
 ```
@@ -82,8 +82,8 @@ Stage 6: "Completion"
 
 At the start of Phase 0, write `.superflow-state.json`:
 ```bash
-cat > .superflow-state.json << 'STATEEOF'
-{"version":1,"phase":0,"phase_label":"Onboarding","stage":"interview","stage_index":0,"last_updated":"..."}
+cat > .superflow-state.json << STATEEOF
+{"version":1,"phase":0,"phase_label":"Onboarding","stage":"interview","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 STATEEOF
 ```
 
@@ -638,7 +638,7 @@ If user declines: continue, but warn that Phase 2 will require manual approval f
 
 **Hooks automate quality checks** — especially valuable for beginners who forget to format/lint. Based on the detected stack from Step 2, propose a hooks configuration.
 
-**If the user already approved hooks in the proposal (Step 3.5), skip this prompt.** Only ask if proposal was skipped or user chose 'skip_hooks'.
+**If the user already approved hooks in the proposal (Step 3.5), skip this prompt and proceed to setup.** If user chose 'skip_hooks' or 'skip_all_optional' in the proposal, skip this entire step. Only ask if the proposal step was skipped.
 
 Tell the user (in their language):
 > "I can set up auto-formatting and quality hooks so Claude automatically formats code after every edit. This catches style issues instantly. Set up hooks?"
@@ -905,19 +905,7 @@ No-jq fallback:
 
 **Location:** Both hooks go to `~/.claude/settings.json` (user-level). They reference `.superflow-state.json` which is gitignored, so the hooks only make sense for users who have Superflow installed. Formatter hooks remain in `.claude/settings.json` (project-level).
 
-**Installation:** Use `jq` to merge into existing settings, or create the file if it doesn't exist:
-```bash
-# Check if user-level settings exist
-if [ -f ~/.claude/settings.json ]; then
-  # Merge hooks into existing settings using jq
-  jq '.hooks.PostCompact = (.hooks.PostCompact // []) + [HOOK_OBJECT] | .hooks.SessionStart = (.hooks.SessionStart // []) + [HOOK_OBJECT]' ~/.claude/settings.json > /tmp/claude-settings.tmp && mv /tmp/claude-settings.tmp ~/.claude/settings.json
-else
-  # Create new settings file with hooks
-  cat > ~/.claude/settings.json << 'HOOKEOF'
-  { "hooks": { ... } }
-  HOOKEOF
-fi
-```
+**Installation:** Use `jq` to merge into existing settings, or create the file if it doesn't exist. The actual hook JSON objects are defined in Hook 1 and Hook 2 above — construct the full jq command with the real JSON objects inlined. If jq is unavailable, read the current file with python3, merge the hooks dict, and write back.
 
 ## Step 7.7: Skills Recommendation
 <!-- Stage 5: Environment Setup, Todo 7 -->
@@ -1028,7 +1016,7 @@ After all steps above, write the **same marker** in every file you touched:
 All three must exist for Phase 0 to be fully skipped on next run.
 
 ## Step 8.5: Plugin Recommendations
-<!-- Stage 5: Environment Setup, Todo 8 -->
+<!-- Stage 6: Completion, Todo 2 -->
 
 Based on detected stack and available MCP tools, recommend relevant Claude Code plugins.
 
@@ -1049,7 +1037,7 @@ Based on detected stack and available MCP tools, recommend relevant Claude Code 
 > Only recommend plugins that are relevant to the detected stack. Don't overwhelm with the full list.
 
 ## Step 9: Completion Checklist
-<!-- Stage 6: Completion, Todo 2 -->
+<!-- Stage 6: Completion, Todo 3 -->
 
 **Walk through each item below. For each, verify it was completed. If not, go back to the relevant step.**
 
@@ -1073,7 +1061,7 @@ Based on detected stack and available MCP tools, recommend relevant Claude Code 
 If any item is unchecked, go back to the referenced step and complete it before proceeding.
 
 ## Step 10: Complete & Restart
-<!-- Stage 6: Completion, Todo 3 -->
+<!-- Stage 6: Completion, Todo 4 -->
 
 **If permissions or hooks were configured (Steps 7-7.5):**
 
