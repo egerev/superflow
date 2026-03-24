@@ -22,7 +22,35 @@
         "supervisor_available": {"type": "boolean"},
         "plan_file": {"type": ["string", "null"]},
         "spec_file": {"type": ["string", "null"]},
-        "queue_file": {"type": ["string", "null"]}
+        "queue_file": {"type": ["string", "null"]},
+        "preflight": {
+          "type": "object",
+          "properties": {
+            "stack": {"type": "string"},
+            "team_size": {"type": "string"},
+            "ci": {"type": "string"},
+            "python3": {"type": "string"},
+            "pm": {"type": "string"},
+            "formatters": {"type": "string"}
+          }
+        },
+        "tech_debt": {
+          "type": "object",
+          "properties": {
+            "total_todos": {"type": "integer"},
+            "files_over_500_loc": {"type": "array", "items": {"type": "string"}},
+            "untested_modules": {"type": "array", "items": {"type": "string"}},
+            "security_issues": {"type": "integer"},
+            "generated_at": {"type": "string", "format": "date-time"}
+          }
+        },
+        "approval": {
+          "type": "object",
+          "properties": {
+            "mode": {"type": "string", "enum": ["all", "custom", "skip"]},
+            "items": {"type": "array", "items": {"type": "string"}}
+          }
+        }
       }
     },
     "history": {
