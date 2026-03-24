@@ -46,6 +46,14 @@ $TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=<LEVEL>
 
 Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` during Phase 0 Step 1. The Agent() tool does NOT accept an inline `effort` parameter — effort is controlled via agent definition files only.
 
+## Test & Process Discipline
+
+1. **One test process at a time.** Never run tests in parallel or retry without killing the previous run.
+2. **Always wrap tests with timeout:** `timeout 120 python3 -m unittest ...`. If timeout fires, investigate — don't retry.
+3. **Hanging test = unmocked subprocess.** Read the test, find the real call. Re-running won't fix it.
+4. **Commit fixes before external review.** Codex/secondary providers see only committed HEAD. Uncommitted fixes are invisible to them — they'll flag already-fixed issues.
+5. **Exit worktree before merge.** `cd` to main repo root, remove worktree, THEN merge. CWD inside a worktree dies when branch is deleted.
+
 ## Rationalization Prevention
 
 If you think any of these, STOP and do the thing:
