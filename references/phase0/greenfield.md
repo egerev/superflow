@@ -307,18 +307,29 @@ After greenfield scaffolding is complete:
    Scaffolded by Superflow Phase 0 greenfield path"
    ```
 
-2. **Write approval state** before entering Stage 4 — greenfield defaults to "all" for B+C:
+2. **Write preflight + approval state** before entering Stage 4 — greenfield needs `context.preflight` for Branch B (permissions/hooks depend on stack):
    ```bash
    python3 -c "
    import json, datetime
    s = json.load(open('.superflow-state.json'))
+   # Preflight from greenfield selections
+   s['context']['preflight'] = {
+       'stack': '$STACK_CHOICE',    # e.g., 'nextjs', 'python', 'react_vite'
+       'team_size': '1',
+       'ci': '$CI_CHOICE',          # 'yes' or 'no'
+       'python3': 'yes' if '$HAS_PYTHON' else 'no',
+       'pm': '$PM',                 # e.g., 'npm', 'pip'
+       'formatters': ['$FORMATTER'] # e.g., ['prettier'], ['ruff']
+   }
    s['context']['approval'] = {'mode': 'all', 'items': ['permissions', 'hooks', 'verify_skill', 'claude_local', 'gitignore', 'enforcement']}
+   s['context']['greenfield'] = True
    s['stage'] = 'setup'
    s['stage_index'] = 3
    s['last_updated'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
    json.dump(s, open('.superflow-state.json', 'w'), indent=2)
    "
    ```
+   Replace `$STACK_CHOICE`, `$CI_CHOICE`, `$PM`, `$FORMATTER` with actual values from G2-G4.
 
 3. **Rejoin Stage 4 (Branch B and C only):**
    - **Skip Branch A** (llms.txt + CLAUDE.md) — these were just created in G5.
