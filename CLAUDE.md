@@ -38,7 +38,10 @@ SKILL.md (entry point, 85 lines)
   │   └── notifications.py (Telegram + stdout)
   ├── templates/
   │   ├── supervisor-sprint-prompt.md (sprint execution template)
-  │   └── replan-prompt.md (replanner template)
+  │   ├── replan-prompt.md (replanner template)
+  │   ├── superflow-state-schema.json (state file schema)
+  │   ├── greenfield/ (stack scaffolding templates: nextjs, python, generic)
+  │   └── ci/ (CI workflow templates: github-actions-node, github-actions-python)
   ├── examples/
   │   └── sprint-queue-example.json (queue template)
   └── tests/

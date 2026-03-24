@@ -88,10 +88,10 @@ Greenfield Stage 2: "Stack" — Stack selection, follow-up questions, scaffoldin
 Greenfield Stage 3: "Scaffold" — Create files from template, install deps
 Greenfield Stage 4: "CI" — GitHub Actions setup
 Greenfield Stage 5: "Documentation" — CLAUDE.md + llms.txt for new project
-Greenfield Stage 6: "Connect" — Initial commit, rejoin shared setup at Stage 5
+Greenfield Stage 6: "Connect" — Initial commit, rejoin shared setup at Step 5.5
 ```
 
-After Greenfield Stage 6, rejoin the shared path at Stage 5 (Environment Setup) through Stage 6 (Completion).
+After Greenfield Stage 6, rejoin the shared path at Step 5.5 (CLAUDE.local.md) through Step 10 (Completion).
 
 ### State Management
 
@@ -256,7 +256,7 @@ If this returns results → treat as existing project (it had source code before
 
 ## Greenfield Path (Steps G1-G6)
 
-If Step 1.5 detected greenfield, skip Steps 2-5 and enter this path. After G6, rejoin at Step 6 (enforcement rules) for shared setup.
+If Step 1.5 detected greenfield, skip Steps 2-5 and enter this path. After G6, rejoin at Step 5.5 (CLAUDE.local.md) for shared setup.
 
 ### Step G1: Project Vision Interview
 <!-- Greenfield Stage 1: Vision -->
@@ -334,6 +334,20 @@ AskUserQuestion(
 )
 ```
 
+**For library:**
+```
+AskUserQuestion(
+  question: "Which language for the library?",
+  options: [
+    {"value": "python", "label": "Python (PyPI package)"},
+    {"value": "node", "label": "Node.js / TypeScript (npm package)"},
+    {"value": "go", "label": "Go module"},
+    {"value": "rust", "label": "Rust crate"},
+    {"value": "other", "label": "Other — I'll specify"}
+  ]
+)
+```
+
 If "other" → free text: "What stack/language do you want to use?"
 
 Store as `$STACK_CHOICE`.
@@ -389,9 +403,9 @@ Based on `$STACK_CHOICE`, generate the initial project structure. **Do NOT use `
 **Template selection:**
 - Next.js / React → `templates/greenfield/nextjs.md`
 - Python (any framework) → `templates/greenfield/python.md`
-- Other / Unknown → `templates/greenfield/generic.md`
+- Other / Unknown → use `templates/greenfield/generic.md` as a base, but generate stack-appropriate files (e.g., for Express: package.json with express dependency, src/index.ts with basic server; for Go: go.mod, main.go; for Rust: Cargo.toml, src/main.rs). The generic template provides the directory skeleton; the LLM fills in stack-specific content.
 
-Read the selected template, replace `{project_name}` and `{project_description}` from `$PROJECT_VISION`, and create all files using the Write tool.
+Read the selected template, replace `{project_name}` and `{project_description}` from `$PROJECT_VISION`, and create all files using the Write tool. For Python templates, convert `{project_name}` to a valid Python identifier by replacing hyphens with underscores (e.g., "my-cool-app" → "my_cool_app") for the package directory name.
 
 **Scaffolding order (strict):**
 1. Write `.gitignore` FIRST (ensures node_modules/, .env, etc. are excluded)
@@ -476,6 +490,20 @@ Also generate a minimal `llms.txt`:
 <!-- updated-by-superflow:YYYY-MM-DD -->
 ```
 
+Also create a minimal `docs/superflow/project-health-report.md` so Phase 0 detection markers work correctly on next run:
+
+```markdown
+# Project Health Report
+
+**Generated:** YYYY-MM-DD (greenfield scaffolding)
+**Status:** New project — no existing code to analyze.
+
+Stack: {stack}
+Type: {project_type}
+
+<!-- updated-by-superflow:YYYY-MM-DD -->
+```
+
 ### Step G6: Connect to Shared Setup
 <!-- Greenfield Stage 6: Connect -->
 
@@ -483,7 +511,7 @@ After greenfield scaffolding is complete:
 
 1. **Initial commit:**
    ```bash
-   git add .gitignore package.json tsconfig.json src/ tests/ README.md CLAUDE.md llms.txt ...
+   git add .gitignore package.json package-lock.json tsconfig.json src/ tests/ README.md CLAUDE.md llms.txt docs/ ...
    git commit -m "Initial project setup with Superflow
 
    Stack: {stack}
@@ -491,7 +519,7 @@ After greenfield scaffolding is complete:
    Scaffolded by Superflow Phase 0 greenfield path"
    ```
 
-2. **Rejoin shared Phase 0:** Continue from Step 6 (enforcement rules) through Step 10. Steps 2-5 (analysis, health report, llms.txt, CLAUDE.md) are skipped since we just created those files.
+2. **Rejoin shared Phase 0:** Continue from Step 5.5 (CLAUDE.local.md) through Step 10. Steps 2-5 (analysis, health report, llms.txt, CLAUDE.md) are skipped since we just created those files. Step 5.5 creates CLAUDE.local.md which is needed for personal preferences.
 
 3. **Transition message:**
    > "Project scaffolded! Now let's plan what to build."
