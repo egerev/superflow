@@ -561,9 +561,10 @@ class TestRunLoop(unittest.TestCase):
         q.save(self.queue_path)
         return q
 
+    @patch("lib.supervisor.run_holistic_review", return_value=True)
     @patch("lib.supervisor.execute_sprint")
     @patch("lib.supervisor.preflight")
-    def test_run_loop_three_sprints(self, mock_preflight, mock_execute):
+    def test_run_loop_three_sprints(self, mock_preflight, mock_execute, mock_holistic):
         """Run loop processes 3 sequential sprints."""
         sprints = [
             _sprint(sid=1, plan_file="plans/plan.md#sprint-1"),
@@ -658,10 +659,11 @@ class TestRunLoopParallel(unittest.TestCase):
         q.save(self.queue_path)
         return q
 
+    @patch("lib.supervisor.run_holistic_review", return_value=True)
     @patch("lib.supervisor._run_replan")
     @patch("lib.parallel._worker")
     @patch("lib.supervisor.preflight")
-    def test_run_loop_parallel_two_independent(self, mock_preflight, mock_worker, mock_replan):
+    def test_run_loop_parallel_two_independent(self, mock_preflight, mock_worker, mock_replan, mock_holistic):
         """With max_parallel=2 and 2 independent sprints, execute_parallel is used."""
         sprints = [
             _sprint(sid=1, plan_file="plans/plan.md#sprint-1"),
@@ -690,10 +692,11 @@ class TestRunLoopParallel(unittest.TestCase):
         # Worker should have been called for both
         self.assertEqual(mock_worker.call_count, 2)
 
+    @patch("lib.supervisor.run_holistic_review", return_value=True)
     @patch("lib.supervisor._run_replan")
     @patch("lib.supervisor.execute_sprint")
     @patch("lib.supervisor.preflight")
-    def test_run_loop_replan_called_after_sprint(self, mock_preflight, mock_execute, mock_replan):
+    def test_run_loop_replan_called_after_sprint(self, mock_preflight, mock_execute, mock_replan, mock_holistic):
         """Replanner should be called after each sprint when plan_path is set."""
         sprints = [
             _sprint(sid=1, plan_file="plans/plan.md#sprint-1"),
@@ -716,10 +719,11 @@ class TestRunLoopParallel(unittest.TestCase):
         # Replan should be called after each sprint
         self.assertEqual(mock_replan.call_count, 2)
 
+    @patch("lib.supervisor.run_holistic_review", return_value=True)
     @patch("lib.supervisor._run_replan")
     @patch("lib.supervisor.execute_sprint")
     @patch("lib.supervisor.preflight")
-    def test_run_loop_no_replan_flag(self, mock_preflight, mock_execute, mock_replan):
+    def test_run_loop_no_replan_flag(self, mock_preflight, mock_execute, mock_replan, mock_holistic):
         """With no_replan=True, replanner should not be called."""
         sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
         self._make_queue(sprints)
@@ -737,10 +741,11 @@ class TestRunLoopParallel(unittest.TestCase):
 
         mock_replan.assert_not_called()
 
+    @patch("lib.supervisor.run_holistic_review", return_value=True)
     @patch("lib.supervisor._run_replan")
     @patch("lib.supervisor.execute_sprint")
     @patch("lib.supervisor.preflight")
-    def test_run_loop_no_plan_path_skips_replan(self, mock_preflight, mock_execute, mock_replan):
+    def test_run_loop_no_plan_path_skips_replan(self, mock_preflight, mock_execute, mock_replan, mock_holistic):
         """Without plan_path, replanner should not be called."""
         sprints = [_sprint(sid=1, plan_file="plans/plan.md#sprint-1")]
         self._make_queue(sprints)
@@ -1599,11 +1604,11 @@ class TestRunBaselineTests(unittest.TestCase):
         passed, output, skipped = run_baseline_tests(self.tmpdir, sprint, q)
         self.assertTrue(passed)
         self.assertFalse(skipped)
-        # Verify subprocess.run was called with the queue baseline_cmd
+        # Verify subprocess.run was called with the queue baseline_cmd split as list
         mock_run.assert_called_once()
         call_args = mock_run.call_args
-        self.assertEqual(call_args[0][0], "make test")
-        self.assertTrue(call_args[1].get("shell", False))
+        self.assertEqual(call_args[0][0], ["make", "test"])
+        self.assertFalse(call_args[1].get("shell", True))
 
 
 class TestBaselineGateInExecuteSprint(unittest.TestCase):
@@ -2138,7 +2143,7 @@ class TestHolisticGateInRun(unittest.TestCase):
         # Create holistic evidence
         evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
         with open(evidence_path, "w") as f:
-            json.dump({"verdict": "APPROVE", "timestamp": "2026-01-01T00:00:00Z", "reviewers": {"claude_code_quality": "APPROVE", "claude_product": "APPROVE", "codex_code_review": "APPROVE", "codex_product": "APPROVE"}}, f)
+            json.dump({"verdict": "APPROVE", "timestamp": "2026-01-01T00:00:00Z", "sprint_prs": ["https://github.com/test/repo/pull/1"], "reviewers": {"claude_code_quality": "APPROVE", "claude_product": "APPROVE", "codex_code_review": "APPROVE", "codex_product": "APPROVE"}}, f)
 
         # Create checkpoint for the sprint (so report can read it)
         cp_dir = os.path.join(self.tmpdir, "checkpoints")
@@ -2175,7 +2180,7 @@ class TestHolisticGateInRun(unittest.TestCase):
         # Create evidence so it passes (must have valid reviewer verdicts)
         evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
         with open(evidence_path, "w") as f:
-            json.dump({"verdict": "APPROVE", "reviewers": {"claude_code_quality": "APPROVE", "claude_product": "APPROVE", "codex_code_review": "APPROVE", "codex_product": "APPROVE"}}, f)
+            json.dump({"verdict": "APPROVE", "sprint_prs": ["https://github.com/test/repo/pull/1"], "reviewers": {"claude_code_quality": "APPROVE", "claude_product": "APPROVE", "codex_code_review": "APPROVE", "codex_product": "APPROVE"}}, f)
 
         cp_dir = os.path.join(self.tmpdir, "checkpoints")
         save_checkpoint(cp_dir, 1, {
@@ -2271,9 +2276,10 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         self.assertIsNone(result["error"])
         self.assertEqual(mock_run.call_args.kwargs["cwd"], None)
 
+    @patch("lib.supervisor._detect_default_branch", return_value="main")
     @patch("lib.supervisor._detect_codex", return_value=False)
     @patch("lib.supervisor.subprocess.run")
-    def test_holistic_reviewer_subprocesses_run_from_repo_root(self, mock_run, mock_codex):
+    def test_holistic_reviewer_subprocesses_run_from_repo_root(self, mock_run, mock_codex, mock_branch):
         """Reviewer sessions should run with cwd=repo_root so they inspect the right repo."""
         q = self._make_queue()
 
@@ -2306,9 +2312,10 @@ class TestHolisticReviewDispatch(unittest.TestCase):
             return MagicMock(returncode=1, stdout="", stderr="not found")
         return MagicMock(returncode=0, stdout="", stderr="")
 
+    @patch("lib.supervisor._detect_default_branch", return_value="main")
     @patch("lib.supervisor._detect_codex", return_value=True)
     @patch("lib.supervisor.subprocess.run")
-    def test_holistic_dispatches_4_reviewers_with_codex(self, mock_run, mock_codex):
+    def test_holistic_dispatches_4_reviewers_with_codex(self, mock_run, mock_codex, mock_branch):
         """With Codex available: 2 claude -p + 2 codex exec calls."""
         q = self._make_queue()
 
@@ -2346,9 +2353,10 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         # the subprocess calls happen per reviewer. Let's verify the evidence file.
         self.assertTrue(os.path.exists(self.evidence_path))
 
+    @patch("lib.supervisor._detect_default_branch", return_value="main")
     @patch("lib.supervisor._detect_codex", return_value=False)
     @patch("lib.supervisor.subprocess.run")
-    def test_holistic_dispatches_4_splitfocus_without_codex(self, mock_run, mock_codex):
+    def test_holistic_dispatches_4_splitfocus_without_codex(self, mock_run, mock_codex, mock_branch):
         """Without Codex: 4 claude -p calls (split-focus)."""
         q = self._make_queue()
 
@@ -2378,9 +2386,10 @@ class TestHolisticReviewDispatch(unittest.TestCase):
             self.assertEqual(cmd[0], "claude",
                              f"Expected claude but got {cmd[0]} — all should be claude without Codex")
 
+    @patch("lib.supervisor._detect_default_branch", return_value="main")
     @patch("lib.supervisor._detect_codex", return_value=False)
     @patch("lib.supervisor.subprocess.run")
-    def test_holistic_writes_evidence_on_approve(self, mock_run, mock_codex):
+    def test_holistic_writes_evidence_on_approve(self, mock_run, mock_codex, mock_branch):
         """All 4 APPROVE -> evidence file created with correct format."""
         q = self._make_queue()
 
@@ -2422,9 +2431,10 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         self.assertEqual(len(evidence["sprint_prs"]), 2)
         self.assertIn("https://github.com/test/repo/pull/1", evidence["sprint_prs"])
 
+    @patch("lib.supervisor._detect_default_branch", return_value="main")
     @patch("lib.supervisor._detect_codex", return_value=False)
     @patch("lib.supervisor.subprocess.run")
-    def test_holistic_retries_on_request_changes(self, mock_run, mock_codex):
+    def test_holistic_retries_on_request_changes(self, mock_run, mock_codex, mock_branch):
         """1 reviewer returns REQUEST_CHANGES -> retry triggered."""
         q = self._make_queue()
 
@@ -2459,9 +2469,10 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         # Should have more calls than initial 6 (diff + reviewers)
         self.assertGreater(mock_run.call_count, 6)
 
+    @patch("lib.supervisor._detect_default_branch", return_value="main")
     @patch("lib.supervisor._detect_codex", return_value=False)
     @patch("lib.supervisor.subprocess.run")
-    def test_holistic_returns_false_on_max_retries(self, mock_run, mock_codex):
+    def test_holistic_returns_false_on_max_retries(self, mock_run, mock_codex, mock_branch):
         """Max retries exceeded -> returns False."""
         q = self._make_queue()
 
@@ -2504,9 +2515,10 @@ class TestHolisticReviewDispatch(unittest.TestCase):
             cp = json.load(f)
         self.assertEqual(cp["status"], "failed")
 
+    @patch("lib.supervisor._detect_default_branch", return_value="main")
     @patch("lib.supervisor._detect_codex", return_value=False)
     @patch("lib.supervisor.subprocess.run")
-    def test_holistic_fix_cycle_reruns_only_failing(self, mock_run, mock_codex):
+    def test_holistic_fix_cycle_reruns_only_failing(self, mock_run, mock_codex, mock_branch):
         """Only failing reviewers re-run in retry, not all 4."""
         q = self._make_queue()
 
@@ -2621,6 +2633,414 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         self.assertIn("# Completion Report", output)
         self.assertIn("Setup", output)
         self.assertIn("Build", output)
+
+
+class TestFix1StaleHolisticEvidence(unittest.TestCase):
+    """Fix 1: Stale holistic evidence reuse — sprint_prs validation."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        os.makedirs(self.cp_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(
+                "Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n"
+                "{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n"
+                "{impl_model}\n{impl_effort}\n{frontend_instructions}\n"
+            )
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints):
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    @patch("lib.supervisor.run_holistic_review", return_value=True)
+    @patch("lib.supervisor.preflight")
+    @patch("lib.supervisor.execute_sprint")
+    def test_stale_evidence_triggers_fresh_review(
+        self, mock_execute, mock_preflight, mock_holistic
+    ):
+        """Cached evidence with mismatched sprint_prs is invalidated and fresh review runs."""
+        sprints = [_sprint(sid=1, title="Setup", status="completed")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        # Evidence has sprint_prs that do NOT match current queue's PR
+        evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
+        with open(evidence_path, "w") as f:
+            json.dump({
+                "verdict": "APPROVE",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "sprint_prs": ["https://github.com/test/repo/pull/STALE"],
+                "reviewers": {
+                    "claude_code_quality": "APPROVE",
+                    "claude_product": "APPROVE",
+                    "codex_code_review": "APPROVE",
+                    "codex_product": "APPROVE",
+                },
+            }, f)
+
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+
+        import io
+        from unittest.mock import patch as _patch
+        with _patch("sys.stdout", new_callable=io.StringIO):
+            run(self.queue_path, repo_root=self.tmpdir)
+
+        # Fresh holistic review should have been dispatched
+        mock_holistic.assert_called_once()
+
+    @patch("lib.supervisor.run_holistic_review")
+    @patch("lib.supervisor.preflight")
+    @patch("lib.supervisor.execute_sprint")
+    def test_valid_evidence_with_matching_sprint_prs_skips_review(
+        self, mock_execute, mock_preflight, mock_holistic
+    ):
+        """Cached evidence matching current sprint_prs is accepted — no fresh review."""
+        sprints = [_sprint(sid=1, title="Setup", status="completed")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
+        with open(evidence_path, "w") as f:
+            json.dump({
+                "verdict": "APPROVE",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "sprint_prs": ["https://github.com/test/repo/pull/1"],
+                "reviewers": {
+                    "claude_code_quality": "APPROVE",
+                    "claude_product": "APPROVE",
+                    "codex_code_review": "APPROVE",
+                    "codex_product": "APPROVE",
+                },
+            }, f)
+
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+
+        import io
+        from unittest.mock import patch as _patch
+        with _patch("sys.stdout", new_callable=io.StringIO):
+            run(self.queue_path, repo_root=self.tmpdir)
+
+        # Should NOT dispatch a fresh review (evidence was valid and matched)
+        mock_holistic.assert_not_called()
+
+
+class TestFix2DetectDefaultBranch(unittest.TestCase):
+    """Fix 2: _detect_default_branch() helper and use in run_holistic_review."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_detect_default_branch_from_origin_head(self, mock_run):
+        """Parses branch name from git symbolic-ref output."""
+        from lib.supervisor import _detect_default_branch
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="refs/remotes/origin/main\n"
+        )
+        branch = _detect_default_branch(self.tmpdir)
+        self.assertEqual(branch, "main")
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_detect_default_branch_master(self, mock_run):
+        """Returns 'master' when origin HEAD points to master."""
+        from lib.supervisor import _detect_default_branch
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="refs/remotes/origin/master\n"
+        )
+        branch = _detect_default_branch(self.tmpdir)
+        self.assertEqual(branch, "master")
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_detect_default_branch_develop(self, mock_run):
+        """Returns 'develop' when origin HEAD points to develop."""
+        from lib.supervisor import _detect_default_branch
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout="refs/remotes/origin/develop\n"
+        )
+        branch = _detect_default_branch(self.tmpdir)
+        self.assertEqual(branch, "develop")
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_detect_default_branch_falls_back_to_main_on_error(self, mock_run):
+        """Falls back to 'main' when git command fails."""
+        from lib.supervisor import _detect_default_branch
+        mock_run.return_value = MagicMock(returncode=1, stdout="")
+        branch = _detect_default_branch(self.tmpdir)
+        self.assertEqual(branch, "main")
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_detect_default_branch_falls_back_on_exception(self, mock_run):
+        """Falls back to 'main' on subprocess exception."""
+        from lib.supervisor import _detect_default_branch
+        mock_run.side_effect = Exception("git not found")
+        branch = _detect_default_branch(self.tmpdir)
+        self.assertEqual(branch, "main")
+
+    @patch("lib.supervisor._detect_codex", return_value=False)
+    @patch("lib.supervisor._detect_default_branch", return_value="develop")
+    @patch("lib.supervisor.subprocess.run")
+    def test_holistic_review_uses_detected_branch_in_diff(
+        self, mock_run, mock_branch, mock_codex
+    ):
+        """run_holistic_review uses _detect_default_branch for git diff."""
+        cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        os.makedirs(cp_dir, exist_ok=True)
+        sprints = [_sprint(sid=1, status="completed", branch="feat/s1")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = SprintQueue("t", "2026-01-01T00:00:00Z", sprints)
+        queue_path = os.path.join(self.tmpdir, "queue.json")
+        q.save(queue_path)
+
+        approve_output = '{"verdict": "APPROVE"}'
+        approve = MagicMock(returncode=0, stdout=approve_output, stderr="")
+        diff = MagicMock(returncode=0, stdout="diff", stderr="")
+        mock_run.side_effect = [diff, approve, approve, approve, approve]
+
+        run_holistic_review(q, queue_path, self.tmpdir, None, cp_dir, timeout=60)
+
+        # First subprocess call should be git diff with "develop...feat/s1"
+        first_call_args = mock_run.call_args_list[0][0][0]
+        self.assertIn("git", first_call_args)
+        self.assertIn("diff", first_call_args)
+        self.assertIn("develop...feat/s1", first_call_args)
+
+
+class TestFix3ShellFalseBaselineCmd(unittest.TestCase):
+    """Fix 3: run_baseline_tests uses shlex.split + shell=False for user-supplied commands."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, baseline_cmd=None):
+        return SprintQueue("test", "2026-01-01T00:00:00Z", [], baseline_cmd=baseline_cmd)
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_string_cmd_split_as_list_shell_false(self, mock_run):
+        """String baseline_cmd is split with shlex and passed as list with shell=False."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok\n", stderr="")
+        sprint = {"baseline_cmd": "python -m pytest --tb=short -q"}
+        q = self._make_queue()
+        run_baseline_tests(self.tmpdir, sprint, q)
+        call_args = mock_run.call_args
+        cmd_arg = call_args[0][0]
+        self.assertIsInstance(cmd_arg, list, "Command should be a list, not a string")
+        self.assertEqual(cmd_arg, ["python", "-m", "pytest", "--tb=short", "-q"])
+        self.assertFalse(call_args[1].get("shell", True), "shell should be False")
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_list_cmd_passed_directly_shell_false(self, mock_run):
+        """List baseline_cmd is passed as-is with shell=False."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok\n", stderr="")
+        sprint = {"baseline_cmd": ["python", "-m", "pytest"]}
+        q = self._make_queue()
+        run_baseline_tests(self.tmpdir, sprint, q)
+        call_args = mock_run.call_args
+        cmd_arg = call_args[0][0]
+        self.assertIsInstance(cmd_arg, list)
+        self.assertEqual(cmd_arg, ["python", "-m", "pytest"])
+        self.assertFalse(call_args[1].get("shell", True), "shell should be False")
+
+    @patch("lib.supervisor.subprocess.run")
+    def test_npm_test_command_split_correctly(self, mock_run):
+        """'npm test' heuristic produces ['npm', 'test'] with shell=False."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok\n", stderr="")
+        sprint = {"baseline_cmd": "npm test"}
+        q = self._make_queue()
+        run_baseline_tests(self.tmpdir, sprint, q)
+        call_args = mock_run.call_args
+        self.assertEqual(call_args[0][0], ["npm", "test"])
+        self.assertFalse(call_args[1].get("shell", True))
+
+
+class TestFix4NpmPlaceholderFilter(unittest.TestCase):
+    """Fix 4: _resolve_baseline_cmd filters npm placeholder test script."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self):
+        return SprintQueue("test", "2026-01-01T00:00:00Z", [])
+
+    def test_npm_placeholder_no_test_specified_returns_none(self):
+        """npm default 'echo Error: no test specified && exit 1' is treated as no runner."""
+        with open(os.path.join(self.tmpdir, "package.json"), "w") as f:
+            json.dump({"scripts": {"test": "echo \"Error: no test specified\" && exit 1"}}, f)
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertIsNone(cmd)
+
+    def test_npm_placeholder_variant_error_no_test_returns_none(self):
+        """Another common variant of npm placeholder is filtered."""
+        with open(os.path.join(self.tmpdir, "package.json"), "w") as f:
+            json.dump({"scripts": {"test": "Error: no test"}}, f)
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertIsNone(cmd)
+
+    def test_real_test_script_not_filtered(self):
+        """A real test script ('jest', 'mocha', etc.) is NOT filtered."""
+        with open(os.path.join(self.tmpdir, "package.json"), "w") as f:
+            json.dump({"scripts": {"test": "jest --coverage"}}, f)
+        sprint = {}
+        q = self._make_queue()
+        cmd = _resolve_baseline_cmd(self.tmpdir, sprint, q)
+        self.assertEqual(cmd, "npm test")
+
+
+class TestFix5HolisticFailurePersistsFindings(unittest.TestCase):
+    """Fix 5: Failed holistic review checkpoint includes last_findings."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        os.makedirs(self.cp_dir, exist_ok=True)
+        self.plan_path = os.path.join(self.tmpdir, "plan.md")
+        with open(self.plan_path, "w") as f:
+            f.write("# Plan\n## Sprint 1\nDo stuff.")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self):
+        sprints = [_sprint(sid=1, status="completed", branch="feat/setup-sprint-1")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = SprintQueue("test-feature", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    @patch("lib.supervisor._detect_default_branch", return_value="main")
+    @patch("lib.supervisor._detect_codex", return_value=False)
+    @patch("lib.supervisor.subprocess.run")
+    def test_failed_holistic_checkpoint_has_last_findings(self, mock_run, mock_codex, mock_branch):
+        """When holistic review fails after max retries, checkpoint includes last_findings."""
+        q = self._make_queue()
+
+        diff_result = MagicMock(returncode=0, stdout="diff content", stderr="")
+        approve = MagicMock(returncode=0, stdout='OK\n{"verdict": "APPROVE"}', stderr="")
+        request_changes = MagicMock(
+            returncode=0,
+            stdout='Bad\n{"verdict": "REQUEST_CHANGES", "findings": [{"severity": "HIGH", "description": "cross-module data race"}]}',
+            stderr="",
+        )
+        fixer_ok = MagicMock(returncode=0, stdout="Fixed.", stderr="")
+
+        mock_run.side_effect = [
+            diff_result,
+            approve, approve, approve, request_changes,
+            fixer_ok,
+            request_changes,
+        ]
+
+        result = run_holistic_review(
+            q, self.queue_path, self.tmpdir, self.plan_path, self.cp_dir,
+            timeout=60, max_retries=1,
+        )
+
+        self.assertFalse(result)
+
+        holistic_cp_path = os.path.join(self.cp_dir, "sprint-holistic.json")
+        with open(holistic_cp_path) as f:
+            cp = json.load(f)
+
+        self.assertEqual(cp["status"], "failed")
+        self.assertIn("last_findings", cp)
+        self.assertIsInstance(cp["last_findings"], list)
+        self.assertTrue(len(cp["last_findings"]) > 0)
+        # Check finding content is included
+        findings_text = json.dumps(cp["last_findings"])
+        self.assertIn("cross-module data race", findings_text)
+
+
+class TestFix6BaselineStatusInPrompt(unittest.TestCase):
+    """Fix 6: build_prompt uses {baseline_status} placeholder from template."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.templates_dir = os.path.join(self.tmpdir, "templates")
+        os.makedirs(self.templates_dir)
+        self.plans_dir = os.path.join(self.tmpdir, "plans")
+        os.makedirs(self.plans_dir)
+        with open(os.path.join(self.plans_dir, "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _write_template(self, content):
+        with open(os.path.join(self.templates_dir, "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(content)
+
+    def test_baseline_status_passed_inserted_when_run(self):
+        """When baseline ran and passed, build_prompt inserts 'passed' status text."""
+        self._write_template(
+            "Sprint {sprint_id}: {sprint_title}\n"
+            "{baseline_status}\n"
+        )
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint["baseline_skipped"] = False
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("Baseline tests passed", result)
+        self.assertNotIn("{baseline_status}", result)
+
+    def test_baseline_status_skipped_inserted_when_not_run(self):
+        """When baseline was skipped, build_prompt inserts caution text."""
+        self._write_template(
+            "Sprint {sprint_id}: {sprint_title}\n"
+            "{baseline_status}\n"
+        )
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint["baseline_skipped"] = True
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("Baseline tests were not available", result)
+        self.assertNotIn("{baseline_status}", result)
+
+    def test_baseline_status_default_when_key_absent(self):
+        """When sprint has no baseline_skipped key, default to 'passed' text."""
+        self._write_template(
+            "Sprint {sprint_id}: {sprint_title}\n"
+            "{baseline_status}\n"
+        )
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        # No baseline_skipped key set
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("Baseline tests passed", result)
+
+    def test_template_without_baseline_status_placeholder_still_works(self):
+        """Template without {baseline_status} still renders without error."""
+        self._write_template(
+            "Sprint {sprint_id}: {sprint_title}\n"
+        )
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("Sprint 1", result)
 
 
 if __name__ == "__main__":
