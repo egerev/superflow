@@ -64,7 +64,7 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 ## Key Files
 | File | Lines | Purpose |
 |------|-------|---------|
-| `SKILL.md` | 118 | Entry point — startup checklist, provider detection, state management, phase routing |
+| `SKILL.md` | ~126 | Entry point — startup checklist, provider detection, state management, phase routing |
 | `superflow-enforcement.md` | 80 | 9 hard rules, specialized 2-agent reviews (Claude=Product, secondary=Technical), rationalization prevention, phase gates |
 | `references/phase0-onboarding.md` | ~80 | Router — detection, recovery matrix, stage loading |
 | `references/phase0/stage1-detect.md` | ~214 | Parallel preflight, auto-detection, confirmation |

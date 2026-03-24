@@ -42,7 +42,7 @@ $TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=<LEVEL>
 | **standard** | `standard-spec-reviewer`, `standard-code-reviewer`, `standard-product-reviewer`, `standard-doc-writer`, `standard-implementer` (opus, effort: medium) | `-c model_reasoning_effort=high` + `prompts/codex/` | Phase 1 plan review, Phase 2 unified review, Phase 3 doc updates |
 | **fast** | `fast-implementer` (sonnet, effort: low) | `-c model_reasoning_effort=medium` | Simple implementation tasks |
 
-Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` during Phase 0 Step 1. The Agent() tool does NOT accept an inline `effort` parameter — effort is controlled via agent definition files only.
+Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` during SKILL.md startup checklist (step 8). The Agent() tool does NOT accept an inline `effort` parameter — effort is controlled via agent definition files only.
 
 ## Test & Process Discipline
 
