@@ -21,7 +21,8 @@ _shutdown_event = threading.Event()
 
 # --- Validation constants ---
 VALID_PASS_VERDICTS = {"APPROVE", "ACCEPTED", "PASS"}
-REQUIRED_PAR_KEYS = {"claude_code_quality", "claude_product", "codex_code_review", "codex_product"}
+REQUIRED_PAR_KEYS = {"claude_product", "technical_review"}
+REQUIRED_HOLISTIC_KEYS = {"claude_product", "technical_review"}
 REQUIRED_SUMMARY_KEYS = {"status", "pr_url", "tests", "par"}
 
 
@@ -588,17 +589,15 @@ def _detect_default_branch(repo_root):
 
 def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir,
                         timeout=1800, notifier=None, max_retries=2):
-    """Execute Final Holistic Review — 4 parallel reviewers on all sprint diffs.
+    """Execute Final Holistic Review — 2 parallel reviewers on all sprint diffs.
 
-    Dispatches 4 reviewer sessions:
-      1. Technical (deep-code-reviewer focus)
-      2. Product (deep-product-reviewer focus)
-      3. Codex Technical / split-focus Architecture (if no Codex)
-      4. Codex Product / split-focus UX (if no Codex)
+    Dispatches 2 reviewer sessions:
+      1. Product Acceptance (claude_product)
+      2. Technical Review (technical_review — Codex or split-focus Claude)
 
     Each returns {"verdict": "APPROVE|REQUEST_CHANGES", "findings": [...]}.
     Aggregates verdicts into .holistic-review-evidence.json.
-    Returns True if all 4 pass, False after max_retries.
+    Returns True if both pass, False after max_retries.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -651,16 +650,6 @@ def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir
     if has_codex:
         reviewers = [
             {
-                "name": "claude_code_quality",
-                "cmd": ["claude", "-p", "--verbose"],
-                "is_codex": False,
-                "role": "Technical Code Quality",
-                "focus": (
-                    "Correctness, security, error handling, performance. "
-                    "Focus on cross-module integration bugs and race conditions."
-                ),
-            },
-            {
                 "name": "claude_product",
                 "cmd": ["claude", "-p", "--verbose"],
                 "is_codex": False,
@@ -671,39 +660,21 @@ def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir
                 ),
             },
             {
-                "name": "codex_code_review",
+                "name": "technical_review",
                 "cmd": ["codex", "exec", "--full-auto"],
                 "is_codex": True,
-                "role": "Architecture",
+                "role": "Technical Review",
                 "focus": (
-                    "Architecture patterns, API consistency, module boundaries. "
-                    "Focus on design debt introduced across sprints."
-                ),
-            },
-            {
-                "name": "codex_product",
-                "cmd": ["codex", "exec", "--full-auto"],
-                "is_codex": True,
-                "role": "UX & Edge Cases",
-                "focus": (
-                    "User experience, edge cases, error states, accessibility. "
-                    "Focus on gaps between sprint boundaries."
+                    "Correctness, security, error handling, performance, "
+                    "architecture patterns, API consistency, module boundaries. "
+                    "Focus on cross-module integration bugs, race conditions, "
+                    "and design debt introduced across sprints."
                 ),
             },
         ]
     else:
-        # Split-focus: 4 Claude sessions with different perspectives
+        # Split-focus: 2 Claude sessions with different perspectives
         reviewers = [
-            {
-                "name": "claude_code_quality",
-                "cmd": ["claude", "-p", "--verbose"],
-                "is_codex": False,
-                "role": "Technical Code Quality",
-                "focus": (
-                    "Correctness, security, error handling, performance. "
-                    "Focus on cross-module integration bugs and race conditions."
-                ),
-            },
             {
                 "name": "claude_product",
                 "cmd": ["claude", "-p", "--verbose"],
@@ -715,23 +686,15 @@ def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir
                 ),
             },
             {
-                "name": "codex_code_review",
+                "name": "technical_review",
                 "cmd": ["claude", "-p", "--verbose"],
                 "is_codex": False,
-                "role": "Architecture (split-focus)",
+                "role": "Technical Review (split-focus)",
                 "focus": (
-                    "Architecture patterns, API consistency, module boundaries. "
-                    "Focus on design debt introduced across sprints."
-                ),
-            },
-            {
-                "name": "codex_product",
-                "cmd": ["claude", "-p", "--verbose"],
-                "is_codex": False,
-                "role": "UX & Edge Cases (split-focus)",
-                "focus": (
-                    "User experience, edge cases, error states, accessibility. "
-                    "Focus on gaps between sprint boundaries."
+                    "Correctness, security, error handling, performance, "
+                    "architecture patterns, API consistency, module boundaries. "
+                    "Focus on cross-module integration bugs, race conditions, "
+                    "and design debt introduced across sprints."
                 ),
             },
         ]
@@ -755,7 +718,7 @@ def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir
             r for r in reviewers if r["name"] in failing_reviewers
         ]
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             futures = {}
             for rev in reviewers_to_run:
                 prompt = _build_holistic_prompt(
@@ -803,10 +766,9 @@ def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir
             evidence = {
                 "timestamp": _now_iso(),
                 "verdict": "APPROVE",
-                "reviewers": {
-                    rev["name"]: attempt_results.get(rev["name"], {}).get("verdict", "UNKNOWN")
-                    for rev in reviewers
-                },
+                "claude_product": attempt_results.get("claude_product", {}).get("verdict", "UNKNOWN"),
+                "technical_review": attempt_results.get("technical_review", {}).get("verdict", "UNKNOWN"),
+                "provider": "codex" if has_codex else "split-focus",
                 "sprint_prs": sprint_prs,
                 "findings_resolved": findings_resolved,
             }
@@ -1480,7 +1442,7 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
                     holistic_data = json.load(f)
                 reviewers_data = holistic_data.get("reviewers", holistic_data)
                 valid, errors = _validate_evidence_verdicts(
-                    reviewers_data, REQUIRED_PAR_KEYS, context="Holistic"
+                    reviewers_data, REQUIRED_HOLISTIC_KEYS, context="Holistic"
                 )
                 if not valid:
                     holistic_valid = False
@@ -1579,12 +1541,12 @@ def generate_completion_report(queue, checkpoints_dir, output_path=None):
             "Completion report blocked: .holistic-review-evidence.json not found. "
             "Run Final Holistic Review first."
         )
-    # Validate evidence contents — all 4 reviewer verdicts must pass
+    # Validate evidence contents — all reviewer verdicts must pass
     try:
         with open(evidence_path) as f:
             holistic_data = json.load(f)
         reviewers = holistic_data.get("reviewers", holistic_data)
-        valid, errors = _validate_evidence_verdicts(reviewers, REQUIRED_PAR_KEYS,
+        valid, errors = _validate_evidence_verdicts(reviewers, REQUIRED_HOLISTIC_KEYS,
                                                      context="Holistic")
         if not valid:
             raise RuntimeError(
@@ -1634,13 +1596,12 @@ def generate_completion_report(queue, checkpoints_dir, output_path=None):
 
         par = summary.get("par")
         if par:
-            claude_cq = par.get("claude_code_quality", par.get("claude", "N/A"))
             claude_pr = par.get("claude_product", "N/A")
-            codex_cr = par.get("codex_code_review", par.get("secondary", "N/A"))
-            codex_pr = par.get("codex_product", "N/A")
+            tech_rev = par.get("technical_review", "N/A")
+            provider = par.get("provider", "unknown")
             lines.append(
-                f"- **PAR:** Claude-CQ={claude_cq}, Claude-Product={claude_pr}, "
-                f"Codex-CR={codex_cr}, Codex-Product={codex_pr}"
+                f"- **PAR:** Claude-Product={claude_pr}, "
+                f"Technical-Review={tech_rev} (provider: {provider})"
             )
         else:
             lines.append("- **PAR:** N/A")

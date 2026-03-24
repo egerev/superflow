@@ -16,7 +16,7 @@ from lib.supervisor import (
     _resolve_baseline_cmd, run_baseline_tests,
     run_holistic_review, _detect_codex, _run_single_reviewer,
     _build_holistic_prompt,
-    VALID_PASS_VERDICTS, REQUIRED_PAR_KEYS, REQUIRED_SUMMARY_KEYS,
+    VALID_PASS_VERDICTS, REQUIRED_PAR_KEYS, REQUIRED_HOLISTIC_KEYS, REQUIRED_SUMMARY_KEYS,
 )
 import lib.supervisor as supervisor_module
 from lib.queue import SprintQueue
@@ -257,16 +257,14 @@ class TestExecuteSprint(unittest.TestCase):
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
         mock_baseline.return_value = (True, "ok", False)
-        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
-                                         "claude_product": "APPROVE",
-                                         "codex_code_review": "APPROVE",
-                                         "codex_product": "APPROVE"}, [])
+        mock_par.return_value = (True, {"claude_product": "APPROVE",
+                                         "technical_review": "APPROVE"}, [])
 
         # Claude subprocess
         claude_output = (
             "Working on sprint...\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/1",'
-            '"tests":{"passed":5,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
+            '"tests":{"passed":5,"failed":0},"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
         claude_result = MagicMock(returncode=0, stdout=claude_output, stderr="")
         # gh pr view subprocess
@@ -323,17 +321,15 @@ class TestExecuteSprint(unittest.TestCase):
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
         mock_baseline.return_value = (True, "ok", False)
-        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
-                                         "claude_product": "APPROVE",
-                                         "codex_code_review": "APPROVE",
-                                         "codex_product": "APPROVE"}, [])
+        mock_par.return_value = (True, {"claude_product": "APPROVE",
+                                         "technical_review": "APPROVE"}, [])
 
         # First attempt fails (exit 1), retry succeeds
         fail_result = MagicMock(returncode=1, stdout="Error", stderr="")
         success_output = (
             "Done.\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/2",'
-            '"tests":{"passed":3,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
+            '"tests":{"passed":3,"failed":0},"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
         success_result = MagicMock(returncode=0, stdout=success_output, stderr="")
         gh_result = MagicMock(returncode=0, stdout="OPEN")
@@ -362,10 +358,8 @@ class TestExecuteSprint(unittest.TestCase):
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
         mock_baseline.return_value = (True, "ok", False)
-        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
-                                         "claude_product": "APPROVE",
-                                         "codex_code_review": "APPROVE",
-                                         "codex_product": "APPROVE"}, [])
+        mock_par.return_value = (True, {"claude_product": "APPROVE",
+                                         "technical_review": "APPROVE"}, [])
 
         # First: exit 0 but no JSON
         no_json = MagicMock(returncode=0, stdout="Done but forgot JSON", stderr="")
@@ -373,7 +367,7 @@ class TestExecuteSprint(unittest.TestCase):
         good_output = (
             "Done.\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/3",'
-            '"tests":{"passed":1,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
+            '"tests":{"passed":1,"failed":0},"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
         good_result = MagicMock(returncode=0, stdout=good_output, stderr="")
         gh_result = MagicMock(returncode=0, stdout="OPEN")
@@ -398,15 +392,13 @@ class TestExecuteSprint(unittest.TestCase):
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
         mock_baseline.return_value = (True, "ok", False)
-        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
-                                         "claude_product": "APPROVE",
-                                         "codex_code_review": "APPROVE",
-                                         "codex_product": "APPROVE"}, [])
+        mock_par.return_value = (True, {"claude_product": "APPROVE",
+                                         "technical_review": "APPROVE"}, [])
 
         claude_output = (
             "Log line 1\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/1",'
-            '"tests":{"passed":1,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
+            '"tests":{"passed":1,"failed":0},"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
         claude_result = MagicMock(returncode=0, stdout=claude_output, stderr="")
         gh_result = MagicMock(returncode=0, stdout="OPEN")
@@ -545,12 +537,9 @@ class TestRunLoop(unittest.TestCase):
         with open(os.path.join(self.tmpdir, ".holistic-review-evidence.json"), "w") as f:
             json.dump({
                 "verdict": "APPROVE",
-                "reviewers": {
-                    "claude_code_quality": "APPROVE",
-                    "claude_product": "APPROVE",
-                    "codex_code_review": "APPROVE",
-                    "codex_product": "APPROVE",
-                },
+                "claude_product": "APPROVE",
+                "technical_review": "APPROVE",
+                "provider": "split-focus",
             }, f)
 
     def tearDown(self):
@@ -642,12 +631,9 @@ class TestRunLoopParallel(unittest.TestCase):
         with open(os.path.join(self.tmpdir, ".holistic-review-evidence.json"), "w") as f:
             json.dump({
                 "verdict": "APPROVE",
-                "reviewers": {
-                    "claude_code_quality": "APPROVE",
-                    "claude_product": "APPROVE",
-                    "codex_code_review": "APPROVE",
-                    "codex_product": "APPROVE",
-                },
+                "claude_product": "APPROVE",
+                "technical_review": "APPROVE",
+                "provider": "split-focus",
             }, f)
         self.plan_path = os.path.join(self.tmpdir, "plans", "plan.md")
 
@@ -970,12 +956,9 @@ class TestShutdownFlag(unittest.TestCase):
             with open(os.path.join(tmpdir, ".holistic-review-evidence.json"), "w") as f:
                 json.dump({
                     "verdict": "APPROVE",
-                    "reviewers": {
-                        "claude_code_quality": "APPROVE",
-                        "claude_product": "APPROVE",
-                        "codex_code_review": "APPROVE",
-                        "codex_product": "APPROVE",
-                    },
+                    "claude_product": "APPROVE",
+                    "technical_review": "APPROVE",
+                    "provider": "split-focus",
                 }, f)
 
             sprints = [
@@ -1019,12 +1002,9 @@ class TestShutdownFlag(unittest.TestCase):
             with open(os.path.join(tmpdir, ".holistic-review-evidence.json"), "w") as f:
                 json.dump({
                     "verdict": "APPROVE",
-                    "reviewers": {
-                        "claude_code_quality": "APPROVE",
-                        "claude_product": "APPROVE",
-                        "codex_code_review": "APPROVE",
-                        "codex_product": "APPROVE",
-                    },
+                    "claude_product": "APPROVE",
+                    "technical_review": "APPROVE",
+                    "provider": "split-focus",
                 }, f)
 
             sprints = [
@@ -1080,12 +1060,9 @@ class TestCompletionReport(unittest.TestCase):
         evidence = {
             "timestamp": "2026-01-01T00:00:00Z",
             "verdict": "APPROVE",
-            "reviewers": {
-                "claude_code_quality": "APPROVE",
-                "claude_product": "APPROVE",
-                "codex_code_review": "APPROVE",
-                "codex_product": "APPROVE",
-            },
+            "claude_product": "APPROVE",
+            "technical_review": "APPROVE",
+            "provider": "split-focus",
         }
         with open(evidence_path, "w") as f:
             json.dump(evidence, f)
@@ -1108,16 +1085,14 @@ class TestCompletionReport(unittest.TestCase):
             "sprint_id": 1, "status": "completed",
             "summary": {
                 "tests": {"passed": 5, "failed": 0},
-                "par": {"claude_code_quality": "ACCEPTED", "claude_product": "ACCEPTED",
-                        "codex_code_review": "ACCEPTED", "codex_product": "ACCEPTED"},
+                "par": {"claude_product": "ACCEPTED", "technical_review": "APPROVE", "provider": "codex"},
             },
         })
         save_checkpoint(self.cp_dir, 2, {
             "sprint_id": 2, "status": "completed",
             "summary": {
                 "tests": {"passed": 10, "failed": 0},
-                "par": {"claude_code_quality": "ACCEPTED", "claude_product": "ACCEPTED",
-                        "codex_code_review": "ACCEPTED", "codex_product": "ACCEPTED"},
+                "par": {"claude_product": "ACCEPTED", "technical_review": "APPROVE", "provider": "codex"},
             },
         })
 
@@ -1130,8 +1105,8 @@ class TestCompletionReport(unittest.TestCase):
         self.assertIn("completed", report)
         self.assertIn("https://github.com/test/repo/pull/1", report)
         self.assertIn("5 passed, 0 failed", report)
-        self.assertIn("Claude-CQ=ACCEPTED", report)
-        self.assertIn("Codex-CR=ACCEPTED", report)
+        self.assertIn("Claude-Product=ACCEPTED", report)
+        self.assertIn("Technical-Review=APPROVE", report)
         self.assertIn("100%", report)
 
     def test_report_with_failures(self):
@@ -1149,7 +1124,7 @@ class TestCompletionReport(unittest.TestCase):
 
         save_checkpoint(self.cp_dir, 1, {
             "sprint_id": 1, "status": "completed",
-            "summary": {"tests": {"passed": 3, "failed": 0}, "par": {"claude_code_quality": "ACCEPTED", "claude_product": "ACCEPTED", "codex_code_review": "ACCEPTED", "codex_product": "ACCEPTED"}},
+            "summary": {"tests": {"passed": 3, "failed": 0}, "par": {"claude_product": "ACCEPTED", "technical_review": "APPROVE", "provider": "codex"}},
         })
         save_checkpoint(self.cp_dir, 2, {
             "sprint_id": 2, "status": "failed",
@@ -1216,12 +1191,10 @@ class TestValidateEvidenceVerdicts(unittest.TestCase):
         shutil.rmtree(self.tmpdir)
 
     def test_validate_evidence_valid(self):
-        """Valid 4-key PAR with APPROVE/ACCEPTED/PASS verdicts passes."""
+        """Valid 2-key PAR with APPROVE/ACCEPTED verdicts passes."""
         data = {
-            "claude_code_quality": "APPROVE",
             "claude_product": "ACCEPTED",
-            "codex_code_review": "PASS",
-            "codex_product": "APPROVE",
+            "technical_review": "APPROVE",
         }
         valid, errors = _validate_evidence_verdicts(data, REQUIRED_PAR_KEYS)
         self.assertTrue(valid)
@@ -1237,32 +1210,28 @@ class TestValidateEvidenceVerdicts(unittest.TestCase):
     def test_validate_evidence_missing_keys(self):
         """PAR evidence with missing keys returns errors."""
         data = {
-            "claude_code_quality": "APPROVE",
-            # missing claude_product, codex_code_review, codex_product
+            "claude_product": "APPROVE",
+            # missing technical_review
         }
         valid, errors = _validate_evidence_verdicts(data, REQUIRED_PAR_KEYS)
         self.assertFalse(valid)
-        self.assertEqual(len(errors), 3)  # 3 missing keys
+        self.assertEqual(len(errors), 1)  # 1 missing key
 
     def test_validate_evidence_invalid_verdict(self):
         """PAR evidence with invalid verdict value returns error."""
         data = {
-            "claude_code_quality": "APPROVE",
             "claude_product": "MAYBE",
-            "codex_code_review": "APPROVE",
-            "codex_product": "APPROVE",
+            "technical_review": "APPROVE",
         }
         valid, errors = _validate_evidence_verdicts(data, REQUIRED_PAR_KEYS)
         self.assertFalse(valid)
         self.assertTrue(any("MAYBE" in e for e in errors))
 
     def test_validate_evidence_frontend_required(self):
-        """With require_frontend=True and all 5 keys present, passes."""
+        """With require_frontend=True and all 3 keys present, passes."""
         evidence = {
-            "claude_code_quality": "APPROVE",
             "claude_product": "ACCEPTED",
-            "codex_code_review": "PASS",
-            "codex_product": "APPROVE",
+            "technical_review": "APPROVE",
             "frontend_verification": "PASS",
         }
         evidence_path = os.path.join(self.tmpdir, ".par-evidence.json")
@@ -1275,10 +1244,8 @@ class TestValidateEvidenceVerdicts(unittest.TestCase):
     def test_validate_evidence_frontend_missing(self):
         """With require_frontend=True and missing frontend_verification, fails."""
         evidence = {
-            "claude_code_quality": "APPROVE",
             "claude_product": "ACCEPTED",
-            "codex_code_review": "PASS",
-            "codex_product": "APPROVE",
+            "technical_review": "APPROVE",
         }
         evidence_path = os.path.join(self.tmpdir, ".par-evidence.json")
         with open(evidence_path, "w") as f:
@@ -1317,7 +1284,7 @@ class TestValidateSprintSummary(unittest.TestCase):
             "status": "completed",
             "pr_url": "https://github.com/test/repo/pull/1",
             "tests": {"passed": 5, "failed": 0},
-            "par": {"claude_code_quality": "ACCEPTED"},
+            "par": {"claude_product": "ACCEPTED", "technical_review": "APPROVE"},
         }
         valid, errors = _validate_sprint_summary(summary)
         self.assertTrue(valid)
@@ -1731,8 +1698,7 @@ class TestPARIntegration(unittest.TestCase):
         return (
             '{"status":"completed","pr_url":"' + pr_url + '",'
             '"tests":{"passed":5,"failed":0},'
-            '"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED",'
-            '"codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
+            '"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
 
     @patch("lib.supervisor.time.sleep")
@@ -1761,9 +1727,9 @@ class TestPARIntegration(unittest.TestCase):
 
         # First PAR call fails, second PAR call passes
         mock_par.side_effect = [
-            (False, {}, ["PAR: missing key 'claude_code_quality'"]),
-            (True, {"claude_code_quality": "APPROVE", "claude_product": "APPROVE",
-                     "codex_code_review": "APPROVE", "codex_product": "APPROVE"}, []),
+            (False, {}, ["PAR: missing key 'technical_review'"]),
+            (True, {"claude_product": "APPROVE",
+                     "technical_review": "APPROVE"}, []),
         ]
 
         cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
@@ -1831,8 +1797,7 @@ class TestPRValidationRetry(unittest.TestCase):
         return (
             '{"status":"completed","pr_url":"' + pr_url + '",'
             '"tests":{"passed":5,"failed":0},'
-            '"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED",'
-            '"codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
+            '"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
 
     @patch("lib.supervisor.time.sleep")
@@ -1849,10 +1814,8 @@ class TestPRValidationRetry(unittest.TestCase):
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
         mock_baseline.return_value = (True, "ok", False)
-        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
-                                         "claude_product": "APPROVE",
-                                         "codex_code_review": "APPROVE",
-                                         "codex_product": "APPROVE"}, [])
+        mock_par.return_value = (True, {"claude_product": "APPROVE",
+                                         "technical_review": "APPROVE"}, [])
 
         good_output = "Done.\n" + self._good_summary_json()
         claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
@@ -1879,10 +1842,8 @@ class TestPRValidationRetry(unittest.TestCase):
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
         mock_baseline.return_value = (True, "ok", False)
-        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
-                                         "claude_product": "APPROVE",
-                                         "codex_code_review": "APPROVE",
-                                         "codex_product": "APPROVE"}, [])
+        mock_par.return_value = (True, {"claude_product": "APPROVE",
+                                         "technical_review": "APPROVE"}, [])
 
         good_output = "Done.\n" + self._good_summary_json()
         claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
@@ -1927,8 +1888,7 @@ class TestMilestoneWrites(unittest.TestCase):
         return (
             '{"status":"completed","pr_url":"' + pr_url + '",'
             '"tests":{"passed":5,"failed":0},'
-            '"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED",'
-            '"codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}'
+            '"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
 
     @patch("lib.supervisor.time.sleep")
@@ -1945,10 +1905,8 @@ class TestMilestoneWrites(unittest.TestCase):
         wt_path = os.path.join(self.tmpdir, ".worktrees", "sprint-1")
         mock_create_wt.return_value = wt_path
         mock_baseline.return_value = (True, "ok", False)
-        mock_par.return_value = (True, {"claude_code_quality": "APPROVE",
-                                         "claude_product": "APPROVE",
-                                         "codex_code_review": "APPROVE",
-                                         "codex_product": "APPROVE"}, [])
+        mock_par.return_value = (True, {"claude_product": "APPROVE",
+                                         "technical_review": "APPROVE"}, [])
 
         good_output = "Done.\n" + self._good_summary_json()
         claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
@@ -2001,12 +1959,9 @@ class TestHolisticGate(unittest.TestCase):
         evidence = {
             "timestamp": "2026-01-01T00:00:00Z",
             "verdict": "APPROVE",
-            "reviewers": {
-                "claude_code_quality": "APPROVE",
-                "claude_product": "APPROVE",
-                "codex_code_review": "APPROVE",
-                "codex_product": "APPROVE",
-            },
+            "claude_product": "APPROVE",
+            "technical_review": "APPROVE",
+            "provider": "split-focus",
         }
         with open(evidence_path, "w") as f:
             json.dump(evidence, f)
@@ -2143,7 +2098,7 @@ class TestHolisticGateInRun(unittest.TestCase):
         # Create holistic evidence
         evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
         with open(evidence_path, "w") as f:
-            json.dump({"verdict": "APPROVE", "timestamp": "2026-01-01T00:00:00Z", "sprint_prs": ["https://github.com/test/repo/pull/1"], "reviewers": {"claude_code_quality": "APPROVE", "claude_product": "APPROVE", "codex_code_review": "APPROVE", "codex_product": "APPROVE"}}, f)
+            json.dump({"verdict": "APPROVE", "timestamp": "2026-01-01T00:00:00Z", "sprint_prs": ["https://github.com/test/repo/pull/1"], "claude_product": "APPROVE", "technical_review": "APPROVE", "provider": "split-focus"}, f)
 
         # Create checkpoint for the sprint (so report can read it)
         cp_dir = os.path.join(self.tmpdir, "checkpoints")
@@ -2180,7 +2135,7 @@ class TestHolisticGateInRun(unittest.TestCase):
         # Create evidence so it passes (must have valid reviewer verdicts)
         evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
         with open(evidence_path, "w") as f:
-            json.dump({"verdict": "APPROVE", "sprint_prs": ["https://github.com/test/repo/pull/1"], "reviewers": {"claude_code_quality": "APPROVE", "claude_product": "APPROVE", "codex_code_review": "APPROVE", "codex_product": "APPROVE"}}, f)
+            json.dump({"verdict": "APPROVE", "sprint_prs": ["https://github.com/test/repo/pull/1"], "claude_product": "APPROVE", "technical_review": "APPROVE", "provider": "split-focus"}, f)
 
         cp_dir = os.path.join(self.tmpdir, "checkpoints")
         save_checkpoint(cp_dir, 1, {
@@ -2200,7 +2155,7 @@ class TestHolisticGateInRun(unittest.TestCase):
 
 
 class TestHolisticReviewDispatch(unittest.TestCase):
-    """Sprint 4b: run_holistic_review() — 4 parallel reviewers, fix cycle, evidence."""
+    """Sprint 4b: run_holistic_review() — 2 parallel reviewers, fix cycle, evidence."""
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
@@ -2261,7 +2216,7 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         )
 
         result = _run_single_reviewer(
-            "claude_code_quality",
+            "technical_review",
             ["claude", "-p", "--verbose"],
             "review prompt",
             {},
@@ -2290,7 +2245,6 @@ class TestHolisticReviewDispatch(unittest.TestCase):
             stderr="",
         )
         mock_run.side_effect = [diff_result, diff_result,
-                                approve_result, approve_result,
                                 approve_result, approve_result]
 
         result = run_holistic_review(
@@ -2315,20 +2269,19 @@ class TestHolisticReviewDispatch(unittest.TestCase):
     @patch("lib.supervisor._detect_default_branch", return_value="main")
     @patch("lib.supervisor._detect_codex", return_value=True)
     @patch("lib.supervisor.subprocess.run")
-    def test_holistic_dispatches_4_reviewers_with_codex(self, mock_run, mock_codex, mock_branch):
-        """With Codex available: 2 claude -p + 2 codex exec calls."""
+    def test_holistic_dispatches_2_reviewers_with_codex(self, mock_run, mock_codex, mock_branch):
+        """With Codex available: 1 claude -p (product) + 1 codex exec (technical) calls."""
         q = self._make_queue()
 
-        # Set up side_effect: first calls are git diff (2 sprints), then 4 reviewers, then possibly fixer
+        # Set up side_effect: first calls are git diff (2 sprints), then 2 reviewers
         diff_result = MagicMock(returncode=0, stdout="diff --git a/f.py\n+line", stderr="")
         approve_result = MagicMock(
             returncode=0,
             stdout='Review OK.\n{"verdict": "APPROVE"}',
             stderr="",
         )
-        # 2 git diffs + 4 reviewers
+        # 2 git diffs + 2 reviewers
         mock_run.side_effect = [diff_result, diff_result,
-                                approve_result, approve_result,
                                 approve_result, approve_result]
 
         result = run_holistic_review(
@@ -2337,27 +2290,17 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         )
 
         self.assertTrue(result)
-        # Count subprocess calls: 2 git diff + 4 reviewers = 6
-        self.assertEqual(mock_run.call_count, 6)
+        # Count subprocess calls: 2 git diff + 2 reviewers = 4
+        self.assertEqual(mock_run.call_count, 4)
 
-        # Verify reviewer commands: 2 should be claude, 2 should be codex
-        reviewer_calls = mock_run.call_args_list[2:]  # skip git diffs
-        claude_calls = [c for c in reviewer_calls
-                        if c[0][0][0] == "claude" or (not c[0] and c[1].get("args", [""])[0] == "claude")]
-        codex_calls = [c for c in reviewer_calls
-                       if c[0][0][0] == "codex" or (not c[0] and c[1].get("args", [""])[0] == "codex")]
-
-        # With ThreadPoolExecutor, calls may come in any order.
-        # Check that at least some calls used claude and some used codex.
-        # Actually, since _run_single_reviewer is called inside threads,
-        # the subprocess calls happen per reviewer. Let's verify the evidence file.
+        # Verify the evidence file was written
         self.assertTrue(os.path.exists(self.evidence_path))
 
     @patch("lib.supervisor._detect_default_branch", return_value="main")
     @patch("lib.supervisor._detect_codex", return_value=False)
     @patch("lib.supervisor.subprocess.run")
-    def test_holistic_dispatches_4_splitfocus_without_codex(self, mock_run, mock_codex, mock_branch):
-        """Without Codex: 4 claude -p calls (split-focus)."""
+    def test_holistic_dispatches_2_splitfocus_without_codex(self, mock_run, mock_codex, mock_branch):
+        """Without Codex: 2 claude -p calls (split-focus)."""
         q = self._make_queue()
 
         diff_result = MagicMock(returncode=0, stdout="diff --git a/f.py\n+line", stderr="")
@@ -2367,7 +2310,6 @@ class TestHolisticReviewDispatch(unittest.TestCase):
             stderr="",
         )
         mock_run.side_effect = [diff_result, diff_result,
-                                approve_result, approve_result,
                                 approve_result, approve_result]
 
         result = run_holistic_review(
@@ -2376,10 +2318,10 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         )
 
         self.assertTrue(result)
-        # 2 git diff + 4 reviewers = 6
-        self.assertEqual(mock_run.call_count, 6)
+        # 2 git diff + 2 reviewers = 4
+        self.assertEqual(mock_run.call_count, 4)
 
-        # All 4 reviewer calls should be claude (no codex)
+        # All 2 reviewer calls should be claude (no codex)
         reviewer_calls = mock_run.call_args_list[2:]
         for c in reviewer_calls:
             cmd = c[0][0] if c[0] else c[1].get("args", [])
@@ -2390,7 +2332,7 @@ class TestHolisticReviewDispatch(unittest.TestCase):
     @patch("lib.supervisor._detect_codex", return_value=False)
     @patch("lib.supervisor.subprocess.run")
     def test_holistic_writes_evidence_on_approve(self, mock_run, mock_codex, mock_branch):
-        """All 4 APPROVE -> evidence file created with correct format."""
+        """All 2 APPROVE -> evidence file created with correct format."""
         q = self._make_queue()
 
         diff_result = MagicMock(returncode=0, stdout="diff content", stderr="")
@@ -2400,7 +2342,6 @@ class TestHolisticReviewDispatch(unittest.TestCase):
             stderr="",
         )
         mock_run.side_effect = [diff_result, diff_result,
-                                approve_result, approve_result,
                                 approve_result, approve_result]
 
         result = run_holistic_review(
@@ -2417,15 +2358,16 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         # Verify structure
         self.assertEqual(evidence["verdict"], "APPROVE")
         self.assertIn("timestamp", evidence)
-        self.assertIn("reviewers", evidence)
+        self.assertIn("claude_product", evidence)
+        self.assertIn("technical_review", evidence)
+        self.assertIn("provider", evidence)
         self.assertIn("sprint_prs", evidence)
         self.assertIn("findings_resolved", evidence)
 
-        # Verify all 4 reviewer keys present
-        reviewers = evidence["reviewers"]
-        for key in REQUIRED_PAR_KEYS:
-            self.assertIn(key, reviewers)
-            self.assertEqual(reviewers[key], "APPROVE")
+        # Verify both reviewer keys present with APPROVE
+        for key in REQUIRED_HOLISTIC_KEYS:
+            self.assertIn(key, evidence)
+            self.assertEqual(evidence[key], "APPROVE")
 
         # Verify sprint PRs
         self.assertEqual(len(evidence["sprint_prs"]), 2)
@@ -2446,14 +2388,14 @@ class TestHolisticReviewDispatch(unittest.TestCase):
             stderr="",
         )
 
-        # Attempt 1: 2 diffs + 3 approve + 1 request_changes
+        # Attempt 1: 2 diffs + 1 approve + 1 request_changes
         # Then fixer session (1 call)
         # Attempt 2: 1 re-run reviewer (approve this time)
         mock_run.side_effect = [
             # git diffs
             diff_result, diff_result,
-            # 4 reviewers (attempt 1) — one fails
-            approve, approve, approve, request_changes,
+            # 2 reviewers (attempt 1) — one fails
+            approve, request_changes,
             # fixer session
             MagicMock(returncode=0, stdout="Fixed.", stderr=""),
             # re-run failing reviewer (attempt 2)
@@ -2466,8 +2408,8 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         )
 
         self.assertTrue(result)
-        # Should have more calls than initial 6 (diff + reviewers)
-        self.assertGreater(mock_run.call_count, 6)
+        # Should have more calls than initial 4 (2 diffs + 2 reviewers)
+        self.assertGreater(mock_run.call_count, 4)
 
     @patch("lib.supervisor._detect_default_branch", return_value="main")
     @patch("lib.supervisor._detect_codex", return_value=False)
@@ -2486,13 +2428,13 @@ class TestHolisticReviewDispatch(unittest.TestCase):
         fixer_ok = MagicMock(returncode=0, stdout="Attempted fix.", stderr="")
 
         # max_retries=1 means: attempt 0 (initial) + attempt 1 (retry) = 2 total
-        # Attempt 0: 2 diffs + 4 reviewers (1 fails)
+        # Attempt 0: 2 diffs + 2 reviewers (1 fails)
         # Fixer + Attempt 1: re-run 1 reviewer (still fails)
         mock_run.side_effect = [
             # git diffs
             diff_result, diff_result,
-            # 4 reviewers (attempt 0) — one always fails
-            approve, approve, approve, request_changes,
+            # 2 reviewers (attempt 0) — one always fails
+            approve, request_changes,
             # fixer
             fixer_ok,
             # re-run failing reviewer (attempt 1) — still fails
@@ -2519,7 +2461,7 @@ class TestHolisticReviewDispatch(unittest.TestCase):
     @patch("lib.supervisor._detect_codex", return_value=False)
     @patch("lib.supervisor.subprocess.run")
     def test_holistic_fix_cycle_reruns_only_failing(self, mock_run, mock_codex, mock_branch):
-        """Only failing reviewers re-run in retry, not all 4."""
+        """Only failing reviewers re-run in retry, not all 2."""
         q = self._make_queue()
 
         diff_result = MagicMock(returncode=0, stdout="diff content", stderr="")
@@ -2541,14 +2483,14 @@ class TestHolisticReviewDispatch(unittest.TestCase):
             # Return results in order
             return mock_run(*args, **kwargs)
 
-        # Attempt 0: 2 diffs + 4 reviewers (last one fails = codex_product)
+        # Attempt 0: 2 diffs + 2 reviewers (last one fails = technical_review)
         # Fixer session
-        # Attempt 1: only the failing reviewer re-runs (1 call, not 4)
+        # Attempt 1: only the failing reviewer re-runs (1 call, not 2)
         mock_run.side_effect = [
             # git diffs
             diff_result, diff_result,
-            # 4 reviewers attempt 0
-            approve, approve, approve, request_changes,
+            # 2 reviewers attempt 0
+            approve, request_changes,
             # fixer session
             fixer_ok,
             # Only 1 re-run (the failing reviewer)
@@ -2562,10 +2504,10 @@ class TestHolisticReviewDispatch(unittest.TestCase):
 
         self.assertTrue(result)
 
-        # Total calls: 2 (diffs) + 4 (initial reviewers) + 1 (fixer) + 1 (re-run) = 8
-        # NOT 2 + 4 + 1 + 4 = 11 (if all were re-run)
-        self.assertEqual(mock_run.call_count, 8,
-                         f"Expected 8 subprocess calls (2 diff + 4 initial + 1 fixer + 1 re-run), "
+        # Total calls: 2 (diffs) + 2 (initial reviewers) + 1 (fixer) + 1 (re-run) = 6
+        # NOT 2 + 2 + 1 + 2 = 7 (if all were re-run)
+        self.assertEqual(mock_run.call_count, 6,
+                         f"Expected 6 subprocess calls (2 diff + 2 initial + 1 fixer + 1 re-run), "
                          f"got {mock_run.call_count}")
 
     @patch("lib.supervisor.run_holistic_review")
@@ -2591,12 +2533,9 @@ class TestHolisticReviewDispatch(unittest.TestCase):
             evidence = {
                 "timestamp": "2026-01-01T00:00:00Z",
                 "verdict": "APPROVE",
-                "reviewers": {
-                    "claude_code_quality": "APPROVE",
-                    "claude_product": "APPROVE",
-                    "codex_code_review": "APPROVE",
-                    "codex_product": "APPROVE",
-                },
+                "claude_product": "APPROVE",
+                "technical_review": "APPROVE",
+                "provider": "split-focus",
                 "sprint_prs": [],
                 "findings_resolved": 0,
             }
@@ -2681,12 +2620,9 @@ class TestFix1StaleHolisticEvidence(unittest.TestCase):
                 "verdict": "APPROVE",
                 "timestamp": "2026-01-01T00:00:00Z",
                 "sprint_prs": ["https://github.com/test/repo/pull/STALE"],
-                "reviewers": {
-                    "claude_code_quality": "APPROVE",
-                    "claude_product": "APPROVE",
-                    "codex_code_review": "APPROVE",
-                    "codex_product": "APPROVE",
-                },
+                "claude_product": "APPROVE",
+                "technical_review": "APPROVE",
+                "provider": "split-focus",
             }, f)
 
         save_checkpoint(self.cp_dir, 1, {
@@ -2719,12 +2655,9 @@ class TestFix1StaleHolisticEvidence(unittest.TestCase):
                 "verdict": "APPROVE",
                 "timestamp": "2026-01-01T00:00:00Z",
                 "sprint_prs": ["https://github.com/test/repo/pull/1"],
-                "reviewers": {
-                    "claude_code_quality": "APPROVE",
-                    "claude_product": "APPROVE",
-                    "codex_code_review": "APPROVE",
-                    "codex_product": "APPROVE",
-                },
+                "claude_product": "APPROVE",
+                "technical_review": "APPROVE",
+                "provider": "split-focus",
             }, f)
 
         save_checkpoint(self.cp_dir, 1, {
@@ -2813,7 +2746,7 @@ class TestFix2DetectDefaultBranch(unittest.TestCase):
         approve_output = '{"verdict": "APPROVE"}'
         approve = MagicMock(returncode=0, stdout=approve_output, stderr="")
         diff = MagicMock(returncode=0, stdout="diff", stderr="")
-        mock_run.side_effect = [diff, approve, approve, approve, approve]
+        mock_run.side_effect = [diff, approve, approve]
 
         run_holistic_review(q, queue_path, self.tmpdir, None, cp_dir, timeout=60)
 
@@ -2954,7 +2887,7 @@ class TestFix5HolisticFailurePersistsFindings(unittest.TestCase):
 
         mock_run.side_effect = [
             diff_result,
-            approve, approve, approve, request_changes,
+            approve, request_changes,
             fixer_ok,
             request_changes,
         ]

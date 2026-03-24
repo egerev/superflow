@@ -2,6 +2,26 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [3.3.0] - 2026-03-24
+
+### Changed — Review Deduplication & Speed Optimization
+- **Unified Review 4→2 agents**: specialize, don't duplicate — Claude handles Product lens (spec fit, user scenarios, data integrity), secondary provider handles Technical lens (correctness, security, architecture). Halves review time and token cost with the same coverage
+- **Holistic Review 4→2 agents**: same specialization principle — Claude deep-product + Codex technical (or 2 split-focus Claude)
+- **Spec review reasoning xhigh→high**: spec review is high-stakes but xhigh was overkill — `model_reasoning_effort=high` is sufficient
+- **Split-focus fallback simplified**: no secondary provider = 2 Claude agents (Product + Technical) instead of 4 with overlapping roles
+- **.par-evidence.json new format**: 2 keys (`claude_product`, `technical_review`) + `provider` field, replaces 4-key format
+- **Holistic evidence**: separate `REQUIRED_HOLISTIC_KEYS` constant, flat JSON with `claude_product` + `technical_review`
+
+### Added
+- **Phase 0 Codex security audit**: 5th agent in onboarding — Codex runs `prompts/codex/audit.md` security section
+- **Claude security fallback**: new `prompts/security-audit.md` — when Codex unavailable, Claude deep-analyst runs security audit instead of skipping
+- **Phase 0 agent focus separation**: Architecture (code structure, module boundaries, data model) vs DevOps (CI/CD, Docker, deployment, infrastructure) — no overlap
+
+### Removed
+- Duplicated Claude code-quality + Codex code reviewer in per-sprint PAR (replaced by single technical reviewer)
+- Duplicated Claude product + Codex product reviewer in per-sprint PAR (replaced by single product reviewer)
+- `codex_code_review` and `codex_product` PAR evidence keys (replaced by `technical_review`)
+
 ## [3.2.0] - 2026-03-24
 
 ### Added — Supervisor Enforcement Hardening

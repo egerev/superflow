@@ -47,6 +47,7 @@ Stage 2: "Analysis"
   - "Dispatch code quality agent"
   - "Dispatch DevOps agent"
   - "Dispatch documentation agent"
+  - "Dispatch Codex security agent (if available)"
   - "Synthesize health report"
 
 Stage 3: "Proposal"
@@ -544,9 +545,9 @@ Phase 1 proceeds normally — the user describes what they want to build against
 ---
 
 ## Step 2: Project Analysis (background)
-<!-- Stage 2: Analysis, Todos 1-4 -->
+<!-- Stage 2: Analysis, Todos 1-5 -->
 
-Dispatch **4 parallel agents** using the Agent tool (`run_in_background: true`, `model: opus` for each).
+Dispatch **4 parallel Claude agents** using the Agent tool (`run_in_background: true`, `model: opus` for each), plus a **5th Codex security audit** if Codex is available.
 
 **Critical: use Opus for analysis, not Sonnet.** Wrong documentation is worse than no documentation — a Sonnet agent may hallucinate framework names based on directory structure (e.g., calling pydantic_graph "LangGraph" because the directory is named `graph/`). Analysis agents must verify by reading actual imports and code, not guessing from names.
 
@@ -554,6 +555,7 @@ Each agent prompt MUST include `ultrathink`, the **mandatory checks** below, AND
 
 ```
 Agent(description: "Architecture analysis", run_in_background: true, model: opus)
+  Focus: code structure, module boundaries, data model, patterns.
   ultrathink. Mandatory checks — show evidence for each:
   1. List all top-level directories with file counts and total LOC per directory
   2. Identify frameworks/libraries by reading actual `import` statements (NOT by guessing from directory names)
@@ -573,6 +575,7 @@ Agent(description: "Code quality analysis", run_in_background: true, model: opus
   7. Find dead code: unused imports, unreachable functions (if tooling available)
 
 Agent(description: "DevOps analysis", run_in_background: true, model: opus)
+  Focus: CI/CD, Docker, deployment config, .env handling, infrastructure.
   ultrathink. Mandatory checks — show evidence for each:
   1. Docker Compose: count services, check for `latest` tags (non-deterministic), check volume mounts
   2. CI/CD: list all GitHub Actions workflows, check what they actually test/deploy
@@ -592,12 +595,20 @@ Agent(description: "Documentation analysis", run_in_background: true, model: opu
   6. API documentation: is it auto-generated or manual? Is it current?
 ```
 
-All 4 agents run in parallel. Wait for all to complete, then synthesize into a concise project profile.
+**5. Codex security audit** (if Codex available):
+```
+$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high "$(cat prompts/codex/audit.md)" 2>&1
+```
+Run in background. Focus: security anti-patterns, hardcoded secrets, CI/CD gaps, dependency vulnerabilities.
+If no Codex: dispatch Claude security agent instead:
+`Agent(subagent_type: "deep-analyst", run_in_background: true, prompt: "[contents of prompts/security-audit.md] Perform a full security audit of this project.")`
+
+All 5 agents (4 Claude + Codex or Claude security) run in parallel. Wait for all to complete, then synthesize into a concise project profile.
 
 **After synthesis, cross-check**: do framework/library names in the profile match actual `import` statements in code? Do file counts match across agents? Resolve discrepancies before proceeding.
 
 ## Step 3: Present Project Health Report
-<!-- Stage 2: Analysis, Todo 5 -->
+<!-- Stage 2: Analysis, Todo 6 -->
 
 Show the user the results conversationally — like a colleague who just explored the codebase. **Every claim must have evidence** (file path, count, command output).
 

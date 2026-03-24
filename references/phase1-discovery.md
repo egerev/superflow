@@ -219,11 +219,11 @@ Create `docs/superflow/specs/` if it doesn't exist.
 
 Run two reviewers in parallel. Both reviewers receive the product brief AND the spec.
 
-1. **Claude reviewer**: `Agent(subagent_type: "deep-spec-reviewer", run_in_background: true, prompt: "Review this spec for completeness, security, architecture. Spec: [SPEC TEXT]")`. Focus: spec completeness, security, architecture.
-2. **Secondary provider**: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=xhigh --ephemeral "Spec review. Check completeness, security, architecture against: [SPEC TEXT]" 2>&1` via Bash (`run_in_background: true`).
-   No secondary provider = split-focus Claude: dispatch two background agents (Technical: completeness + security; Product: scope + YAGNI).
+1. **Claude reviewer (PRODUCT lens)**: `Agent(subagent_type: "deep-product-reviewer", run_in_background: true, prompt: "Review this spec for product completeness, scope alignment, user story coverage. Spec: [SPEC TEXT]")`. Focus: product completeness, scope alignment, user story coverage.
+2. **Secondary provider (TECHNICAL lens)**: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high --ephemeral "Spec review. Check completeness, security, architecture against: [SPEC TEXT]" 2>&1` via Bash (`run_in_background: true`).
+   No secondary provider = split-focus Claude: Product (`deep-product-reviewer`) + Technical (`deep-spec-reviewer`).
 
-> **Reasoning:** Deep tier — spec review is the highest-stakes gate before implementation begins.
+> **Reasoning:** Spec review is high-stakes but `xhigh` reasoning was overkill — `high` is sufficient for catching real issues without excessive latency.
 
 Wait for both. If either returns NEEDS_REVISION: fix issues, re-run both reviews.
 Both must return PASS to proceed.
@@ -240,9 +240,9 @@ Break into sprints (independently deployable), 3-8 tasks each, each task 2-5 min
 
 Run two reviewers in parallel (same mechanism as Step 8):
 
-1. **Claude reviewer**: `Agent(subagent_type: "standard-spec-reviewer", run_in_background: true, prompt: "Review this plan for achievability, scoping, dependencies. Plan: [PLAN TEXT]")`. Is the plan achievable? Are sprints properly scoped? Are task estimates realistic? Dependencies correct?
-2. **Secondary provider**: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high --ephemeral "Plan review. Check achievability, scoping, dependencies against: [PLAN TEXT]" 2>&1` via Bash (`run_in_background: true`). Are there missing tasks? Over-engineering? Does sprint ordering make sense?
-   No secondary provider = split-focus Claude (Technical + Product lenses).
+1. **Claude reviewer (PRODUCT lens)**: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "Review this plan for product feasibility, scope correctness, user value alignment. Plan: [PLAN TEXT]")`. Does the plan deliver user value? Is scope correct? Are priorities aligned with the brief?
+2. **Secondary provider (TECHNICAL lens)**: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high --ephemeral "Plan review. Check achievability, scoping, dependencies against: [PLAN TEXT]" 2>&1` via Bash (`run_in_background: true`). Are there missing tasks? Over-engineering? Does sprint ordering make sense?
+   No secondary provider = split-focus Claude: Product (`standard-product-reviewer`) + Technical (`standard-spec-reviewer`).
 
 > **Reasoning:** Standard tier — plan review checks structure and feasibility, not deep architectural decisions.
 

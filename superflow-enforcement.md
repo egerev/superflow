@@ -6,21 +6,19 @@ Survives context compaction. SKILL.md does not.
 
 1. **Subagents write all code.** Orchestrator reads, plans, reviews, dispatches.
 2. **Git worktrees per sprint.** `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`. Verify `.worktrees/` is in `.gitignore` before creating (`git check-ignore -q .worktrees`).
-3. **Unified Review before every PR** (4 agents, all receive SPEC + brief):
-   1. Dispatch Claude code-quality reviewer (subagent_type: standard-code-reviewer). `run_in_background: true`
-   2. Dispatch Claude product reviewer (subagent_type: standard-product-reviewer). `run_in_background: true`
-   3. Dispatch Codex code reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=high --ephemeral`
-   4. Dispatch Codex product reviewer: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high`
-   5. Wait for all 4. Fix confirmed issues (NEEDS_FIXES, REQUEST_CHANGES, or FAIL). Re-review only flagging agents.
-   6. Write `.par-evidence.json`: `{"sprint":N,"claude_code_quality":"APPROVE","claude_product":"ACCEPTED","codex_code_review":"APPROVE","codex_product":"ACCEPTED","ts":"..."}`
-   7. GATE: `git push` / `gh pr create` blocked until `.par-evidence.json` exists with all 4 verdicts passing.
-   8. Pass verdicts: APPROVE, ACCEPTED, PASS. Fail verdicts: REQUEST_CHANGES, NEEDS_FIXES, FAIL. The orchestrator must accept any pass verdict from any agent role.
+3. **Unified Review before every PR** (2 agents, specialized: Claude=Product, Secondary=Technical):
+   1. Dispatch Claude product reviewer (subagent_type: standard-product-reviewer). `run_in_background: true`
+   2. Dispatch secondary technical reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=high --ephemeral` (or Claude code-quality if no secondary)
+   3. Wait for both. Fix confirmed issues (NEEDS_FIXES, REQUEST_CHANGES, or FAIL). Re-review only flagging agent.
+   4. Write `.par-evidence.json`: `{"sprint":N,"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex|split-focus","ts":"..."}`
+   5. GATE: `git push` / `gh pr create` blocked until `.par-evidence.json` exists with both verdicts passing.
+   6. Pass verdicts: APPROVE, ACCEPTED, PASS. Fail verdicts: REQUEST_CHANGES, NEEDS_FIXES, FAIL.
 4. **Tests with evidence.** Paste actual output before claiming done.
 5. **Re-read phase docs** at each sprint boundary via Read tool.
-6. **Dual-model reviews mandatory.** Use secondary provider for spec review, plan review, and PAR.
-7. **No secondary provider = four split-focus Claude agents.** Technical (code-quality-reviewer), Product (product-reviewer), Architecture (spec compliance), UX (user scenarios). Never skip the second pair.
+6. **Dual-model reviews: specialize, don't duplicate.** Claude = Product lens (spec fit, user scenarios, data integrity). Secondary provider = Technical lens (correctness, security, architecture). Each model reviews what it's best at — no overlapping roles.
+7. **No secondary provider = two Claude agents.** Product (product-reviewer) + Technical (code-quality-reviewer). Same split, same coverage, just both Claude.
 8. **One PR per sprint.** Execute silently after plan approval.
-9. **Final Holistic Review after all sprints.** Four reviewers (2 Claude deep-tier + 2 Codex xhigh, or 4 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint review misses cross-module issues.
+9. **Final Holistic Review after all sprints.** Two reviewers (Claude deep-product + Codex xhigh technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint review misses cross-module issues.
 
 ## Secondary Provider Invocation
 
@@ -33,14 +31,14 @@ $TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=<LEVEL>
 
 # Gemini: $TIMEOUT_CMD 600 gemini "PROMPT_HERE" 2>&1
 # Other:  $TIMEOUT_CMD 600 $SECONDARY_PROVIDER <non-interactive-flag> "PROMPT_HERE" 2>&1
-# None:   dispatch four Claude agents with split focus (Technical, Product, Architecture, UX)
+# None:   dispatch two Claude agents with split focus (Product + Technical)
 ```
 
 ## Reasoning Tiers
 
 | Tier | Claude Agent (subagent_type) | Codex | When |
 |------|-------------------------------|-------|------|
-| **deep** | `deep-spec-reviewer`, `deep-code-reviewer`, `deep-product-reviewer`, `deep-analyst`, `deep-doc-writer`, `deep-implementer` (opus, effort: high) | `-c model_reasoning_effort=xhigh` + `prompts/codex/` | Phase 0 audit, Phase 1 spec review, Phase 2 final holistic, llms.txt/CLAUDE.md generation |
+| **deep** | `deep-spec-reviewer`, `deep-code-reviewer`, `deep-product-reviewer`, `deep-analyst`, `deep-doc-writer`, `deep-implementer` (opus, effort: high) | `-c model_reasoning_effort=high` + `prompts/codex/` | Phase 0 audit+security, Phase 1 spec review, Phase 2 final holistic, llms.txt/CLAUDE.md generation |
 | **standard** | `standard-spec-reviewer`, `standard-code-reviewer`, `standard-product-reviewer`, `standard-doc-writer`, `standard-implementer` (opus, effort: medium) | `-c model_reasoning_effort=high` + `prompts/codex/` | Phase 1 plan review, Phase 2 unified review, Phase 3 doc updates |
 | **fast** | `fast-implementer` (sonnet, effort: low) | `-c model_reasoning_effort=medium` | Simple implementation tasks |
 
@@ -59,7 +57,7 @@ Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` du
 If you think any of these, STOP and do the thing:
 - "I'll write the code directly" → dispatch subagent
 - "Too simple for a worktree" → create worktree
-- "Two reviewers is enough" → dispatch all 4 reviewers
+- "One reviewer is enough" → dispatch both reviewers (Product + Technical)
 - "I'll ask the user during Phase 2" → Phase 2 is autonomous
 - "One big PR is easier" → one PR per sprint
 - "This sprint is too small for PAR" → run PAR
