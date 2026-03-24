@@ -276,7 +276,6 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
     else:
         queue.mark_in_progress(sid)
         queue.save(queue_path)
-        _write_state(repo_root, phase=2, sprint=sid, stage="setup", queue=queue)
 
     # 2. Notify sprint start
     if notifier:
@@ -290,8 +289,12 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         "sprint_id": sid, "status": "in_progress", "started_at": _now_iso(),
     })
 
-    # 3. Create worktree
+    # 4. Create worktree
     wt_path = create_worktree(sprint, repo_root)
+
+    # 5. Write state AFTER worktree creation (sequential mode only)
+    if not queue_lock:
+        _write_state(repo_root, phase=2, sprint=sid, stage="setup", queue=queue)
 
     try:
         result = _attempt_sprint(sprint, queue, queue_path, checkpoints_dir,

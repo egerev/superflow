@@ -67,7 +67,7 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 | `lib/supervisor.py` | 743 (~572 LOC) | Core supervisor: worktree lifecycle, sprint execution, run loop, reports |
 | `lib/queue.py` | 114 (~98 LOC) | Sprint queue with DAG dependency resolution, atomic saves |
 | `lib/checkpoint.py` | 37 (~31 LOC) | Checkpoint save/load for crash recovery |
-| `lib/parallel.py` | 38 (~31 LOC) | ThreadPoolExecutor-based concurrent sprint execution |
+| `lib/parallel.py` | 52 (~40 LOC) | ThreadPoolExecutor-based concurrent sprint execution + state writes |
 | `lib/replanner.py` | 212 (~168 LOC) | Adaptive replanner — adjusts remaining sprints via Claude |
 | `lib/notifications.py` | 134 (~110 LOC) | Telegram Bot API + stdout fallback, 11 event types |
 | `templates/supervisor-sprint-prompt.md` | 25 | Sprint execution prompt with placeholders |

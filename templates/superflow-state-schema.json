@@ -9,7 +9,7 @@
     "phase_label": {"type": "string"},
     "sprint": {"type": ["integer", "null"]},
     "stage": {"type": "string"},
-    "stage_index": {"type": "integer", "minimum": 0},
+    "stage_index": {"type": "integer"},
     "tasks_done": {"type": "array", "items": {"type": "integer"}},
     "tasks_total": {"type": "integer"},
     "last_updated": {"type": "string", "format": "date-time"},
