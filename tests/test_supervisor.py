@@ -3035,5 +3035,211 @@ class TestVerifySteps(unittest.TestCase):
         self.assertEqual(sorted(missing), sorted(REQUIRED_STEPS))
 
 
+class TestGenerateCompletionReport(unittest.TestCase):
+    """Focused tests for generate_completion_report() covering sprint blocks,
+    PR URLs, test counts, PAR verdicts, holistic verdicts, missing checkpoints,
+    and file output."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        self._create_holistic_evidence()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _create_holistic_evidence(self, verdicts=None):
+        """Create .holistic-review-evidence.json in parent of cp_dir."""
+        evidence_path = os.path.join(
+            os.path.dirname(self.cp_dir),
+            ".holistic-review-evidence.json",
+        )
+        evidence = verdicts or {
+            "timestamp": "2026-01-01T00:00:00Z",
+            "claude_product": "APPROVE",
+            "technical_review": "APPROVE",
+            "provider": "split-focus",
+        }
+        with open(evidence_path, "w") as f:
+            json.dump(evidence, f)
+
+    def _make_queue(self, sprints):
+        return SprintQueue("test-feature", "2026-01-01T00:00:00Z", sprints)
+
+    def test_report_contains_all_sprint_blocks(self):
+        """Each completed sprint appears as its own '## Sprint N: Title' block."""
+        sprints = [
+            _sprint(sid=1, title="Auth Module", status="completed"),
+            _sprint(sid=2, title="API Layer", status="completed"),
+            _sprint(sid=3, title="Frontend", status="completed"),
+        ]
+        q = self._make_queue(sprints)
+        # Create minimal checkpoints for each sprint
+        for s in sprints:
+            save_checkpoint(self.cp_dir, s["id"], {
+                "sprint_id": s["id"], "status": "completed", "summary": {},
+            })
+
+        report = generate_completion_report(q, self.cp_dir)
+
+        self.assertIn("## Sprint 1: Auth Module", report)
+        self.assertIn("## Sprint 2: API Layer", report)
+        self.assertIn("## Sprint 3: Frontend", report)
+        # Verify all three blocks are separate (count occurrences of "## Sprint")
+        self.assertEqual(report.count("## Sprint"), 3)
+
+    def test_report_includes_pr_urls(self):
+        """PR URLs from sprint data appear in the report output."""
+        sprints = [
+            _sprint(sid=1, title="Sprint A", status="completed"),
+            _sprint(sid=2, title="Sprint B", status="completed"),
+        ]
+        sprints[0]["pr"] = "https://github.com/org/repo/pull/42"
+        sprints[1]["pr"] = "https://github.com/org/repo/pull/43"
+        q = self._make_queue(sprints)
+        for s in sprints:
+            save_checkpoint(self.cp_dir, s["id"], {
+                "sprint_id": s["id"], "status": "completed", "summary": {},
+            })
+
+        report = generate_completion_report(q, self.cp_dir)
+
+        self.assertIn("https://github.com/org/repo/pull/42", report)
+        self.assertIn("https://github.com/org/repo/pull/43", report)
+
+    def test_report_includes_test_counts(self):
+        """Test pass/fail counts from checkpoint summaries appear in the report."""
+        sprints = [
+            _sprint(sid=1, title="Core", status="completed"),
+            _sprint(sid=2, title="Extensions", status="completed"),
+        ]
+        q = self._make_queue(sprints)
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed",
+            "summary": {"tests": {"passed": 12, "failed": 1}},
+        })
+        save_checkpoint(self.cp_dir, 2, {
+            "sprint_id": 2, "status": "completed",
+            "summary": {"tests": {"passed": 25, "failed": 0}},
+        })
+
+        report = generate_completion_report(q, self.cp_dir)
+
+        self.assertIn("12 passed, 1 failed", report)
+        self.assertIn("25 passed, 0 failed", report)
+
+    def test_report_includes_par_verdicts(self):
+        """PAR evidence (claude_product, technical_review, provider) appears in the report."""
+        sprints = [_sprint(sid=1, title="Main", status="completed")]
+        q = self._make_queue(sprints)
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed",
+            "summary": {
+                "tests": {"passed": 5, "failed": 0},
+                "par": {
+                    "claude_product": "ACCEPTED",
+                    "technical_review": "APPROVE",
+                    "provider": "codex",
+                },
+            },
+        })
+
+        report = generate_completion_report(q, self.cp_dir)
+
+        self.assertIn("Claude-Product=ACCEPTED", report)
+        self.assertIn("Technical-Review=APPROVE", report)
+        self.assertIn("provider: codex", report)
+
+    def test_report_includes_holistic_verdict(self):
+        """When holistic review evidence has specific verdicts, the report generates
+        successfully (the gate validates the verdicts). Non-passing verdicts block."""
+        # Passing case: holistic evidence already created in setUp with APPROVE verdicts
+        sprints = [_sprint(sid=1, title="Sprint X", status="completed")]
+        q = self._make_queue(sprints)
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+
+        # Should succeed (holistic evidence passes gate)
+        report = generate_completion_report(q, self.cp_dir)
+        self.assertIn("# Completion Report", report)
+
+        # Now overwrite with a failing holistic verdict
+        self._create_holistic_evidence({
+            "claude_product": "NEEDS_FIXES",
+            "technical_review": "APPROVE",
+        })
+
+        with self.assertRaises(RuntimeError) as ctx:
+            generate_completion_report(q, self.cp_dir)
+        self.assertIn("invalid verdicts", str(ctx.exception))
+
+    def test_report_handles_missing_checkpoints(self):
+        """Report works gracefully when checkpoint data is missing for a sprint."""
+        sprints = [
+            _sprint(sid=1, title="With CP", status="completed"),
+            _sprint(sid=2, title="Without CP", status="completed"),
+        ]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/10"
+        sprints[1]["pr"] = "https://github.com/test/repo/pull/11"
+        q = self._make_queue(sprints)
+
+        # Only create checkpoint for sprint 1; sprint 2 has none
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed",
+            "summary": {
+                "tests": {"passed": 8, "failed": 0},
+                "par": {"claude_product": "ACCEPTED", "technical_review": "APPROVE", "provider": "codex"},
+            },
+        })
+
+        report = generate_completion_report(q, self.cp_dir)
+
+        # Sprint 1 has full data
+        self.assertIn("8 passed, 0 failed", report)
+        self.assertIn("Claude-Product=ACCEPTED", report)
+        # Sprint 2 falls back to N/A for tests and PAR
+        # Count "Tests:** N/A" — should appear for sprint 2
+        self.assertIn("## Sprint 2: Without CP", report)
+        # The sprint without checkpoint should show N/A for tests and PAR
+        lines = report.split("\n")
+        sprint2_section = False
+        sprint2_tests_na = False
+        sprint2_par_na = False
+        for line in lines:
+            if "## Sprint 2" in line:
+                sprint2_section = True
+            elif line.startswith("## Sprint") and sprint2_section:
+                break
+            elif sprint2_section and "**Tests:** N/A" in line:
+                sprint2_tests_na = True
+            elif sprint2_section and "**PAR:** N/A" in line:
+                sprint2_par_na = True
+        self.assertTrue(sprint2_tests_na, "Sprint 2 should show Tests: N/A")
+        self.assertTrue(sprint2_par_na, "Sprint 2 should show PAR: N/A")
+
+    def test_report_output_to_file(self):
+        """Report is written to the specified output path and content matches return value."""
+        sprints = [_sprint(sid=1, title="File Test", status="completed")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/99"
+        q = self._make_queue(sprints)
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed",
+            "summary": {"tests": {"passed": 3, "failed": 0}},
+        })
+
+        output_path = os.path.join(self.tmpdir, "output", "completion.md")
+        report = generate_completion_report(q, self.cp_dir, output_path=output_path)
+
+        # File must exist
+        self.assertTrue(os.path.exists(output_path))
+        # File content must match returned string
+        with open(output_path) as f:
+            file_content = f.read()
+        self.assertEqual(report, file_content)
+        # Verify it's valid markdown with expected header
+        self.assertTrue(file_content.startswith("# Completion Report"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -54,6 +54,12 @@ If you wrote production code before the test: set it aside and restart from the 
 - After 1-2 failed fix attempts: re-read the error, form a new hypothesis, try a different approach.
 - After 3+ failed fix attempts: stop. This usually signals an architectural issue rather than a simple bug. Report BLOCKED with evidence of what you tried and suggest the approach may need rethinking.
 - If you lack information to proceed: report NEEDS_CONTEXT with what you tried and what you need.
+
+## Deep Implementation (high-effort only)
+- Before coding: write a brief design note (3-5 sentences) explaining your approach and why.
+- Consider 2 alternative approaches before committing to one. Note trade-offs.
+- Integration tests required: not just unit tests, but tests that verify module interaction.
+- Document non-obvious decisions with inline comments explaining "why", not "what".
 </instructions>
 
 <constraints>

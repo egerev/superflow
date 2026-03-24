@@ -40,6 +40,12 @@ Check each of the following areas:
    _Why: Tests that exist but were not run may be broken or outdated._
 
 Focus on issues that would cause real problems during integration or for end users. Cosmetic or stylistic deviations from the spec are acceptable if the behavior is correct.
+
+## Deep Analysis (high-effort only)
+- Specification completeness: are there implicit requirements not captured in the spec?
+- Contradiction detection: do any requirements conflict with each other or with existing system behavior?
+- Testability: can every requirement be verified with an automated test? Flag untestable requirements.
+- Security threat model: identify the top 3 attack vectors for this feature.
 </instructions>
 
 <output_format>
