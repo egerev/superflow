@@ -27,12 +27,12 @@ You are executing Sprint {sprint_id}: {sprint_title} of the Superflow workflow a
 3. Follow Phase 2 execution steps (implementer dispatch, review, PAR, PR)
 4. Use the reasoning tier above to select the correct implementer agent and effort level.
 5. You MUST write `.par-evidence.json` to the worktree root with these verdict keys:
-   `claude_code_quality`, `claude_product`, `codex_code_review`, `codex_product`.
-   Each value must be one of: APPROVE, ACCEPTED, PASS.
+   `claude_product`, `technical_review`. Also include `provider` ("codex" or "split-focus").
+   Each verdict must be one of: APPROVE, ACCEPTED, PASS.
    The supervisor validates this file — if missing or invalid, the sprint FAILS and retries.
 {frontend_instructions}
 6. Output a JSON summary as the LAST line of your response:
-   {"status":"completed","pr_url":"...","tests":{"passed":0,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"},"steps_completed":["baseline_tests","implementation","internal_review","test_verification","par","pr_created"]}
+   {"status":"completed","pr_url":"...","tests":{"passed":0,"failed":0},"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"},"steps_completed":["baseline_tests","implementation","internal_review","test_verification","par","pr_created"]}
 
 ## Step Verification
 After each step, verify completion before proceeding:
@@ -54,5 +54,5 @@ If this sprint has multiple tasks, analyze for independence:
 ## Enforcement
 - Dispatch subagents for all code (never write directly)
 - TDD cycle mandatory
-- PAR with 4-agent review before PR
+- PAR with 2-agent specialized review before PR (Claude=Product, secondary=Technical)
 - One PR for this sprint

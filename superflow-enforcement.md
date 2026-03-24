@@ -18,7 +18,7 @@ Survives context compaction. SKILL.md does not.
 6. **Dual-model reviews: specialize, don't duplicate.** Claude = Product lens (spec fit, user scenarios, data integrity). Secondary provider = Technical lens (correctness, security, architecture). Each model reviews what it's best at — no overlapping roles.
 7. **No secondary provider = two Claude agents.** Product (product-reviewer) + Technical (code-quality-reviewer). Same split, same coverage, just both Claude.
 8. **One PR per sprint.** Execute silently after plan approval.
-9. **Final Holistic Review after all sprints.** Two reviewers (Claude deep-product + Codex xhigh technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint review misses cross-module issues.
+9. **Final Holistic Review after all sprints.** Two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint review misses cross-module issues.
 
 ## Secondary Provider Invocation
 
