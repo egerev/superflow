@@ -2,6 +2,14 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [3.3.1] - 2026-03-25
+
+### Fixed — Audit Findings
+- **Deep agent prompt differentiation**: deep-tier reviewers/implementers now include additional analysis areas (cross-module side effects, concurrency safety, data migration, threat model, architectural consistency) that justify higher reasoning effort vs standard tier
+- **Completion report tests**: 7 new unit tests for `generate_completion_report()` — report structure, PR URLs, test counts, PAR verdicts, holistic gate, missing checkpoints, file output
+- **Single-source permissions**: full permissions list now lives only in `phase0-onboarding.md`; README has short example with link to canonical source
+- **CLAUDE.md LOC counts**: updated 15 stale line counts in Key Files table
+
 ## [3.3.0] - 2026-03-24
 
 ### Changed — Review Deduplication & Speed Optimization

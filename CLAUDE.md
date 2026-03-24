@@ -1,7 +1,7 @@
 # Superflow — Claude Instructions
 
 ## Project Overview
-Superflow is a Claude Code skill (hybrid: Markdown prompts + Python companion CLI) that orchestrates a 4-phase dev workflow: onboarding, product discovery, autonomous execution, merge. The Python supervisor enables multi-hour autonomous sprint execution outside Claude's context window. v3.3.0, MIT License.
+Superflow is a Claude Code skill (hybrid: Markdown prompts + Python companion CLI) that orchestrates a 4-phase dev workflow: onboarding, product discovery, autonomous execution, merge. The Python supervisor enables multi-hour autonomous sprint execution outside Claude's context window. v3.3.1, MIT License.
 
 ## Key Rules
 - All documentation output in English — user communication follows their language preference
