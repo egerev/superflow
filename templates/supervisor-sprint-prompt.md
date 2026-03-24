@@ -32,7 +32,24 @@ You are executing Sprint {sprint_id}: {sprint_title} of the Superflow workflow a
    The supervisor validates this file — if missing or invalid, the sprint FAILS and retries.
 {frontend_instructions}
 6. Output a JSON summary as the LAST line of your response:
-   {"status":"completed","pr_url":"...","tests":{"passed":0,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"}}
+   {"status":"completed","pr_url":"...","tests":{"passed":0,"failed":0},"par":{"claude_code_quality":"ACCEPTED","claude_product":"ACCEPTED","codex_code_review":"ACCEPTED","codex_product":"ACCEPTED"},"steps_completed":["baseline_tests","implementation","internal_review","test_verification","par","pr_created"]}
+
+## Step Verification
+After each step, verify completion before proceeding:
+- After worktree setup: verify branch with `git branch --show-current`
+- After baseline tests: paste test output as evidence
+- After implementation: verify all tasks DONE, list changed files
+- After internal review: paste reviewer verdicts
+- After PAR: verify .par-evidence.json exists
+- After PR creation: verify PR URL with `gh pr view`
+- If any step skipped (e.g., after compaction), go back and complete it
+- Check `.superflow-state.json` if unsure of progress
+
+## Parallel Task Dispatch
+If this sprint has multiple tasks, analyze for independence:
+- Different files + no data dependency = parallel
+- Group into waves, dispatch with Agent(run_in_background: true)
+- If ≤3 tasks, dispatch sequentially
 
 ## Enforcement
 - Dispatch subagents for all code (never write directly)

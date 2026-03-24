@@ -239,6 +239,44 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_PHASE_LABELS = {0: "Onboarding", 1: "Product Discovery", 2: "Autonomous Execution", 3: "Merge"}
+_STAGE_INDICES = {"setup": 0, "implementation": 1, "review": 2, "par": 3, "ship": 4, "failed": -1}
+
+
+def _write_state(repo_root: str, phase: int, sprint: int | None,
+                 stage: str, queue) -> None:
+    """Write .superflow-state.json as a projection of current state."""
+    completed = [s["id"] for s in queue.sprints if s.get("status") == "completed"]
+    state = {
+        "version": 1,
+        "phase": phase,
+        "phase_label": _PHASE_LABELS.get(phase, "Unknown"),
+        "sprint": sprint,
+        "stage": stage,
+        "stage_index": _STAGE_INDICES.get(stage, 0),
+        "tasks_done": completed,
+        "tasks_total": len(queue.sprints),
+        "last_updated": _now_iso(),
+    }
+    state_path = os.path.join(repo_root, ".superflow-state.json")
+    tmp_path = state_path + ".tmp"
+    try:
+        with open(tmp_path, "w") as f:
+            json.dump(state, f, indent=2)
+        os.replace(tmp_path, state_path)
+    except OSError as e:
+        logger.warning("Failed to write state file: %s", e)
+
+
+REQUIRED_STEPS = {"baseline_tests", "implementation", "par", "pr_created"}
+
+
+def _verify_steps(summary: dict) -> list[str]:
+    """Check if all required steps were completed. Returns list of missing steps."""
+    completed = set(summary.get("steps_completed", []))
+    return sorted(REQUIRED_STEPS - completed)
+
+
 def _parse_json_summary(output: str) -> dict | None:
     """Parse a trailing JSON object from model output.
 
@@ -884,6 +922,10 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
     # 4. Create worktree
     wt_path = create_worktree(sprint, repo_root)
 
+    # 5. Write state AFTER worktree creation (sequential mode only)
+    if not queue_lock:
+        _write_state(repo_root, phase=2, sprint=sid, stage="setup", queue=queue)
+
     try:
         # 5. Baseline test gate
         baseline_passed, baseline_output, baseline_skipped = run_baseline_tests(
@@ -972,6 +1014,10 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         # Filter environment
         env = _filtered_env()
 
+        # Write state before implementation
+        if not queue_lock:
+            _write_state(repo_root, phase=2, sprint=sid, stage="implementation", queue=queue)
+
         # Launch claude subprocess
         try:
             result = subprocess.run(
@@ -1004,6 +1050,11 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
                 last_summary_errors = summary_errors
 
         success = (result.returncode == 0 and summary is not None)
+
+        if summary:
+            missing = _verify_steps(summary)
+            if missing:
+                logger.warning("Sprint %d missing steps: %s", sid, missing)
 
         if success:
             # Milestone: implemented
@@ -1047,6 +1098,10 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
                 "milestones": {"baseline_passed": True, "implemented": True,
                                "par_validated": True},
             })
+
+            # Write ship state (sequential mode only)
+            if not queue_lock:
+                _write_state(repo_root, phase=2, sprint=sid, stage="ship", queue=queue)
 
             # PR verification with retry (separate from Claude retry)
             pr_url = summary.get("pr_url", "")

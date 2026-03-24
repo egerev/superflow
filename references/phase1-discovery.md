@@ -1,9 +1,88 @@
 # Phase 1: Product Discovery (COLLABORATIVE)
 
+## Stage Structure
+
+Phase 1 has 5 stages. Use TaskCreate at each stage start, TaskUpdate as todos complete.
+
+```
+Stage 1: "Research"
+  Todos:
+  - "Read project context (CLAUDE.md, llms.txt, docs)"
+  - "Dispatch best practices research"
+  - "Dispatch product expert research"
+  - "Present research findings"
+
+Stage 2: "Brainstorming"
+  Todos:
+  - "Conduct multi-expert brainstorming (3-5 questions)"
+  - "Present approaches with trade-offs"
+
+Stage 3: "Product Approval"
+  Todos:
+  - "Present Product Summary + Brief for approval"
+  - "Get user approval"
+
+Stage 4: "Specification"
+  Todos:
+  - "Write technical spec"
+  - "Dual-model spec review"
+  - "Fix review findings"
+
+Stage 5: "Planning"
+  Todos:
+  - "Write implementation plan"
+  - "Dual-model plan review"
+  - "Fix review findings"
+  - "Get user final approval"
+```
+
+### State Management
+
+At the start of Phase 1, write `.superflow-state.json`:
+```bash
+cat > .superflow-state.json << STATEEOF
+{"version":1,"phase":1,"phase_label":"Product Discovery","stage":"research","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+STATEEOF
+```
+
+After each stage transition, update via python3:
+```bash
+python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s['stage']='brainstorming'; s['stage_index']=1; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
+```
+
+### TaskCreate/TaskUpdate Pattern
+
+```
+# At the beginning of Stage 1:
+TaskCreate(
+  title: "Phase 1: Research",
+  description: "Read context, dispatch research agents, present findings",
+  todos: [
+    "Read project context",
+    "Dispatch best practices research",
+    "Dispatch product expert research",
+    "Present research findings"
+  ]
+)
+
+# As each todo completes:
+TaskUpdate(id: <task_id>, todo_updates: [
+  {index: 0, status: "completed"}
+])
+
+# When stage completes:
+TaskUpdate(id: <task_id>, status: "completed")
+```
+
+---
+
 ## Step 1: Context Exploration
+<!-- Stage 1: Research, Todo 1 -->
+
 Read CLAUDE.md, llms.txt, project docs, git history. Understand architecture, data model, existing features. Identify gaps.
 
 ## Step 2: Best Practices & Product Research
+<!-- Stage 1: Research, Todos 2-3 -->
 
 Dispatch **parallel background research** using the Agent tool (`run_in_background: true` for each):
 
@@ -27,10 +106,12 @@ Wait for all background tasks to complete. If research yields insufficient resul
 **NOT optional.** Synthesize findings before proceeding.
 
 ## Step 3: Present Research Findings
+<!-- Stage 1: Research, Todo 4 -->
 
 Present a brief summary of research results to the user before brainstorming. Include product expert proposals. This ensures the user sees what was discovered and can steer the conversation.
 
 ## Step 4: Multi-Expert Brainstorming
+<!-- Stage 2: Brainstorming, Todo 1 -->
 
 **STOP GATE — Do NOT proceed past this step without user interaction.**
 Your next action MUST be a question or proposal to the user. Do NOT jump to Product Summary.
@@ -41,29 +122,52 @@ Your next action MUST be a question or proposal to the user. Do NOT jump to Prod
 - Proposals must be genuinely new (not rephrasing user's own words)
 - Three lenses: Product ("users expect X"), Architecture ("data model supports X"), Domain ("best practice is Y")
 
+Use AskUserQuestion when options are enumerable, free text for open-ended exploration.
+
+**For priority questions:**
+```
+AskUserQuestion(
+  question: "What matters most for this feature?",
+  options: [
+    {"value": "speed", "label": "Ship fast — MVP first"},
+    {"value": "quality", "label": "Get it right — thorough implementation"},
+    {"value": "flexibility", "label": "Keep options open — extensible design"}
+  ]
+)
+```
+
 ## Step 5: Approaches + Recommendation
+<!-- Stage 2: Brainstorming, Todo 2 -->
 
 Present 2-3 approaches with trade-offs. Lead with recommendation.
 For each approach: strengths, risks, effort level.
 **Mandatory step** — even if one approach seems obvious, present alternatives. The user must see options before Product Summary.
 
-## Step 6: Product Summary (APPROVAL GATE)
+**For approach selection, use AskUserQuestion:**
+```
+AskUserQuestion(
+  question: "I see three approaches. Which direction appeals to you?",
+  options: [
+    {"value": "a", "label": "Approach A: [name] — [1-line tradeoff]"},
+    {"value": "b", "label": "Approach B: [name] — [1-line tradeoff]"},
+    {"value": "c", "label": "Approach C: [name] — [1-line tradeoff]"},
+    {"value": "details", "label": "Tell me more about each"}
+  ]
+)
+```
 
-Present to the user:
+## Step 6: Product Approval (MERGED GATE)
+<!-- Stage 3: Product Approval, Todos 1-2 -->
+
+Present Product Summary + Product Brief together as a single document for approval.
+
+### Product Summary
 - What we're building (feature list)
 - Problems solved
 - NOT in scope
 - Key decisions + rationale
 
-**APPROVAL GATE:** Ask the user: "Approve this scope? I'll write the spec next."
-- User says "yes" / "go" / "approve" / approving phrase → proceed to Product Brief
-- User requests changes → update summary, re-present, ask again
-- Do NOT proceed to Step 7 without explicit approval
-
-## Step 7: Product Brief
-
-After approval, before the technical spec, write a lightweight product brief. This bridges product thinking and technical implementation. Include:
-
+### Product Brief
 - **Problem statement**: What user pain are we solving? (1-2 sentences)
 - **Jobs to be Done**: When [situation], I want to [motivation], so I can [outcome]
 - **User stories**: As a [role], I want [action] so that [benefit] (3-5 key stories)
@@ -79,7 +183,24 @@ This brief is shared with:
 
 Keep it short (< 1 page). No frameworks — just clarity about what we're building and for whom.
 
-## Step 8: Spec Document
+**APPROVAL GATE:**
+```
+AskUserQuestion(
+  question: "Does this capture what we're building? Approve to proceed to technical spec.",
+  options: [
+    {"value": "approve", "label": "Approve — write the spec"},
+    {"value": "changes", "label": "Needs changes"},
+    {"value": "restart", "label": "Start over — wrong direction"}
+  ]
+)
+```
+
+- "approve" → proceed to Step 7 (Spec)
+- "changes" → ask what to change, update, re-present
+- "restart" → go back to Step 4 (brainstorming)
+
+## Step 7: Spec Document
+<!-- Stage 4: Specification, Todo 1 -->
 
 Write to `docs/superflow/specs/YYYY-MM-DD-<topic>-design.md`. Reference the product brief.
 
@@ -93,7 +214,8 @@ Include:
 
 Create `docs/superflow/specs/` if it doesn't exist.
 
-## Step 9: Spec Review (dual-model parallel)
+## Step 8: Spec Review (dual-model parallel)
+<!-- Stage 4: Specification, Todos 2-3 -->
 
 Run two reviewers in parallel. Both reviewers receive the product brief AND the spec.
 
@@ -106,15 +228,17 @@ Run two reviewers in parallel. Both reviewers receive the product brief AND the 
 Wait for both. If either returns NEEDS_REVISION: fix issues, re-run both reviews.
 Both must return PASS to proceed.
 
-## Step 10: Implementation Plan
+## Step 9: Implementation Plan
+<!-- Stage 5: Planning, Todo 1 -->
 
 Write to `docs/superflow/plans/YYYY-MM-DD-<topic>.md`. Create `docs/superflow/plans/` if it doesn't exist.
 
 Break into sprints (independently deployable), 3-8 tasks each, each task 2-5 min. Include: files, steps, commit message.
 
-## Step 11: Plan Review (dual-model parallel)
+## Step 10: Plan Review (dual-model parallel)
+<!-- Stage 5: Planning, Todos 2-3 -->
 
-Run two reviewers in parallel (same mechanism as Step 9):
+Run two reviewers in parallel (same mechanism as Step 8):
 
 1. **Claude reviewer**: `Agent(subagent_type: "standard-spec-reviewer", run_in_background: true, prompt: "Review this plan for achievability, scoping, dependencies. Plan: [PLAN TEXT]")`. Is the plan achievable? Are sprints properly scoped? Are task estimates realistic? Dependencies correct?
 2. **Secondary provider**: `$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high --ephemeral "Plan review. Check achievability, scoping, dependencies against: [PLAN TEXT]" 2>&1` via Bash (`run_in_background: true`). Are there missing tasks? Over-engineering? Does sprint ordering make sense?
@@ -124,7 +248,8 @@ Run two reviewers in parallel (same mechanism as Step 9):
 
 Both must APPROVE. If either returns NEEDS_REVISION: fix, re-review.
 
-## Step 12: User Approval (FINAL GATE)
+## Step 11: User Approval (FINAL GATE)
+<!-- Stage 5: Planning, Todo 4 -->
 
 Present:
 - Sprint breakdown with task counts

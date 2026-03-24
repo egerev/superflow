@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Superflow State",
+  "type": "object",
+  "required": ["version", "phase", "stage", "stage_index", "last_updated"],
+  "properties": {
+    "version": {"type": "integer", "const": 1},
+    "phase": {"type": "integer", "minimum": 0, "maximum": 3},
+    "phase_label": {"type": "string"},
+    "sprint": {"type": ["integer", "null"]},
+    "stage": {"type": "string"},
+    "stage_index": {"type": "integer"},
+    "tasks_done": {"type": "array", "items": {"type": "integer"}},
+    "tasks_total": {"type": "integer"},
+    "last_updated": {"type": "string", "format": "date-time"},
+    "context": {
+      "type": "object",
+      "properties": {
+        "user_context": {"type": "object"},
+        "detected_stack": {"type": "string"},
+        "secondary_provider": {"type": ["string", "null"]},
+        "supervisor_available": {"type": "boolean"},
+        "plan_file": {"type": ["string", "null"]},
+        "spec_file": {"type": ["string", "null"]},
+        "queue_file": {"type": ["string", "null"]}
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["phase", "completed_at"],
+        "properties": {
+          "phase": {"type": "integer"},
+          "sprint": {"type": "integer"},
+          "completed_at": {"type": "string"},
+          "pr": {"type": "string"}
+        }
+      }
+    }
+  }
+}
