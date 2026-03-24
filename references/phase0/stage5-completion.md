@@ -36,7 +36,7 @@ Files that must receive the marker:
 
 1. **CLAUDE.md** — append at the very end of the file
 2. **llms.txt** — append at the very end of the file
-3. **docs/superflow/project-health-report.md** — already created in Stage 2; append marker if not already present
+3. **docs/superflow/project-health-report.md** — already created in Stage 3; append marker if not already present
 
 All three must exist and have the marker for Phase 0 to be fully skipped on the next run.
 Detection logic (from SKILL.md): checks CLAUDE.md → llms.txt → health report in order.
@@ -103,7 +103,7 @@ import json, datetime
 with open('.superflow-state.json') as f:
     state = json.load(f)
 state['phase'] = 1
-state['phase_label'] = 'discovery'
+state['phase_label'] = 'Product Discovery'
 state['stage'] = 'research'
 state['stage_index'] = 0
 state['last_updated'] = datetime.datetime.utcnow().isoformat() + 'Z'
