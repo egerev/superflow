@@ -61,20 +61,14 @@ Add to `~/.claude/settings.json` for fully autonomous Phase 2 execution **withou
 {
   "permissions": {
     "allow": [
-      "Bash(git worktree *)", "Bash(git checkout *)", "Bash(git add *)",
-      "Bash(git commit *)", "Bash(git push *)", "Bash(git push --force-with-lease *)",
-      "Bash(git rebase *)", "Bash(git pull *)", "Bash(git check-ignore *)",
-      "Bash(git log *)", "Bash(git diff *)",
-      "Bash(gh pr *)",
-      "Bash(npm test *)", "Bash(npm run *)",
-      "Bash(codex *)", "Bash(gemini *)", "Bash(aider *)",
-      "Bash(gtimeout *)", "Bash(timeout *)"
+      "Bash(git *)", "Bash(gh *)",
+      "Bash(npm *)", "Bash(codex *)", "Bash(timeout *)"
     ]
   }
 }
 ```
 
-Adapt to your toolchain — replace `npm` with `yarn`/`bun`/`pnpm` as needed. Phase 0 will propose these permissions automatically on first run.
+This is a minimal example. See [Phase 0 onboarding](references/phase0-onboarding.md#step-7-permissions-setup-for-autonomous-execution) for the complete permissions configuration (core + stack-specific), or copy from the proposal generated during your first `superflow` run.
 
 This is the **safer alternative** to `--dangerously-skip-permissions` — Superflow gets autonomy for exactly the commands it needs, nothing more.
 

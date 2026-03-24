@@ -12,7 +12,7 @@ Superflow is a Claude Code skill (hybrid: Markdown prompts + Python companion CL
 
 ## Architecture
 ```
-SKILL.md (entry point, ~108 lines)
+SKILL.md (entry point, ~118 lines)
   ├── superflow-enforcement.md (durable rules → ~/.claude/rules/)
   ├── references/
   │   ├── phase0-onboarding.md (first-run, 10+ steps + greenfield path G1-G6, interactive interview)
@@ -57,27 +57,27 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 ## Key Files
 | File | Lines | Purpose |
 |------|-------|---------|
-| `SKILL.md` | 108 | Entry point — startup checklist, provider detection, state management, phase routing |
-| `superflow-enforcement.md` | 83 | 9 hard rules, specialized 2-agent reviews (Claude=Product, secondary=Technical), rationalization prevention, phase gates |
-| `references/phase0-onboarding.md` | ~1384 | First-run: AskUserQuestion interview, greenfield path (G1-G6), 5 parallel agents (4 Claude + Codex/Claude security), health report, proposal gate, doc audit, hooks + verification, /verify skill, plugins, state management |
-| `references/phase1-discovery.md` | 257 | 11 steps, 5 stages, merged Product Approval gate, specialized reviews (Claude=Product, Codex=Technical) |
-| `references/phase2-execution.md` | 219 | Per-sprint stages, 2-agent specialized review (Claude Product + Codex Technical), holistic review |
-| `references/phase3-merge.md` | 167 | 3 stages, sequential rebase merge with CI gate |
+| `SKILL.md` | 118 | Entry point — startup checklist, provider detection, state management, phase routing |
+| `superflow-enforcement.md` | 80 | 9 hard rules, specialized 2-agent reviews (Claude=Product, secondary=Technical), rationalization prevention, phase gates |
+| `references/phase0-onboarding.md` | ~1395 | First-run: AskUserQuestion interview, greenfield path (G1-G6), 5 parallel agents (4 Claude + Codex/Claude security), health report, proposal gate, doc audit, hooks + verification, /verify skill, plugins, state management |
+| `references/phase1-discovery.md` | 263 | 11 steps, 5 stages, merged Product Approval gate, specialized reviews (Claude=Product, Codex=Technical) |
+| `references/phase2-execution.md` | 293 | Per-sprint stages, 2-agent specialized review (Claude Product + Codex Technical), holistic review |
+| `references/phase3-merge.md` | 184 | 3 stages, sequential rebase merge with CI gate |
 | `prompts/implementer.md` | 81 | Red-Green-Refactor TDD cycle for code agents |
-| `prompts/llms-txt-writer.md` | 156 | llmstxt.org standard, no hard size limit |
-| `prompts/claude-md-writer.md` | 150 | Verified paths/commands, <200 lines target |
-| `bin/superflow-supervisor` | 147 | CLI: run, status, resume, reset commands |
-| `lib/supervisor.py` | 1733 (~1350 LOC) | Core supervisor: worktree lifecycle, sprint execution, run loop, validation gates, holistic review |
-| `lib/queue.py` | 117 (~100 LOC) | Sprint queue with DAG dependency resolution, atomic saves, baseline_cmd |
+| `prompts/llms-txt-writer.md` | 154 | llmstxt.org standard, no hard size limit |
+| `prompts/claude-md-writer.md` | 148 | Verified paths/commands, <200 lines target |
+| `bin/superflow-supervisor` | 148 | CLI: run, status, resume, reset commands |
+| `lib/supervisor.py` | 1749 (~1370 LOC) | Core supervisor: worktree lifecycle, sprint execution, run loop, validation gates, holistic review |
+| `lib/queue.py` | 122 (~105 LOC) | Sprint queue with DAG dependency resolution, atomic saves, baseline_cmd |
 | `lib/checkpoint.py` | 52 (~44 LOC) | Checkpoint save/load for crash recovery, string IDs, named checkpoints |
-| `lib/parallel.py` | 47 (~38 LOC) | ThreadPoolExecutor concurrency with queue_lock |
+| `lib/parallel.py` | 61 (~50 LOC) | ThreadPoolExecutor concurrency with queue_lock |
 | `lib/replanner.py` | 212 (~168 LOC) | Adaptive replanner — adjusts remaining sprints via Claude |
 | `lib/notifications.py` | 159 (~130 LOC) | Telegram Bot API + stdout fallback, 16 event types |
-| `templates/supervisor-sprint-prompt.md` | 42 | Sprint execution prompt + baseline_status, frontend_instructions, enforcement |
+| `templates/supervisor-sprint-prompt.md` | 58 | Sprint execution prompt + baseline_status, frontend_instructions, enforcement |
 | `templates/replan-prompt.md` | 26 | Replanner prompt with placeholders |
 | `templates/superflow-state-schema.json` | 42 | JSON Schema for .superflow-state.json |
-| `examples/sprint-queue-example.json` | 42 | Queue file template for new users |
-| `tests/` | ~4780 | 228 tests: unit (all modules) + integration (happy path, crash, retry) |
+| `examples/sprint-queue-example.json` | 45 | Queue file template for new users |
+| `tests/` | ~5134 | 228 tests: unit (all modules) + integration (happy path, crash, retry) |
 
 ## Conventions
 - Hybrid project: Markdown skill files (no dependencies) + Python supervisor (stdlib only, no pip install)
@@ -91,7 +91,7 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 
 ## Known Issues & Tech Debt
 - TDD cycle duplicated in `implementer.md:23-31` and `testing-guidelines.md:13-21` (agent sees it twice since implementer includes testing-guidelines)
-- Permissions JSON duplicated verbatim in `README.md:60-75` and `references/phase0-onboarding.md:222-237`
+- Permissions JSON: single-sourced in `references/phase0-onboarding.md` (Step 7); `README.md` has a short example with a link to the canonical source
 - Greenfield templates (nextjs.md, python.md) provide config files but not source file contents — LLM generates those
 - `_verify_steps()` is advisory-only (warns but does not block incomplete sprints)
 

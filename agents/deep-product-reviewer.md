@@ -42,6 +42,12 @@ Skip the following — they are handled by the code quality reviewer:
 - **Code style and architecture** — already reviewed for technical quality.
 - **Test coverage** — already verified by the code reviewer.
 - **Performance** (unless it directly impacts the user experience, such as visible lag or timeouts) — already covered in technical review.
+
+## Deep Analysis (high-effort only)
+- Cross-feature interaction: do the changes interact with existing features in unexpected ways?
+- Data migration safety: if data model changed, is the migration reversible? What happens to existing records?
+- Future maintenance cost: will this code be easy to modify in 6 months? Identify coupling risks.
+- User flow completeness: trace 2-3 complete user journeys end-to-end through the changed code.
 </instructions>
 
 <output_format>

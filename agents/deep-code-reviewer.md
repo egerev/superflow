@@ -51,6 +51,13 @@ Skip the following — they are out of scope for this review:
 - **Import ordering** — handled by formatters.
 
 Apply this calibration principle: "Would this cause a bug, security issue, or maintenance problem within 6 months?" If the answer is no, skip it.
+
+## Deep Analysis (high-effort only)
+- Architectural consistency: do the changes follow the project's established patterns? Identify deviations.
+- Cross-module side effects: trace data flow across module boundaries. Identify hidden dependencies.
+- Concurrency safety: check for race conditions, deadlocks, shared mutable state.
+- Error propagation: trace error paths from origin to user-visible output. Are errors helpful or opaque?
+- Dependency impact: do new dependencies introduce version conflicts, license issues, or supply chain risk?
 </instructions>
 
 <output_format>
