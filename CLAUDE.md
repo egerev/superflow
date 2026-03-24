@@ -65,16 +65,16 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 | `agents/*.md` | 12 files | Agent definitions — deep/standard/fast tiers with effort frontmatter |
 | `prompts/codex/*.md` | 3 files | Codex-specific prompts: code-reviewer, product-reviewer, audit |
 | `bin/superflow-supervisor` | 147 | CLI: run, status, resume, reset commands |
-| `lib/supervisor.py` | 743 (~572 LOC) | Core supervisor: worktree lifecycle, sprint execution, run loop, reports |
-| `lib/queue.py` | 114 (~98 LOC) | Sprint queue with DAG dependency resolution, atomic saves |
-| `lib/checkpoint.py` | 37 (~31 LOC) | Checkpoint save/load for crash recovery |
-| `lib/parallel.py` | 38 (~31 LOC) | ThreadPoolExecutor-based concurrent sprint execution |
+| `lib/supervisor.py` | 1733 (~1350 LOC) | Core supervisor: worktree lifecycle, sprint execution, run loop, validation gates, holistic review, reports |
+| `lib/queue.py` | 117 (~100 LOC) | Sprint queue with DAG dependency resolution, atomic saves, baseline_cmd |
+| `lib/checkpoint.py` | 52 (~44 LOC) | Checkpoint save/load for crash recovery, string IDs, named checkpoints |
+| `lib/parallel.py` | 47 (~38 LOC) | ThreadPoolExecutor-based concurrent sprint execution with queue_lock |
 | `lib/replanner.py` | 212 (~168 LOC) | Adaptive replanner — adjusts remaining sprints via Claude |
-| `lib/notifications.py` | 134 (~110 LOC) | Telegram Bot API + stdout fallback, 11 event types |
-| `templates/supervisor-sprint-prompt.md` | 25 | Sprint execution prompt with placeholders |
+| `lib/notifications.py` | 159 (~130 LOC) | Telegram Bot API + stdout fallback, 16 event types |
+| `templates/supervisor-sprint-prompt.md` | 42 | Sprint execution prompt with placeholders (baseline_status, frontend_instructions, enforcement) |
 | `templates/replan-prompt.md` | 26 | Replanner prompt with placeholders |
 | `examples/sprint-queue-example.json` | 42 | Queue file template for new users |
-| `tests/` | 2948 | 149 tests: unit (all modules) + integration (happy path, crash, retry) |
+| `tests/` | 4780 | 220 tests: unit (all modules) + integration (happy path, crash, retry, holistic review) |
 
 ## Release Process
 After Phase 3 merge, always:
