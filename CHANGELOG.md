@@ -2,6 +2,43 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [3.2.0] - 2026-03-24
+
+### Added — Supervisor Enforcement Hardening
+- **Validation gates**: PAR evidence validation (`_validate_par_evidence`), sprint summary validation (`_validate_sprint_summary`), evidence verdict validation with configurable pass/fail verdicts
+- **Baseline test gate**: heuristic detection for Python (pytest.ini, pyproject.toml), JavaScript (package.json with npm placeholder filter), Ruby (Gemfile), Go (go.mod), Elixir (mix.exs). Fails fast on broken baseline
+- **PAR retry gate**: separate retry counter from general sprint retries, prevents wasting retries on review failures
+- **Holistic review dispatch**: `run_holistic_review()` with 4 parallel reviewers (2 Claude + 2 Codex, split-focus fallback), retry/fix cycle, evidence emission, cached evidence with `sprint_prs` validation
+- **Milestone checkpoints**: `baseline_passed`, `implemented`, `par_validated`, `pr_created` — enables fine-grained crash recovery
+- **16 notification event types**: holistic review start/complete, PAR validation failed, baseline failed, resume recovery (up from 11)
+- **Milestone-aware resume**: `resume()` checks for existing PRs and milestone state, annotates resume context
+- **Preflight checks**: gitignore verification, Claude CLI availability, disk space, queue validation
+- **PR verification**: 3-attempt retry with `gh pr view` after push
+- **Default branch detection**: `_detect_default_branch()` via `git symbolic-ref` — no longer hardcoded to `main`
+
+### Added — Phase 0 Improvements (PR #37)
+- **Interactive onboarding**: mini-interview via AskUserQuestion (project type, stack, goals) before agent dispatch
+- **Greenfield path**: G1-G6 steps for empty repos — stack scaffolding templates (Next.js, Python, generic), CI workflow generation
+- **State management**: `.superflow-state.json` persists phase/stage for crash recovery across all phases
+- **Stage/todo structure**: all phases now use TaskCreate/TaskUpdate for progress tracking
+- **Proposal gate**: agents propose changes, user approves before execution
+- **Hooks and verification**: `/verify` skill, plugin detection, expanded permissions
+
+### Added — Workflow Discipline (PR #36)
+- **Session recovery check**: startup checklist detects uncommitted changes from crashed sessions (stash → test → compare)
+- **Test execution discipline**: one process at a time, mandatory timeout, hanging test = unmocked subprocess
+- **Commit before review**: Codex sees only committed HEAD — commit fixes before dispatching external reviewers
+- **Worktree-before-merge**: exit worktree and remove it BEFORE merge — prevents CWD death when branch is deleted
+
+### Changed
+- Supervisor: `lib/supervisor.py` grew from 743 to 1733 lines (enforcement gates, holistic review, validation)
+- Tests: 228 tests (up from 149), 4780 lines
+- Notifications: 16 event types (up from 11)
+- Checkpoint: supports string IDs and named checkpoints (e.g., "holistic")
+- Template: conditional `{baseline_status}` placeholder, enforcement section, frontend verification
+- Phase 3: worktree cleanup moved from post-merge to pre-merge
+- `shell=True` replaced with `shlex.split` + `shell=False` in baseline test runner (security)
+
 ## [3.1.0] - 2026-03-23
 
 ### Added — Reasoning Tiers & Unified Review

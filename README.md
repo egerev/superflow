@@ -1,4 +1,4 @@
-# superflow v3.1.0
+# superflow v3.2.0
 
 Lightweight Claude Code skill for autonomous product-to-production development. Designed for modern models (Opus 4.6+) — minimal instructions, maximum autonomy.
 
@@ -6,13 +6,13 @@ Lightweight Claude Code skill for autonomous product-to-production development. 
 
 ## How It Works
 
-**Phase 0 — Onboarding** (interactive, first run only, 11 steps). 5 parallel agents (4 Claude + 1 Codex) analyze the project, audit/create `llms.txt` + `CLAUDE.md` (agent definitions with effort frontmatter), produce health report, propose permissions. Skipped on subsequent runs (marker detection with backwards compatibility).
+**Phase 0 — Onboarding** (interactive, first run only). Mini-interview via AskUserQuestion, 5 parallel agents (4 Claude + 1 Codex) analyze the project, greenfield scaffolding for empty repos, health report, audit/create llms.txt + CLAUDE.md, propose permissions and hooks.
 
 **Phase 1 — Discovery** (interactive, 12 steps). Research with parallel agents, brainstorming (STOP GATE), approaches, product summary (APPROVAL GATE), product brief, spec, dual-model spec review, plan, dual-model plan review, user approval (FINAL GATE).
 
-**Phase 2 — Execution** (autonomous, zero interaction, 10 steps per sprint). PR per sprint, git worktrees, unified 4-agent review (2 Claude + 2 Codex, or 4 Claude split-focus), sprint completion checklist. Reports results in Demo Day format.
+**Phase 2 — Execution** (autonomous, zero interaction, 10 steps per sprint). PR per sprint, git worktrees, baseline test gate, unified 4-agent review (2 Claude + 2 Codex, or 4 Claude split-focus), PAR evidence validation with retry, milestone checkpoints, holistic review gate before completion report. Reports results in Demo Day format.
 
-**Phase 3 — Merge** (interactive, user-initiated). Pre-merge checklist, doc update, sequential rebase merges with CI failure recovery, post-merge report.
+**Phase 3 — Merge** (interactive, user-initiated). 3-stage process: pre-merge checklist with doc updates, sequential rebase merges with CI failure recovery, post-merge report with cleanup.
 
 ```
 You: "superflow — upgrade analytics"
@@ -157,7 +157,7 @@ You will receive Telegram notifications for sprint starts, completions, failures
 | `lib/parallel.py` | Parallel sprint execution via ThreadPoolExecutor |
 | `lib/replanner.py` | Adaptive replanner (adjusts remaining sprints after completion) |
 | `lib/notifications.py` | Telegram/stdout notification system |
-| `tests/` | Unit and integration tests (140+ tests) |
+| `tests/` | Unit and integration tests (228 tests) |
 
 ## Origin
 
