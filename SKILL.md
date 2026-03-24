@@ -92,7 +92,7 @@ Use detected provider silently. No warnings about missing providers.
 `.superflow-state.json` in the project root tracks current phase, sprint, and stage. It is:
 - **Read-only projection** during Phase 2 with supervisor (generated from queue/checkpoint data)
 - **Directly written** during Phases 0, 1, 3 (interactive, single session)
-- **Gitignored** (added during Phase 0 Step 6)
+- **Gitignored** (added during Phase 0 Stage 4 Branch C)
 - **Schema**: `templates/superflow-state-schema.json`
 
 Hooks read state for context restoration:
