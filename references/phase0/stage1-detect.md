@@ -104,7 +104,7 @@ Compile results into a dict. Example shape:
   "stack": "Python",
   "framework": "FastAPI",
   "pm": "pip",
-  "formatters": "ruff",
+  "formatters": ["ruff"],
   "has_llms_txt": false,
   "has_claude_md": true,
   "has_health_report": false

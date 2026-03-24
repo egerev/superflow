@@ -31,7 +31,7 @@
             "ci": {"type": "string"},
             "python3": {"type": "string"},
             "pm": {"type": "string"},
-            "formatters": {"type": "string"}
+            "formatters": {"type": "array", "items": {"type": "string"}}
           }
         },
         "tech_debt": {
