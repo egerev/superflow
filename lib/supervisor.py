@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import signal
 import shutil
 import threading
@@ -201,6 +202,20 @@ def build_prompt(sprint: dict, repo_root: str) -> str:
     result = result.replace("{impl_model}", impl_model)
     result = result.replace("{impl_effort}", impl_effort)
 
+    # Baseline status injection
+    baseline_skipped = sprint.get("baseline_skipped", False)
+    if baseline_skipped:
+        baseline_status = (
+            "Baseline tests were not available — exercise caution with test failures "
+            "(they may be pre-existing, not from your changes)."
+        )
+    else:
+        baseline_status = (
+            "Baseline tests passed in this worktree (verified by supervisor before your session). "
+            "If you encounter test failures, they are from YOUR changes, not pre-existing."
+        )
+    result = result.replace("{baseline_status}", baseline_status)
+
     # Frontend instructions injection
     frontend_instructions = ""
     if sprint.get("has_frontend", False):
@@ -366,13 +381,14 @@ def _resolve_baseline_cmd(wt_path, sprint, queue):
         except (IOError, OSError):
             pass
 
-    # JavaScript: package.json with "test" script
+    # JavaScript: package.json with "test" script (skip npm placeholder)
     package_json_path = os.path.join(wt_path, "package.json")
     if os.path.exists(package_json_path):
         try:
             with open(package_json_path) as f:
                 pkg = json.load(f)
-            if "test" in pkg.get("scripts", {}):
+            test_script = pkg.get("scripts", {}).get("test", "")
+            if test_script and "no test specified" not in test_script and "Error: no test" not in test_script:
                 return "npm test"
         except (json.JSONDecodeError, IOError, OSError):
             pass
@@ -402,8 +418,10 @@ def run_baseline_tests(wt_path, sprint, queue, timeout=300):
         return (True, "No test runner detected — skipped", True)
 
     try:
+        if isinstance(cmd, str):
+            cmd = shlex.split(cmd)
         result = subprocess.run(
-            cmd, shell=True, cwd=wt_path, timeout=timeout,
+            cmd, shell=False, cwd=wt_path, timeout=timeout,
             capture_output=True, text=True,
         )
         output = result.stdout + "\n" + result.stderr
@@ -510,6 +528,26 @@ def _run_single_reviewer(name, cmd, prompt, env, timeout, is_codex=False, cwd=No
     return result_dict
 
 
+def _detect_default_branch(repo_root):
+    """Detect the default branch of the repo via git symbolic-ref.
+
+    Returns the branch name (e.g. 'main', 'master', 'develop').
+    Falls back to 'main' if detection fails.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+            capture_output=True, text=True, cwd=repo_root,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # Output is like "refs/remotes/origin/main"
+            ref = result.stdout.strip()
+            return ref.split("/")[-1]
+    except Exception:
+        pass
+    return "main"
+
+
 def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir,
                         timeout=1800, notifier=None, max_retries=2):
     """Execute Final Holistic Review — 4 parallel reviewers on all sprint diffs.
@@ -538,6 +576,7 @@ def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir
     sprint_prs = [s.get("pr", "") for s in completed_sprints if s.get("pr")]
 
     # 2. Generate combined diffs
+    default_branch = _detect_default_branch(repo_root)
     diffs_parts = []
     for sprint in completed_sprints:
         branch = sprint.get("branch", "")
@@ -545,7 +584,7 @@ def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir
             continue
         try:
             diff_result = subprocess.run(
-                ["git", "diff", f"main...{branch}"],
+                ["git", "diff", f"{default_branch}...{branch}"],
                 capture_output=True, text=True, cwd=repo_root, timeout=60,
             )
             if diff_result.returncode == 0 and diff_result.stdout.strip():
@@ -785,13 +824,30 @@ def run_holistic_review(queue, queue_path, repo_root, plan_path, checkpoints_dir
         reviewer_results = attempt_results
         failing_reviewers = next_failing_reviewers
 
-    # Max retries exceeded
+    # Max retries exceeded — collect last round's findings for diagnostics
+    last_findings = []
+    for name in failing_reviewers:
+        res = reviewer_results.get(name, {})
+        for finding in res.get("findings", []):
+            last_findings.append({
+                "reviewer": name,
+                "severity": finding.get("severity", "UNKNOWN"),
+                "description": finding.get("description", ""),
+            })
+        if res.get("error"):
+            last_findings.append({
+                "reviewer": name,
+                "severity": "ERROR",
+                "description": res["error"],
+            })
+
     save_checkpoint(checkpoints_dir, "holistic", {
         "phase": "holistic_review",
         "status": "failed",
         "failed_at": _now_iso(),
         "verdict": "REQUEST_CHANGES",
         "failing_reviewers": failing_reviewers,
+        "last_findings": last_findings,
     })
     return False
 
@@ -853,6 +909,8 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
             return cp
 
         # 6. Save baseline milestone in checkpoint
+        # Also store baseline_skipped on sprint dict so build_prompt can use it
+        sprint["baseline_skipped"] = baseline_skipped
         save_checkpoint(checkpoints_dir, sid, {
             "sprint_id": sid, "status": "in_progress", "started_at": _now_iso(),
             "milestones": {"baseline_passed": True, "baseline_skipped": baseline_skipped},
@@ -1356,6 +1414,11 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
         # Check if evidence already exists and is valid (skip re-run)
         holistic_valid = False
         holistic_verdict = None
+        # Compute current sprint PRs for cache comparison
+        current_sprint_prs = sorted(
+            s.get("pr", "") for s in queue.sprints
+            if s["status"] == "completed" and s.get("pr")
+        )
         if os.path.exists(evidence_path):
             try:
                 with open(evidence_path) as f:
@@ -1364,11 +1427,21 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
                 valid, errors = _validate_evidence_verdicts(
                     reviewers_data, REQUIRED_PAR_KEYS, context="Holistic"
                 )
-                holistic_valid = valid
                 if not valid:
+                    holistic_valid = False
                     logger.warning("Holistic evidence invalid, will re-run: %s", errors)
                 else:
-                    holistic_verdict = holistic_data.get("verdict", "APPROVE")
+                    # Validate sprint_prs match current queue's completed PRs
+                    evidence_prs = sorted(holistic_data.get("sprint_prs", []))
+                    if evidence_prs != current_sprint_prs:
+                        holistic_valid = False
+                        logger.warning(
+                            "Holistic evidence sprint_prs mismatch (cached=%s, current=%s) — re-running.",
+                            evidence_prs, current_sprint_prs,
+                        )
+                    else:
+                        holistic_valid = True
+                        holistic_verdict = holistic_data.get("verdict", "APPROVE")
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning("Failed to parse holistic evidence, will re-run: %s", e)
 

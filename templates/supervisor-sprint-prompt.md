@@ -19,8 +19,7 @@ You are executing Sprint {sprint_id}: {sprint_title} of the Superflow workflow a
 - **Implementation effort:** {impl_effort}
 
 ## Pre-verified
-- Baseline tests passed in this worktree (verified by supervisor before your session).
-  If you encounter test failures, they are from YOUR changes, not pre-existing.
+- {baseline_status}
 
 ## Instructions
 1. Read the enforcement rules at ~/.claude/rules/superflow-enforcement.md
