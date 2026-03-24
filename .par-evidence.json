@@ -1,20 +1,14 @@
 {
-  "sprint": 2,
+  "sprint": 3,
   "claude_code_quality": "APPROVE",
   "claude_product": "APPROVE",
   "codex_code_review": "APPROVE",
   "codex_product": "APPROVE",
   "provider": "codex",
   "findings_fixed": {
-    "claude_code": ["stage_ordering_8.5", "literal_timestamp", "literal_N_sprint", "CLAUDE.md_step_count", "hook_pseudocode"],
-    "claude_product": ["stage_ordering", "literal_timestamp", "brief_guidance_truncated"],
-    "codex_code": ["phase2_no_init_state", "stage_ordering", "skip_hooks_contradiction", "schema_permissive", "hook_pseudocode"],
-    "codex_product": ["noted_as_future_sprint_items"]
-  },
-  "disagreements": {
-    "codex_product_stale_state": "State file freshness is handled by the LLM re-reading phase docs on resume. The hook provides context, not authoritative truth. Stale state is an edge case mitigated by the existing 'check detection markers' flow.",
-    "codex_product_merged_gate": "Spec explicitly requires merged gate (Sprint 2 spec line 862-903). The brief is lightweight (<1 page) — cost of re-presenting is low."
+    "claude_code": ["rejoin_contradiction", "claude_local_md_skipped", "library_type_missing", "python_hyphen", "claude_md_architecture"],
+    "codex_product": ["library_onboarding", "stack_accuracy_clarified", "health_report_marker", "lockfile_in_commit"]
   },
   "tests": {"passed": 130, "failed": 0, "skipped": 0},
-  "ts": "2026-03-24T05:25:00Z"
+  "ts": "2026-03-24T05:35:00Z"
 }
