@@ -4,7 +4,12 @@ import os
 
 
 class SprintQueue:
-    """Manages a queue of sprints with dependency tracking."""
+    """Manages a queue of sprints with dependency tracking.
+
+    Sprint dict fields:
+        id, title, status, plan_file, branch, depends_on, pr, retries, max_retries, error_log
+        Optional: tasks (list of task dicts for intra-sprint tracking)
+    """
 
     def __init__(self, feature: str, created: str, sprints: list):
         self.feature = feature

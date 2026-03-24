@@ -187,6 +187,41 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_PHASE_LABELS = {0: "Onboarding", 1: "Product Discovery", 2: "Autonomous Execution", 3: "Merge"}
+_STAGE_INDICES = {"setup": 0, "implementation": 1, "review": 2, "par": 3, "ship": 4}
+
+
+def _write_state(repo_root: str, phase: int, sprint: int | None,
+                 stage: str, queue) -> None:
+    """Write .superflow-state.json as a projection of current state."""
+    completed = [s["id"] for s in queue.sprints if s.get("status") == "completed"]
+    state = {
+        "version": 1,
+        "phase": phase,
+        "phase_label": _PHASE_LABELS.get(phase, "Unknown"),
+        "sprint": sprint,
+        "stage": stage,
+        "stage_index": _STAGE_INDICES.get(stage, 0),
+        "tasks_done": completed,
+        "tasks_total": len(queue.sprints),
+        "last_updated": _now_iso(),
+    }
+    state_path = os.path.join(repo_root, ".superflow-state.json")
+    tmp_path = state_path + ".tmp"
+    with open(tmp_path, "w") as f:
+        json.dump(state, f, indent=2)
+    os.replace(tmp_path, state_path)
+
+
+REQUIRED_STEPS = {"baseline_tests", "implementation", "par", "pr_created"}
+
+
+def _verify_steps(summary: dict) -> list[str]:
+    """Check if all required steps were completed. Returns list of missing steps."""
+    completed = set(summary.get("steps_completed", []))
+    return sorted(REQUIRED_STEPS - completed)
+
+
 def _parse_json_summary(output: str) -> dict | None:
     """Parse JSON summary from the last lines of claude output."""
     if not output:
@@ -238,6 +273,7 @@ def execute_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
     else:
         queue.mark_in_progress(sid)
         queue.save(queue_path)
+        _write_state(repo_root, phase=2, sprint=sid, stage="setup", queue=queue)
 
     # 2. Notify sprint start
     if notifier:
@@ -276,6 +312,10 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         # Filter environment
         env = _filtered_env()
 
+        # Write state before implementation
+        if not queue_lock:
+            _write_state(repo_root, phase=2, sprint=sid, stage="implementation", queue=queue)
+
         # Launch claude subprocess
         try:
             result = subprocess.run(
@@ -300,7 +340,16 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         json_parse_error = (result.returncode == 0 and summary is None)
         success = (result.returncode == 0 and summary is not None)
 
+        if summary:
+            missing = _verify_steps(summary)
+            if missing:
+                logger.warning("Sprint %d missing steps: %s", sid, missing)
+
         if success:
+            # Write ship state (sequential mode only)
+            if not queue_lock:
+                _write_state(repo_root, phase=2, sprint=sid, stage="ship", queue=queue)
+
             # Verify PR
             pr_url = summary.get("pr_url", "")
             if pr_url:

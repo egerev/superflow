@@ -29,6 +29,16 @@ def execute_parallel(sprints, queue, queue_path, checkpoints_dir, repo_root,
             if on_sprint_done:
                 on_sprint_done()
 
+            # Write state after each sprint completes (under lock)
+            with queue_lock:
+                from lib.supervisor import _write_state
+                _write_state(repo_root, phase=2, sprint=sprint["id"],
+                             stage="ship", queue=queue)
+
+    # Final state snapshot after all sprints
+    from lib.supervisor import _write_state
+    _write_state(repo_root, phase=2, sprint=None, stage="ship", queue=queue)
+
 
 def _worker(sprint, queue, queue_path, checkpoints_dir, repo_root,
             timeout, notifier, queue_lock):

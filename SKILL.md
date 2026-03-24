@@ -9,7 +9,7 @@ Four phases: onboarding, discovery, execution, merge.
 
 Phase 0 (auto, first run only): Detect markers > Mini-interview (AskUserQuestion) > Detect empty/existing > Analyze codebase (4 parallel agents) > Health report > Proposal (approval gate) > Audit llms.txt & CLAUDE.md > CLAUDE.local.md > Permissions > Hooks setup + verification > /verify skill > Plugins > Markers > Restart instruction
 Phase 1 (with user, 11 steps): Context > Research (parallel agents) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Approval (MERGED GATE) > Spec > Spec Review (dual-model) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE)
-Phase 2 (autonomous, 11 steps per sprint): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers > Internal review > Test verification > PAR > Push+PR > Cleanup > Telegram
+Phase 2 (autonomous, 11 steps per sprint + wave-based parallel dispatch): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers (parallel waves) > Internal review > Test verification > PAR > Push+PR > Cleanup > Telegram
 Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase merge (with CI failure handling) > Post-merge report
 
 Durable rules live in `.claude/rules/superflow-enforcement.md` (survives compaction).

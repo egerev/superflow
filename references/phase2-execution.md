@@ -87,15 +87,43 @@ TaskCreate(
 
 ---
 
+## Parallel Dispatch within a Sprint
+
+When a sprint has multiple tasks, analyze them for parallelism before dispatching.
+
+**Independence criteria** (ALL must hold for parallel dispatch):
+1. Tasks modify different files (no overlapping file paths)
+2. No data dependency (Task B doesn't read output of Task A)
+3. No shared state (no common database table, config, or global variable)
+4. No ordering constraint (either can complete first)
+
+**Wave analysis:**
+1. List files each task modifies
+2. Build dependency graph from file overlaps and explicit `depends_on`
+3. Group tasks into waves — tasks in the same wave are independent
+4. Dispatch each wave: all tasks in wave via `Agent(run_in_background: true)`
+5. Wait for wave to complete before dispatching next wave
+
+**Example:** 6 tasks → Wave 1: tasks 1,2,3 (independent files) → Wave 2: task 4 (depends on 1) → Wave 3: tasks 5,6 (independent)
+
+**Fallback:** If ≤3 tasks in the sprint, skip wave analysis and dispatch sequentially. The overhead of parallelism isn't worth it for small task counts.
+
+**After all waves:** Verify no file conflicts by checking `git status` — if two agents modified the same file, resolve manually.
+
+---
+
 ## Per-Sprint Flow
 
 1. <!-- Stage 1: Setup, Todo 1 --> **Re-read** this file (`references/phase2-execution.md`) and the current sprint's SPEC (from the plan in `docs/superflow/specs/` or `docs/superflow/plans/`)
 2. <!-- Stage 1: Setup, Todo 2 --> **Telegram update** (if MCP connected): "Starting sprint N: [title]"
 3. <!-- Stage 1: Setup, Todo 3 --> **Worktree**: verify `.worktrees/` is gitignored (`git check-ignore -q .worktrees || echo '.worktrees/' >> .gitignore`), then `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`
 4. <!-- Stage 1: Setup, Todo 4 --> **Baseline tests** in worktree: run full test suite, record output. If tests fail on baseline, stop and report — do not build on a broken base.
-5. <!-- Stage 2: Implementation, Todos 1-2 --> **Dispatch implementers** via Agent tool (`model: sonnet` for mechanical tasks; permissions are handled by `settings.json` from Phase 0 Step 7). Use `prompts/implementer.md`. Include `llms.txt` content in agent context (if exists) — this gives implementers project architecture understanding.
-   - **Parallelize** when tasks are independent (different files, no shared state, no dependencies)
-   - **Sequentialize** when tasks share files, state, or depend on each other's output
+5. <!-- Stage 2: Implementation, Todos 1-2 --> **Dispatch implementers** — see Parallel Dispatch section above for wave analysis.
+   - 5a. Analyze task list — identify independent tasks (see Parallel Dispatch above)
+   - 5b. Group into waves
+   - 5c. For Wave 1: dispatch each as `Agent(run_in_background: true, model: sonnet)`. Use `prompts/implementer.md`. Include `llms.txt` content in agent context.
+   - 5d. For subsequent waves: same pattern
+   - 5e. After all waves: verify no file conflicts with `git status`
 6. <!-- Stage 3: Review, Todo 1 --> **Internal review** (pre-PAR, scale by complexity — see Review Optimization below):
    - Dispatch spec reviewer (`prompts/spec-reviewer.md`, `run_in_background: true`)
    - Dispatch code quality reviewer (`prompts/code-quality-reviewer.md`, `run_in_background: true`) — skip for Simple sprints

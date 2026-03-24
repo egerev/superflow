@@ -1,6 +1,7 @@
 """Tests for SprintQueue — TDD approach."""
 import json
 import os
+import shutil
 import tempfile
 import unittest
 
@@ -365,6 +366,41 @@ class TestConcurrentQueueWrites(unittest.TestCase):
         self.assertEqual(summary["completed"], 4)
         self.assertEqual(summary["failed"], 4)
         self.assertEqual(summary["skipped"], 4)
+
+
+class TestQueueTasksField(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_sprint_with_tasks_field(self):
+        sprints = [{
+            "id": 1, "title": "Test", "status": "pending",
+            "plan_file": "p.md", "branch": "feat/test",
+            "depends_on": [], "pr": None, "retries": 0,
+            "max_retries": 2, "error_log": None,
+            "tasks": [{"name": "Task A", "done": False}, {"name": "Task B", "done": True}]
+        }]
+        q = SprintQueue("test", "2026-01-01", sprints)
+        q.save(self.queue_path)
+        q2 = SprintQueue.load(self.queue_path)
+        self.assertEqual(len(q2.sprints[0]["tasks"]), 2)
+        self.assertEqual(q2.sprints[0]["tasks"][1]["done"], True)
+
+    def test_sprint_without_tasks_field(self):
+        sprints = [{
+            "id": 1, "title": "Test", "status": "pending",
+            "plan_file": "p.md", "branch": "feat/test",
+            "depends_on": [], "pr": None, "retries": 0,
+            "max_retries": 2, "error_log": None,
+        }]
+        q = SprintQueue("test", "2026-01-01", sprints)
+        q.save(self.queue_path)
+        q2 = SprintQueue.load(self.queue_path)
+        self.assertNotIn("tasks", q2.sprints[0])
 
 
 if __name__ == "__main__":

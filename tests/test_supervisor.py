@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock, call
 from lib.supervisor import (
     create_worktree, cleanup_worktree, build_prompt, execute_sprint,
     preflight, run, print_summary, resume, _shutdown_event,
-    generate_completion_report,
+    generate_completion_report, _write_state, _verify_steps, REQUIRED_STEPS,
 )
 import lib.supervisor as supervisor_module
 from lib.queue import SprintQueue
@@ -901,6 +901,66 @@ class TestCompletionReport(unittest.TestCase):
 
         self.assertIsInstance(report, str)
         self.assertTrue(len(report) > 0)
+
+
+class TestWriteState(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints=None):
+        if sprints is None:
+            sprints = [_sprint(1, status="completed"), _sprint(2, status="in_progress")]
+        return SprintQueue("test", "2026-01-01", sprints)
+
+    def test_write_state_creates_file(self):
+        q = self._make_queue()
+        _write_state(self.tmpdir, phase=2, sprint=1, stage="setup", queue=q)
+        state_path = os.path.join(self.tmpdir, ".superflow-state.json")
+        self.assertTrue(os.path.exists(state_path))
+        with open(state_path) as f:
+            state = json.load(f)
+        self.assertEqual(state["version"], 1)
+        self.assertEqual(state["phase"], 2)
+        self.assertEqual(state["sprint"], 1)
+        self.assertEqual(state["stage"], "setup")
+        self.assertEqual(state["tasks_done"], [1])
+        self.assertEqual(state["tasks_total"], 2)
+        self.assertIn("last_updated", state)
+
+    def test_write_state_atomic(self):
+        q = self._make_queue()
+        _write_state(self.tmpdir, phase=2, sprint=1, stage="setup", queue=q)
+        tmp_path = os.path.join(self.tmpdir, ".superflow-state.json.tmp")
+        self.assertFalse(os.path.exists(tmp_path))
+
+    def test_write_state_updates_on_transition(self):
+        q = self._make_queue()
+        _write_state(self.tmpdir, phase=2, sprint=1, stage="setup", queue=q)
+        _write_state(self.tmpdir, phase=2, sprint=1, stage="implementation", queue=q)
+        with open(os.path.join(self.tmpdir, ".superflow-state.json")) as f:
+            state = json.load(f)
+        self.assertEqual(state["stage"], "implementation")
+        self.assertEqual(state["stage_index"], 1)
+
+
+class TestVerifySteps(unittest.TestCase):
+    def test_all_present(self):
+        summary = {"steps_completed": list(REQUIRED_STEPS)}
+        self.assertEqual(_verify_steps(summary), [])
+
+    def test_missing(self):
+        summary = {"steps_completed": ["baseline_tests", "implementation"]}
+        missing = _verify_steps(summary)
+        self.assertIn("par", missing)
+        self.assertIn("pr_created", missing)
+
+    def test_backward_compatible(self):
+        summary = {}
+        missing = _verify_steps(summary)
+        self.assertEqual(sorted(missing), sorted(REQUIRED_STEPS))
 
 
 if __name__ == "__main__":
