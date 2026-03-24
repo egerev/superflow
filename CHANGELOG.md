@@ -2,6 +2,31 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [3.4.0] - 2026-03-25
+
+### Changed — Phase 0 Modular Rewrite
+- **Monolith → modular stages**: `phase0-onboarding.md` split from 1,395 lines into 96-line router + 6 stage files loaded on demand. Each stage file is self-contained and survives context compaction
+- **Auto-detection replaces interview**: parallel preflight detects stack, team size, CI, formatters, package manager automatically. User confirms with one click instead of answering 3 questions
+- **Tiered model usage**: Opus for analysis/security/documentation (deep reasoning), Sonnet for permissions/hooks/scaffolding (mechanical tasks)
+- **3 parallel setup branches**: Stage 4 runs documentation, permissions/hooks, and scaffolding concurrently with strict file ownership
+- **Informative summary**: ~15 line summary shown to user instead of full health report wall. Full details saved to `docs/superflow/project-health-report.md`
+- **State schema expanded**: `context.preflight`, `context.tech_debt`, `context.approval` objects for cross-stage data flow and crash recovery
+
+### Added
+- `references/phase0/stage1-detect.md` — parallel preflight, auto-detection, confirmation flow
+- `references/phase0/stage2-analysis.md` — 5 parallel agents with tiered model usage
+- `references/phase0/stage3-report.md` — health report, informative summary, 3-path approval
+- `references/phase0/stage4-setup.md` — 3 concurrent branches, execution matrix by approval mode
+- `references/phase0/stage5-completion.md` — markers, tech debt persistence, restart instruction
+- `references/phase0/greenfield.md` — extracted greenfield path (G1-G6) with Stage 4 rejoin
+- Recovery matrix in router: 5 explicit crash recovery paths, state-based priority over markers
+
+### Fixed
+- Greenfield path now populates `context.preflight` for Stage 4 Branch B (permissions need stack info)
+- "Skip Phase 0" writes markers in all 3 detection files (prevents re-entry on next run)
+- Near-empty repos with manifest files (package.json) treated as existing projects, not greenfield
+- `.gitignore` update moved to Stage 5 (always runs, regardless of approval mode)
+
 ## [3.3.1] - 2026-03-25
 
 ### Fixed — Audit Findings
