@@ -107,6 +107,21 @@ After each stage transition, update via python3:
 python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s['stage']='analysis'; s['stage_index']=1; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
 ```
 
+**Critical: persist $USER_CONTEXT after interview (Stage 1 → Stage 2 transition).** Without this, context compaction during analysis loses the user's answers:
+```bash
+python3 -c "
+import json,datetime
+s=json.load(open('.superflow-state.json'))
+s['stage']='analysis'
+s['stage_index']=1
+s['context']={'user_context': $USER_CONTEXT_JSON}
+s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat()
+json.dump(s,open('.superflow-state.json','w'),indent=2)
+"
+# Replace $USER_CONTEXT_JSON with the actual JSON from Step 1, e.g.:
+# {"team":"solo","experience":"intermediate","ci":"no","dismissed":false}
+```
+
 If python3 is unavailable (checked in Step 6.5), overwrite the full file with updated JSON.
 
 ### TaskCreate/TaskUpdate Pattern
@@ -209,7 +224,7 @@ Pass `$USER_CONTEXT` to analysis agents in Step 2 so they adjust focus:
 
 > **Keep it lightweight.** The interview must not feel like a blocker — the "just go" edge case ensures impatient users skip straight to analysis.
 
-Then proceed to analysis.
+Then proceed to analysis. **Before dispatching agents, persist `$USER_CONTEXT` to `.superflow-state.json`** (see State Management section above) so context compaction during analysis does not lose interview answers.
 
 ## Step 1.5: Detect Empty Project vs Existing
 <!-- Stage 1: Interview, Todo 4 -->
