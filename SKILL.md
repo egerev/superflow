@@ -53,7 +53,7 @@ superflow/
 ## Startup Checklist
 
 1. Read `.claude/rules/superflow-enforcement.md`
-2. **Session recovery check**: `git status --short`. If uncommitted changes exist from a crashed previous session:
+2. **Session recovery check** (only on `feat/*` branches): `git status --short`. If uncommitted changes exist from a crashed previous session:
    a. `git stash` → run tests on clean HEAD → note results
    b. `git stash pop` → run tests again → compare
    c. If working tree tests fail but HEAD tests pass, the stashed changes have bugs — fix before proceeding

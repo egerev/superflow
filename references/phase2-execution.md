@@ -213,7 +213,7 @@ Agent-to-key mapping: Agent A (Technical) -> `claude_code_quality`, Agent B (Pro
 
 **One test process at a time.** Never run tests in parallel or spawn a new run before the previous one finishes.
 
-1. Always wrap test commands with timeout: `timeout 120 python3 -m unittest discover -s tests`
+1. Always wrap test commands with timeout: `$TIMEOUT_CMD 120 python3 -m unittest discover -s tests`
 2. If tests hang: `pkill -f unittest` FIRST, then investigate WHY (read the test, find the unmocked call)
 3. **Never retry a hanging test without understanding the cause.** Hanging = a real `subprocess.run()` is being called without a mock. Re-running won't help.
 4. If a test passes individually but fails in the full suite, suspect leaked global state (threading events, shared mocks, file artifacts)
