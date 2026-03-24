@@ -7,7 +7,7 @@ description: "Use when user says 'superflow', 'суперфлоу', or asks for 
 
 Four phases: onboarding, discovery, execution, merge.
 
-Phase 0 (auto, first run only): Detect markers > Mini-interview (AskUserQuestion) > Detect empty/existing > Analyze codebase (4 parallel agents) > Health report > Proposal (approval gate) > Audit llms.txt & CLAUDE.md > CLAUDE.local.md > Permissions > Hooks setup + verification > /verify skill > Plugins > Markers > Restart instruction
+Phase 0 (auto, first run only): Detect markers > Auto-detect + confirm > Analyze codebase (5 parallel agents) > Health report > Proposal (approval gate) > Docs + Environment (3 parallel branches) > Markers > Restart instruction
 Phase 1 (with user, 11 steps): Context > Research (parallel agents) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Approval (MERGED GATE) > Spec > Spec Review (dual-model) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE)
 Phase 2 (autonomous, 10 steps per sprint + wave-based parallel dispatch): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers (parallel waves) > Unified Review (4 agents) > Test verification > Push+PR > Cleanup > Telegram
 Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase merge (with CI failure handling) > Post-merge report
@@ -47,6 +47,14 @@ superflow/
   prompts/               — Agent prompt templates (7 prompts)
     codex/               — Codex-specific prompts (3 prompts)
   references/            — Phase documentation (phases 0-3)
+    phase0-onboarding.md — Phase 0 router (detection, recovery matrix, stage loading)
+    phase0/
+      stage1-detect.md   — Parallel preflight, auto-detection, confirmation
+      stage2-analysis.md — 5 parallel agents, tiered model usage
+      stage3-report.md   — Health report, summary, approval
+      stage4-setup.md    — 3 concurrent branches, strict file ownership
+      stage5-completion.md — Markers, tech debt, restart
+      greenfield.md      — Empty project path, G1-G6
   tests/                 — Unit and integration tests (140+ tests)
 ```
 
@@ -102,7 +110,7 @@ fi
 
 ## Phase References
 
-- Phase 0: `references/phase0-onboarding.md` (first run only)
+- Phase 0: `references/phase0-onboarding.md` (router — first run only); stages: `references/phase0/stage1-detect.md`, `references/phase0/stage2-analysis.md`, `references/phase0/stage3-report.md`, `references/phase0/stage4-setup.md`, `references/phase0/stage5-completion.md`, `references/phase0/greenfield.md`
 - Phase 1: `references/phase1-discovery.md`
 - Phase 2: `references/phase2-execution.md`
 - Phase 3: `references/phase3-merge.md`

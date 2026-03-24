@@ -6,7 +6,7 @@
 
 Superflow is a 4-phase development workflow skill for Claude Code:
 
-- **Phase 0 (Onboarding):** Analyzes codebase with 5 parallel agents (4 Claude + 1 Codex), generates health report, creates/audits llms.txt and CLAUDE.md, sets up permissions
+- **Phase 0 (Onboarding):** Auto-detects project state and confirms with user, analyzes codebase with 5 parallel agents (4 Claude + 1 Codex), generates health report, creates/audits llms.txt and CLAUDE.md, sets up permissions — structured as 5 modular stage files
 - **Phase 1 (Product Discovery):** 12-step interactive brainstorming with dual-model spec/plan review, JTBD user stories, approval gates
 - **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — git worktrees, TDD, subagent implementers, specialized 2-agent review (Claude Product + Codex Technical), one PR per sprint
 - **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification and documentation update
@@ -22,7 +22,13 @@ Version: v3.3.1 (2026-03-25). MIT License.
 
 ## Phase References
 
-- [references/phase0-onboarding.md](references/phase0-onboarding.md): First-run onboarding — 11 steps, marker detection, 5 parallel agents (4 Claude + 1 Codex), health report, llms.txt/CLAUDE.md audit, python3 check (~323 lines)
+- [references/phase0-onboarding.md](references/phase0-onboarding.md): Phase 0 router — detection, recovery matrix, stage loading (~80 lines)
+- [references/phase0/stage1-detect.md](references/phase0/stage1-detect.md): Parallel preflight, auto-detection, confirmation (~214 lines)
+- [references/phase0/stage2-analysis.md](references/phase0/stage2-analysis.md): 5 parallel agents, tiered model usage (~256 lines)
+- [references/phase0/stage3-report.md](references/phase0/stage3-report.md): Health report, informative summary, approval (~179 lines)
+- [references/phase0/stage4-setup.md](references/phase0/stage4-setup.md): 3 concurrent branches, strict file ownership (~238 lines)
+- [references/phase0/stage5-completion.md](references/phase0/stage5-completion.md): Markers, tech debt persistence, restart (~163 lines)
+- [references/phase0/greenfield.md](references/phase0/greenfield.md): Greenfield path G1-G6 (~350 lines)
 - [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — 12 steps, brainstorm STOP GATE, product summary APPROVAL, spec/plan with dual-model review (132 lines)
 - [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — 10 steps, worktree, TDD, implementer dispatch, 2-agent specialized review (Claude Product + Codex Technical), push+PR, Final Holistic Review (166 lines)
 - [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, CI handling, post-merge report (87 lines)
