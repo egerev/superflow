@@ -7,6 +7,7 @@ def execute_parallel(sprints, queue, queue_path, checkpoints_dir, repo_root,
                      timeout=1800, notifier=None, max_workers=2, on_sprint_done=None):
     """Execute independent sprints in parallel using ThreadPoolExecutor."""
     queue_lock = threading.Lock()
+    from lib.supervisor import _write_state
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {}
@@ -25,18 +26,21 @@ def execute_parallel(sprints, queue, queue_path, checkpoints_dir, repo_root,
                 with queue_lock:
                     queue.mark_failed(sprint["id"], str(e))
                     queue.save(queue_path)
+                    _write_state(repo_root, phase=2, sprint=sprint["id"],
+                                 stage="failed", queue=queue)
+                if on_sprint_done:
+                    on_sprint_done()
+                continue
 
             if on_sprint_done:
                 on_sprint_done()
 
-            # Write state after each sprint completes (under lock)
+            # Write state after successful sprint (under lock)
             with queue_lock:
-                from lib.supervisor import _write_state
                 _write_state(repo_root, phase=2, sprint=sprint["id"],
                              stage="ship", queue=queue)
 
     # Final state snapshot after all sprints
-    from lib.supervisor import _write_state
     _write_state(repo_root, phase=2, sprint=None, stage="ship", queue=queue)
 
 

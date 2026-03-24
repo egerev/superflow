@@ -188,7 +188,7 @@ def _now_iso() -> str:
 
 
 _PHASE_LABELS = {0: "Onboarding", 1: "Product Discovery", 2: "Autonomous Execution", 3: "Merge"}
-_STAGE_INDICES = {"setup": 0, "implementation": 1, "review": 2, "par": 3, "ship": 4}
+_STAGE_INDICES = {"setup": 0, "implementation": 1, "review": 2, "par": 3, "ship": 4, "failed": -1}
 
 
 def _write_state(repo_root: str, phase: int, sprint: int | None,
@@ -208,9 +208,12 @@ def _write_state(repo_root: str, phase: int, sprint: int | None,
     }
     state_path = os.path.join(repo_root, ".superflow-state.json")
     tmp_path = state_path + ".tmp"
-    with open(tmp_path, "w") as f:
-        json.dump(state, f, indent=2)
-    os.replace(tmp_path, state_path)
+    try:
+        with open(tmp_path, "w") as f:
+            json.dump(state, f, indent=2)
+        os.replace(tmp_path, state_path)
+    except OSError as e:
+        logger.warning("Failed to write state file: %s", e)
 
 
 REQUIRED_STEPS = {"baseline_tests", "implementation", "par", "pr_created"}

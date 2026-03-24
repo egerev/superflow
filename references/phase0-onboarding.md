@@ -401,9 +401,9 @@ Show the file list from the selected template (e.g., for Next.js: package.json, 
 Based on `$STACK_CHOICE`, generate the initial project structure. **Do NOT use `create-next-app` or similar generators** — they produce too much boilerplate and make non-standard choices. Instead, read the appropriate template and create a minimal, clean structure.
 
 **Template selection:**
-- Next.js / React → `templates/greenfield/nextjs.md`
+- Next.js (specifically `nextjs` stack choice) → `templates/greenfield/nextjs.md`
 - Python (any framework) → `templates/greenfield/python.md`
-- Other / Unknown → use `templates/greenfield/generic.md` as a base, but generate stack-appropriate files (e.g., for Express: package.json with express dependency, src/index.ts with basic server; for Go: go.mod, main.go; for Rust: Cargo.toml, src/main.rs). The generic template provides the directory skeleton; the LLM fills in stack-specific content.
+- React + Vite, Express, Go, Rust, or other stacks → use `templates/greenfield/generic.md` as a base, but generate stack-appropriate files (e.g., for React+Vite: package.json with vite/react, vite.config.ts, src/App.tsx; for Express: package.json with express, src/index.ts; for Go: go.mod, main.go; for Rust: Cargo.toml, src/main.rs). The generic template provides the directory skeleton; the LLM fills in stack-specific content.
 
 Read the selected template, replace `{project_name}` and `{project_description}` from `$PROJECT_VISION`, and create all files using the Write tool. For Python templates, convert `{project_name}` to a valid Python identifier by replacing hyphens with underscores (e.g., "my-cool-app" → "my_cool_app") for the package directory name.
 
