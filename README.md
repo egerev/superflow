@@ -36,7 +36,7 @@ Agent: [Phase 3: update docs → merge PRs → cleanup]
 - **PR per sprint** — small, reviewable, deployable
 - **Git worktrees** — isolated workspace per sprint
 - **TDD** — write failing test → verify fail → implement → verify pass
-- **4-agent unified review** — 2 Claude + 2 Codex reviewers (code quality + product), or 4 Claude split-focus fallback
+- **2-agent specialized review** — Claude Product + Codex Technical (specialize, don't duplicate), or 2 Claude split-focus fallback
 - **Review gate** — unified review before every push, `.par-evidence.json` required
 - **llms.txt** — standard project documentation for all LLMs (llmstxt.org)
 - **Product brief** — Jobs to be Done + user stories before technical spec

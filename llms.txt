@@ -8,10 +8,10 @@ Superflow is a 4-phase development workflow skill for Claude Code:
 
 - **Phase 0 (Onboarding):** Analyzes codebase with 5 parallel agents (4 Claude + 1 Codex), generates health report, creates/audits llms.txt and CLAUDE.md, sets up permissions
 - **Phase 1 (Product Discovery):** 12-step interactive brainstorming with dual-model spec/plan review, JTBD user stories, approval gates
-- **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — git worktrees, TDD, subagent implementers, 4-agent unified review (2 Claude + 2 Codex or 4 Claude split-focus), one PR per sprint
+- **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — git worktrees, TDD, subagent implementers, specialized 2-agent review (Claude Product + Codex Technical), one PR per sprint
 - **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification and documentation update
 
-Version: v3.2.0 (2026-03-24). MIT License.
+Version: v3.3.0 (2026-03-24). MIT License.
 
 ## File Structure
 
@@ -24,7 +24,7 @@ Version: v3.2.0 (2026-03-24). MIT License.
 
 - [references/phase0-onboarding.md](references/phase0-onboarding.md): First-run onboarding — 11 steps, marker detection, 5 parallel agents (4 Claude + 1 Codex), health report, llms.txt/CLAUDE.md audit, python3 check (~323 lines)
 - [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — 12 steps, brainstorm STOP GATE, product summary APPROVAL, spec/plan with dual-model review (132 lines)
-- [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — 10 steps, worktree, TDD, implementer dispatch, 4-agent unified review, push+PR, Final Holistic Review (166 lines)
+- [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — 10 steps, worktree, TDD, implementer dispatch, 2-agent specialized review (Claude Product + Codex Technical), push+PR, Final Holistic Review (166 lines)
 - [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, CI handling, post-merge report (87 lines)
 
 ## Agent Prompts
@@ -76,7 +76,7 @@ The supervisor is a Python CLI that orchestrates autonomous multi-sprint executi
 
 ## Key Concepts
 
-- **4-agent unified review:** Every PR is reviewed by 4 agents in parallel (2 Claude + 2 Codex, or 4 Claude split-focus if Codex unavailable) — code quality and product acceptance from both providers
+- **2-agent specialized review:** Every PR is reviewed by 2 agents in parallel — Claude (Product lens: spec fit, user scenarios, data integrity) + Codex/secondary (Technical lens: correctness, security, architecture). Specialize, don't duplicate
 - **Review gate:** Mandatory gate before every PR push — all reviewers must return ACCEPTED, evidence written to `.par-evidence.json`
 - **Final Holistic Review:** After all sprints complete, two Opus reviewers (Technical + Product) review ALL code together to catch cross-module issues
 - **Breakage Scenario:** Every review finding must include a concrete scenario where the issue causes a real problem — no scenario = not a finding
