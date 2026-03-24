@@ -307,18 +307,31 @@ After greenfield scaffolding is complete:
    Scaffolded by Superflow Phase 0 greenfield path"
    ```
 
-2. **Rejoin Stage 4 (Branch B and C only):**
-   - **Skip Branch A** (llms.txt + CLAUDE.md + CLAUDE.local.md) — these were just created in G5.
+2. **Write approval state** before entering Stage 4 — greenfield defaults to "all" for B+C:
+   ```bash
+   python3 -c "
+   import json, datetime
+   s = json.load(open('.superflow-state.json'))
+   s['context']['approval'] = {'mode': 'all', 'items': ['permissions', 'hooks', 'verify_skill', 'claude_local', 'gitignore', 'enforcement']}
+   s['stage'] = 'setup'
+   s['stage_index'] = 3
+   s['last_updated'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+   json.dump(s, open('.superflow-state.json', 'w'), indent=2)
+   "
+   ```
+
+3. **Rejoin Stage 4 (Branch B and C only):**
+   - **Skip Branch A** (llms.txt + CLAUDE.md) — these were just created in G5.
      Stage 4 Branch A would overwrite the freshly generated docs with no gain.
-   - **Run Branch B** (permissions/hooks — Stage 4, steps 7 and 7.5 in original):
+   - **Run Branch B** (permissions/hooks — Stage 4):
      Read `references/phase0/stage4-setup.md` and execute Branch B from there.
-   - **Run Branch C** (skills recommendation, /verify skill, plugins):
+   - **Run Branch C** (skills recommendation, /verify skill, scaffolding):
      Read `references/phase0/stage4-setup.md` and execute Branch C from there.
 
-3. **Transition message:**
+4. **Transition message:**
    > "Project scaffolded! Now let's configure your development environment."
 
-4. **After Stage 4 Branch B+C:** proceed to Stage 5 (references/phase0/stage5-completion.md).
+5. **After Stage 4 Branch B+C:** proceed to Stage 5 (references/phase0/stage5-completion.md).
 
 Phase 1 proceeds normally — the user describes what they want to build against the freshly
 scaffolded project.
