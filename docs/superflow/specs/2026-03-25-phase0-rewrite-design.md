@@ -174,7 +174,7 @@ This is ~15 lines — informative but not overwhelming. Full details in the save
 
 Three concurrent branches via `Agent(run_in_background: true)`:
 
-**Branch A — Documentation (Sonnet):**
+**Branch A — Documentation (Opus deep-doc-writer):**
 - Read evidence from Stage 2 analysis
 - Audit/create llms.txt (using prompts/llms-txt-writer.md)
 - Audit/create CLAUDE.md (using prompts/claude-md-writer.md)
@@ -270,7 +270,7 @@ All stages use sequential integers. No more X.5 steps.
 ## Migration
 
 1. Create `references/phase0/` directory with 5 stage files
-2. Create `references/phase0-greenfield.md` from existing greenfield sections
+2. Create `references/phase0/greenfield.md` from existing greenfield sections
 3. Replace `references/phase0-onboarding.md` with router (~60 lines)
 4. Update all references in SKILL.md, CLAUDE.md, llms.txt, enforcement
 5. Test greenfield detection still routes correctly
