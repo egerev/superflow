@@ -35,6 +35,13 @@ superflow/
     supervisor-sprint-prompt.md — Sprint execution prompt template
     replan-prompt.md     — Replanner prompt template
     superflow-state-schema.json — JSON Schema for .superflow-state.json
+    greenfield/              — Stack-specific scaffolding templates
+      nextjs.md              — Next.js project template
+      python.md              — Python project template
+      generic.md             — Generic fallback template
+    ci/                      — CI workflow templates
+      github-actions-node.yml    — GitHub Actions for Node.js
+      github-actions-python.yml  — GitHub Actions for Python
   # Phase 0 creates <project>/.claude/skills/verify/SKILL.md during onboarding
   prompts/               — Agent prompt templates (7 prompts)
   references/            — Phase documentation (phases 0-3)
