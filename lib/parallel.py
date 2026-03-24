@@ -2,6 +2,7 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import lib.supervisor as _sup
 from lib.checkpoint import save_checkpoint
 
 
@@ -27,16 +28,29 @@ def execute_parallel(sprints, queue, queue_path, checkpoints_dir, repo_root,
                 with queue_lock:
                     queue.mark_failed(sprint["id"], str(e))
                     queue.save(queue_path)
-                from lib.supervisor import _now_iso
                 save_checkpoint(checkpoints_dir, sprint["id"], {
                     "sprint_id": sprint["id"],
                     "status": "failed",
-                    "failed_at": _now_iso(),
+                    "failed_at": _sup._now_iso(),
                     "error": str(e)[:500],
                 })
+                with queue_lock:
+                    _sup._write_state(repo_root, phase=2, sprint=sprint["id"],
+                                      stage="failed", queue=queue)
+                if on_sprint_done:
+                    on_sprint_done()
+                continue
 
             if on_sprint_done:
                 on_sprint_done()
+
+            # Write state after successful sprint (under lock)
+            with queue_lock:
+                _sup._write_state(repo_root, phase=2, sprint=sprint["id"],
+                                  stage="ship", queue=queue)
+
+    # Final state snapshot after all sprints
+    _sup._write_state(repo_root, phase=2, sprint=None, stage="ship", queue=queue)
 
 
 def _worker(sprint, queue, queue_path, checkpoints_dir, repo_root,
