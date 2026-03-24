@@ -8,7 +8,7 @@ description: "Use when user says 'superflow', 'суперфлоу', or asks for 
 Four phases: onboarding, discovery, execution, merge.
 
 Phase 0 (auto, first run only): Detect markers > Mini-interview (AskUserQuestion) > Detect empty/existing > Analyze codebase (4 parallel agents) > Health report > Proposal (approval gate) > Audit llms.txt & CLAUDE.md > CLAUDE.local.md > Permissions > Hooks setup + verification > /verify skill > Plugins > Markers > Restart instruction
-Phase 1 (with user, 12 steps): Context > Research (parallel agents) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Summary (APPROVAL) > Brief > Spec > Spec Review (dual-model) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE)
+Phase 1 (with user, 11 steps): Context > Research (parallel agents) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Approval (MERGED GATE) > Spec > Spec Review (dual-model) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE)
 Phase 2 (autonomous, 11 steps per sprint): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers > Internal review > Test verification > PAR > Push+PR > Cleanup > Telegram
 Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase merge (with CI failure handling) > Post-merge report
 
@@ -34,6 +34,7 @@ superflow/
   templates/
     supervisor-sprint-prompt.md — Sprint execution prompt template
     replan-prompt.md     — Replanner prompt template
+    superflow-state-schema.json — JSON Schema for .superflow-state.json
   # Phase 0 creates <project>/.claude/skills/verify/SKILL.md during onboarding
   prompts/               — Agent prompt templates (7 prompts)
   references/            — Phase documentation (phases 0-3)
@@ -49,7 +50,8 @@ superflow/
 5. Detect supervisor: `python3 -c "import sys; print(sys.version)" 2>/dev/null`
 6. Detect mode: existing code = Enhancement, empty repo = Greenfield
 7. **Run Phase 0** if first run (see detection in `references/phase0-onboarding.md`)
-8. Read CLAUDE.md and project docs
+8. Check `.superflow-state.json` for resume context (crash recovery, session restore)
+9. Read CLAUDE.md and project docs
 
 ## Secondary Provider Detection
 
@@ -61,6 +63,18 @@ codex --version 2>/dev/null && SECONDARY_PROVIDER="codex"
 ```
 
 Use detected provider silently. No warnings about missing providers.
+
+## State Management
+
+`.superflow-state.json` in the project root tracks current phase, sprint, and stage. It is:
+- **Read-only projection** during Phase 2 with supervisor (generated from queue/checkpoint data)
+- **Directly written** during Phases 0, 1, 3 (interactive, single session)
+- **Gitignored** (added during Phase 0 Step 6)
+- **Schema**: `templates/superflow-state-schema.json`
+
+Hooks read state for context restoration:
+- **PostCompact hook** (`~/.claude/settings.json`): after context compaction, injects current phase/stage so the LLM can re-read the right phase doc
+- **SessionStart hook** (`~/.claude/settings.json`): on `claude --resume`, restores Superflow context from state file
 
 ## Timeout Helper
 
@@ -82,5 +96,6 @@ fi
 - Testing: `prompts/testing-guidelines.md`
 - Supervisor: `bin/superflow-supervisor`, `lib/supervisor.py`, `lib/queue.py`, `lib/checkpoint.py`, `lib/parallel.py`, `lib/replanner.py`, `lib/notifications.py`
 - Templates: `templates/supervisor-sprint-prompt.md`, `templates/replan-prompt.md`
+- State: `templates/superflow-state-schema.json` (schema), `.superflow-state.json` (runtime, gitignored)
 
 Re-read phase docs at every phase/sprint boundary (compaction erases skill content).

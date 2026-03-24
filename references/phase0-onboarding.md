@@ -29,7 +29,108 @@ Phase 0 leaves an **exact marker** in each file it touches:
 
 ---
 
+## Stage Structure
+
+Phase 0 has 6 stages. Use TaskCreate at each stage start, TaskUpdate as todos complete.
+
+```
+Stage 1: "Interview"
+  Todos:
+  - "Ask team size"
+  - "Ask experience level"
+  - "Ask CI status"
+  - "Detect project type (empty/existing)"
+
+Stage 2: "Analysis"
+  Todos:
+  - "Dispatch architecture agent"
+  - "Dispatch code quality agent"
+  - "Dispatch DevOps agent"
+  - "Dispatch documentation agent"
+  - "Synthesize health report"
+
+Stage 3: "Proposal"
+  Todos:
+  - "Generate proposal"
+  - "Get user approval"
+
+Stage 4: "Documentation"
+  Todos:
+  - "Audit/create llms.txt"
+  - "Audit/create CLAUDE.md"
+  - "Create CLAUDE.local.md"
+
+Stage 5: "Environment Setup"
+  Todos:
+  - "Verify enforcement rules"
+  - "Check .gitignore"
+  - "Check supervisor prerequisites"
+  - "Set up permissions"
+  - "Set up hooks"
+  - "Verify hooks"
+  - "Recommend skills"
+  - "Recommend plugins"
+
+Stage 6: "Completion"
+  Todos:
+  - "Write markers"
+  - "Run completion checklist"
+  - "Show restart instruction"
+```
+
+### State Management
+
+At the start of Phase 0, write `.superflow-state.json`:
+```bash
+cat > .superflow-state.json << 'STATEEOF'
+{"version":1,"phase":0,"phase_label":"Onboarding","stage":"interview","stage_index":0,"last_updated":"..."}
+STATEEOF
+```
+
+After each stage transition, update via python3:
+```bash
+python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s['stage']='analysis'; s['stage_index']=1; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
+```
+
+If python3 is unavailable (checked in Step 6.5), overwrite the full file with updated JSON.
+
+### TaskCreate/TaskUpdate Pattern
+
+```
+# At the beginning of Stage 1:
+TaskCreate(
+  title: "Phase 0: Interview",
+  description: "Ask 3 questions, detect project type",
+  todos: [
+    "Ask team size",
+    "Ask experience level",
+    "Ask CI status",
+    "Detect project type"
+  ]
+)
+
+# As each todo completes:
+TaskUpdate(id: <task_id>, todo_updates: [
+  {index: 0, status: "completed"}
+])
+
+# When stage completes:
+TaskUpdate(id: <task_id>, status: "completed")
+```
+
+### Phase Cross-Reference
+
+Phases 1-3 have their own stage structures defined in their respective reference docs:
+- Phase 1: `references/phase1-discovery.md` — 5 stages (Research, Brainstorming, Product Approval, Specification, Planning)
+- Phase 2: `references/phase2-execution.md` — 5 stages per sprint (Setup, Implementation, Review, PAR, Ship)
+- Phase 3: `references/phase3-merge.md` — 3 stages (Pre-merge, Merge, Post-merge)
+
+After Phase 0 completion, `.superflow-state.json` transitions to `phase: 1`.
+
+---
+
 ## Step 1: Greet, Announce & Mini-Interview
+<!-- Stage 1: Interview, Todos 1-3 -->
 
 Tell the user (in their language):
 > "This is the first Superflow run on this project. Before I dive in — a couple of quick questions so I can tailor the setup."
@@ -96,6 +197,7 @@ Pass `$USER_CONTEXT` to analysis agents in Step 2 so they adjust focus:
 Then proceed to analysis.
 
 ## Step 1.5: Detect Empty Project vs Existing
+<!-- Stage 1: Interview, Todo 4 -->
 
 Insert after the interview, before analysis. Determines which onboarding path to follow.
 
@@ -136,6 +238,7 @@ If this returns results → treat as existing project (it had source code before
 - **Existing project:** Proceed to Step 2 as normal.
 
 ## Step 2: Project Analysis (background)
+<!-- Stage 2: Analysis, Todos 1-4 -->
 
 Dispatch **4 parallel agents** using the Agent tool (`run_in_background: true`, `model: opus` for each).
 
@@ -188,6 +291,7 @@ All 4 agents run in parallel. Wait for all to complete, then synthesize into a c
 **After synthesis, cross-check**: do framework/library names in the profile match actual `import` statements in code? Do file counts match across agents? Resolve discrepancies before proceeding.
 
 ## Step 3: Present Project Health Report
+<!-- Stage 2: Analysis, Todo 5 -->
 
 Show the user the results conversationally — like a colleague who just explored the codebase. **Every claim must have evidence** (file path, count, command output).
 
@@ -246,6 +350,7 @@ If a section has no issues, state that explicitly with evidence — "No files >5
 Save report to `docs/superflow/project-health-report.md` (in English).
 
 ## Step 3.5: Proposal — Review Before Execution
+<!-- Stage 3: Proposal, Todos 1-2 -->
 
 After analysis (Step 2) and health report (Step 3), present a proposal of ALL planned actions before executing them. This is the user's last approval checkpoint.
 
@@ -305,6 +410,7 @@ AskUserQuestion(
 **Skip individual confirmations:** Items approved in this proposal do NOT need individual AskUserQuestion calls later. The proposal replaces per-step approval.
 
 ## Step 4: Audit & Update llms.txt
+<!-- Stage 4: Documentation, Todo 1 -->
 
 `llms.txt` is a standard (llmstxt.org) that helps any LLM understand a project. **Always audit, even if it exists.**
 
@@ -328,6 +434,7 @@ Use `prompts/llms-txt-writer.md` for best practices. Verify every framework/libr
 7. Report: "llms.txt covers N/M dirs (X%). Found K stale entries, J missing entries."
 
 ## Step 5: Audit & Update CLAUDE.md
+<!-- Stage 4: Documentation, Todo 2 -->
 
 **Always audit, even if it exists.** Use `prompts/claude-md-writer.md` for best practices.
 
@@ -356,6 +463,7 @@ Tell user: > "Created CLAUDE.md with project description."
 Tell user: > "Audited CLAUDE.md — [X/Y paths valid, N new modules since last audit, fixed K issues: brief list]."
 
 ## Step 5.5: Create CLAUDE.local.md
+<!-- Stage 4: Documentation, Todo 3 -->
 
 Create a personal preferences file that is gitignored. This stores user-specific settings from the interview.
 
@@ -390,6 +498,7 @@ grep -q 'CLAUDE.local.md' .gitignore || echo "CLAUDE.local.md" >> .gitignore
 Tell user: > "Created CLAUDE.local.md with your preferences. It's gitignored — personal to you."
 
 ## Step 6: Verify Enforcement Rules & Gitignore
+<!-- Stage 5: Environment Setup, Todos 1-2 -->
 
 Check if `~/.claude/rules/superflow-enforcement.md` exists:
 - If missing: copy from the skill directory (`superflow-enforcement.md` → `~/.claude/rules/`)
@@ -404,6 +513,7 @@ git check-ignore -q .superflow-state.json || echo ".superflow-state.json" >> .gi
 This file survives context compaction and is critical for Phase 2 discipline.
 
 ## Step 6.5: Check Supervisor Prerequisites
+<!-- Stage 5: Environment Setup, Todo 3 -->
 
 Check if the supervisor system is available:
 
@@ -415,6 +525,7 @@ python3 --version 2>/dev/null && echo "SUPERVISOR_AVAILABLE" || echo "SUPERVISOR
 - If python3 is missing: note "Supervisor: unavailable (python3 not found). Long-running autonomous mode requires python3." No error — single-session mode still works.
 
 ## Step 7: Permissions Setup for Autonomous Execution
+<!-- Stage 5: Environment Setup, Todo 4 -->
 
 **Do NOT skip this step.** Check if `~/.claude/settings.json` has the required allow permissions for Superflow.
 
@@ -523,6 +634,7 @@ If user declines: continue, but warn that Phase 2 will require manual approval f
 > **Note on restart:** Permissions changes in `settings.json` may require restarting Claude Code to take effect. If so, tell the user: "Permissions added. Please restart Claude Code and run `/superflow` again — Phase 0 will detect the markers and skip straight to Phase 1."
 
 ## Step 7.5: Hooks Setup
+<!-- Stage 5: Environment Setup, Todos 5-6 -->
 
 **Hooks automate quality checks** — especially valuable for beginners who forget to format/lint. Based on the detected stack from Step 2, propose a hooks configuration.
 
@@ -722,7 +834,93 @@ rm -f /tmp/superflow-hook-test.ts
 
 **If jq is not available:** Skip Stages 1-2. Log: "jq not found — skipping hook validation. Verify manually by editing a file and checking if formatting is applied."
 
+### Superflow Hooks (PostCompact + SessionStart)
+
+In addition to formatter hooks (project-level, `.claude/settings.json`), set up Superflow-specific hooks at user-level (`~/.claude/settings.json`). These provide crash recovery and context restoration.
+
+**Include these in the proposal (Step 3.5) under "Development Environment > Hooks".** If user approved hooks in the proposal, install both without asking again.
+
+**Hook 1: PostCompact** — when context compacts, inject Superflow state so the LLM knows where it was:
+
+```json
+{
+  "hooks": {
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f .superflow-state.json ]; then echo '--- SUPERFLOW STATE ---'; cat .superflow-state.json; echo '--- Re-read the phase doc for your current phase. State file: .superflow-state.json ---'; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Hook 2: SessionStart** — when a session starts (including `claude --resume`), restore Superflow context:
+
+jq-based version (extracts phase and stage for a readable message):
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f .superflow-state.json ]; then PHASE=$(jq -r '.phase' .superflow-state.json 2>/dev/null); STAGE=$(jq -r '.stage // \"unknown\"' .superflow-state.json 2>/dev/null); echo \"--- SUPERFLOW RESUME: Phase $PHASE, stage: $STAGE. Re-read references/ phase doc and continue. State: $(cat .superflow-state.json) ---\"; fi",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+No-jq fallback:
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat .superflow-state.json 2>/dev/null || echo 'No Superflow state found'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Location:** Both hooks go to `~/.claude/settings.json` (user-level). They reference `.superflow-state.json` which is gitignored, so the hooks only make sense for users who have Superflow installed. Formatter hooks remain in `.claude/settings.json` (project-level).
+
+**Installation:** Use `jq` to merge into existing settings, or create the file if it doesn't exist:
+```bash
+# Check if user-level settings exist
+if [ -f ~/.claude/settings.json ]; then
+  # Merge hooks into existing settings using jq
+  jq '.hooks.PostCompact = (.hooks.PostCompact // []) + [HOOK_OBJECT] | .hooks.SessionStart = (.hooks.SessionStart // []) + [HOOK_OBJECT]' ~/.claude/settings.json > /tmp/claude-settings.tmp && mv /tmp/claude-settings.tmp ~/.claude/settings.json
+else
+  # Create new settings file with hooks
+  cat > ~/.claude/settings.json << 'HOOKEOF'
+  { "hooks": { ... } }
+  HOOKEOF
+fi
+```
+
 ## Step 7.7: Skills Recommendation
+<!-- Stage 5: Environment Setup, Todo 7 -->
 
 Based on detected stack and user experience level from Step 1, recommend relevant Claude Code skills. **Show only skills that match the project's stack** — don't overwhelm with the full list.
 
@@ -815,6 +1013,7 @@ If any check fails, fix the issue and re-run. Report all results before marking 
 Tell user: > "Created /verify skill — run `/verify` anytime to check your code before committing."
 
 ## Step 8: Leave Markers
+<!-- Stage 6: Completion, Todo 1 -->
 
 After all steps above, write the **same marker** in every file you touched:
 
@@ -829,6 +1028,7 @@ After all steps above, write the **same marker** in every file you touched:
 All three must exist for Phase 0 to be fully skipped on next run.
 
 ## Step 8.5: Plugin Recommendations
+<!-- Stage 5: Environment Setup, Todo 8 -->
 
 Based on detected stack and available MCP tools, recommend relevant Claude Code plugins.
 
@@ -849,6 +1049,7 @@ Based on detected stack and available MCP tools, recommend relevant Claude Code 
 > Only recommend plugins that are relevant to the detected stack. Don't overwhelm with the full list.
 
 ## Step 9: Completion Checklist
+<!-- Stage 6: Completion, Todo 2 -->
 
 **Walk through each item below. For each, verify it was completed. If not, go back to the relevant step.**
 
@@ -872,6 +1073,7 @@ Based on detected stack and available MCP tools, recommend relevant Claude Code 
 If any item is unchecked, go back to the referenced step and complete it before proceeding.
 
 ## Step 10: Complete & Restart
+<!-- Stage 6: Completion, Todo 3 -->
 
 **If permissions or hooks were configured (Steps 7-7.5):**
 

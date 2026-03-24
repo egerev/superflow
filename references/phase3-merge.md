@@ -2,7 +2,84 @@
 
 Triggered when user says "merge", "мёрдж", "мерж", or gives clear affirmative response (e.g., "go ahead", "do it", "yes") after the Completion Report.
 
+## Stage Structure
+
+Phase 3 has 3 stages. Use TaskCreate at each stage start, TaskUpdate as todos complete.
+
+```
+Stage 1: "Pre-merge"
+  Todos:
+  - "CI check on all PRs"
+  - "Review comments check"
+  - "Update CLAUDE.md"
+  - "Update llms.txt"
+
+Stage 2: "Merge"
+  Todos (one per PR, dynamic):
+  - "Merge PR #N (Sprint K: [title])"
+
+Stage 3: "Post-merge"
+  Todos:
+  - "Sync local main"
+  - "Prune worktrees"
+  - "Clean artifacts"
+  - "Generate post-merge report"
+  - "Send Telegram report"
+```
+
+### State Management
+
+At the start of Phase 3, write `.superflow-state.json`:
+```bash
+cat > .superflow-state.json << 'STATEEOF'
+{"version":1,"phase":3,"phase_label":"Merge","stage":"pre-merge","stage_index":0,"last_updated":"..."}
+STATEEOF
+```
+
+After each stage transition, update via python3:
+```bash
+python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s['stage']='merge'; s['stage_index']=1; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
+```
+
+### TaskCreate/TaskUpdate Pattern
+
+```
+# At the beginning of Stage 1:
+TaskCreate(
+  title: "Phase 3: Pre-merge",
+  description: "CI checks, review comments, doc updates",
+  todos: [
+    "CI check on all PRs",
+    "Review comments check",
+    "Update CLAUDE.md",
+    "Update llms.txt"
+  ]
+)
+
+# As each todo completes:
+TaskUpdate(id: <task_id>, todo_updates: [
+  {index: 0, status: "completed"}
+])
+
+# When stage completes:
+TaskUpdate(id: <task_id>, status: "completed")
+
+# Stage 2 — dynamic todos based on PR count:
+TaskCreate(
+  title: "Phase 3: Merge",
+  description: "Sequential rebase merge of all PRs",
+  todos: [
+    "Merge PR #42 (Sprint 1: Interactive Onboarding)",
+    "Merge PR #43 (Sprint 2: Stages + State)",
+    ...
+  ]
+)
+```
+
+---
+
 ## Pre-Merge Checklist
+<!-- Stage 1: Pre-merge -->
 
 Before merging any PR:
 1. **CI must pass** on all PRs — check with `gh pr checks <number>`
@@ -14,6 +91,7 @@ Before merging any PR:
    - Use `prompts/claude-md-writer.md` for conventions
 
 ## Documentation Update (pre-merge)
+<!-- Stage 1: Pre-merge, Todos 3-4 -->
 
 Before the first merge, create a dedicated documentation commit on the last sprint branch:
 1. Update `CLAUDE.md` with new/changed modules, files, conventions
@@ -21,6 +99,7 @@ Before the first merge, create a dedicated documentation commit on the last spri
 3. Push the doc update, wait for CI to pass again
 
 ## Merge Order
+<!-- Stage 2: Merge -->
 
 Use the PR list and merge order from the Phase 2 Completion Report. If the report is unavailable (context compaction), enumerate open PRs: `gh pr list --state open --author @me --json number,title,headRefName --jq 'sort_by(.number)'`
 
@@ -67,6 +146,7 @@ If `gh pr checks <number>` shows failing checks:
 7. Resume merge sequence from the failed PR
 
 ## Post-Merge Report
+<!-- Stage 3: Post-merge -->
 
 After all PRs are merged:
 

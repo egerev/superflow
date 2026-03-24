@@ -2,29 +2,105 @@
 
 Execute continuously. Never ask, never pause. Orchestrator never writes code directly.
 
+## Stage Structure (Per Sprint)
+
+Each sprint passes through 5 stages. Use TaskCreate at sprint start, TaskUpdate as todos complete.
+
+```
+Stage 1: "Setup"
+  Todos:
+  - "Re-read phase docs"
+  - "Send Telegram update"
+  - "Create worktree"
+  - "Run baseline tests"
+
+Stage 2: "Implementation"
+  Todos:
+  - "Dispatch implementer(s)"
+  - "Collect results"
+
+Stage 3: "Review"
+  Todos:
+  - "Internal review (spec + code quality)"
+  - "Fix review findings"
+  - "Post-review test verification"
+
+Stage 4: "PAR"
+  Todos:
+  - "Dispatch Claude reviewer"
+  - "Dispatch secondary provider reviewer"
+  - "Fix NEEDS_FIXES (if any)"
+  - "Write .par-evidence.json"
+
+Stage 5: "Ship"
+  Todos:
+  - "Push and create PR"
+  - "Verify PR created"
+  - "Cleanup worktree"
+  - "Send Telegram update"
+```
+
+### State Management
+
+During Phase 2 with supervisor, the supervisor writes `.superflow-state.json` — the Claude session does NOT write it directly. During Phase 2 without supervisor (single-session), the Claude session writes state at each stage transition:
+
+```bash
+python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s['stage']='implementation'; s['stage_index']=1; s['sprint']=N; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
+```
+
+### TaskCreate/TaskUpdate Pattern
+
+```
+# At sprint start:
+TaskCreate(
+  title: "Sprint N: [title] — Setup",
+  description: "Prepare worktree and baseline",
+  todos: [
+    "Re-read phase docs",
+    "Send Telegram update",
+    "Create worktree",
+    "Run baseline tests"
+  ]
+)
+
+# As each todo completes:
+TaskUpdate(id: <task_id>, todo_updates: [
+  {index: 0, status: "completed"}
+])
+
+# When stage completes, create next stage task:
+TaskUpdate(id: <task_id>, status: "completed")
+TaskCreate(
+  title: "Sprint N: [title] — Implementation",
+  ...
+)
+```
+
+---
+
 ## Per-Sprint Flow
 
-1. **Re-read** this file (`references/phase2-execution.md`) and the current sprint's SPEC (from the plan in `docs/superflow/specs/` or `docs/superflow/plans/`)
-2. **Telegram update** (if MCP connected): "Starting sprint N: [title]"
-3. **Worktree**: verify `.worktrees/` is gitignored (`git check-ignore -q .worktrees || echo '.worktrees/' >> .gitignore`), then `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`
-4. **Baseline tests** in worktree: run full test suite, record output. If tests fail on baseline, stop and report — do not build on a broken base.
-5. **Dispatch implementers** via Agent tool (`model: sonnet` for mechanical tasks; permissions are handled by `settings.json` from Phase 0 Step 7). Use `prompts/implementer.md`. Include `llms.txt` content in agent context (if exists) — this gives implementers project architecture understanding.
+1. <!-- Stage 1: Setup, Todo 1 --> **Re-read** this file (`references/phase2-execution.md`) and the current sprint's SPEC (from the plan in `docs/superflow/specs/` or `docs/superflow/plans/`)
+2. <!-- Stage 1: Setup, Todo 2 --> **Telegram update** (if MCP connected): "Starting sprint N: [title]"
+3. <!-- Stage 1: Setup, Todo 3 --> **Worktree**: verify `.worktrees/` is gitignored (`git check-ignore -q .worktrees || echo '.worktrees/' >> .gitignore`), then `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`
+4. <!-- Stage 1: Setup, Todo 4 --> **Baseline tests** in worktree: run full test suite, record output. If tests fail on baseline, stop and report — do not build on a broken base.
+5. <!-- Stage 2: Implementation, Todos 1-2 --> **Dispatch implementers** via Agent tool (`model: sonnet` for mechanical tasks; permissions are handled by `settings.json` from Phase 0 Step 7). Use `prompts/implementer.md`. Include `llms.txt` content in agent context (if exists) — this gives implementers project architecture understanding.
    - **Parallelize** when tasks are independent (different files, no shared state, no dependencies)
    - **Sequentialize** when tasks share files, state, or depend on each other's output
-6. **Internal review** (pre-PAR, scale by complexity — see Review Optimization below):
+6. <!-- Stage 3: Review, Todo 1 --> **Internal review** (pre-PAR, scale by complexity — see Review Optimization below):
    - Dispatch spec reviewer (`prompts/spec-reviewer.md`, `run_in_background: true`)
    - Dispatch code quality reviewer (`prompts/code-quality-reviewer.md`, `run_in_background: true`) — skip for Simple sprints
    - Both run in parallel. Wait for both. Fix any FAIL/REQUEST_CHANGES findings before proceeding.
    - Verify tests still pass after fixes.
-7. **Post-review test verification**: run full test suite after all review fixes are applied. Paste actual output as evidence (enforcement rule 4). All tests must pass before proceeding to PAR.
-8. **PAR** (see enforcement rules for algorithm):
+7. <!-- Stage 3: Review, Todos 2-3 --> **Post-review test verification**: run full test suite after all review fixes are applied. Paste actual output as evidence (enforcement rule 4). All tests must pass before proceeding to PAR.
+8. <!-- Stage 4: PAR, Todos 1-4 --> **PAR** (see enforcement rules for algorithm):
    - Claude reviewer: use `prompts/spec-reviewer.md` focus (spec compliance, security, architecture). `run_in_background: true`
    - Secondary provider: use `prompts/product-reviewer.md` focus (product fit, UX gaps, edge cases). `$TIMEOUT_CMD 600`
    - Both receive the SPEC. Wait for both. Fix NEEDS_FIXES, re-review.
    - Write `.par-evidence.json` in the worktree root after both ACCEPTED.
-9. **Push + PR**: verify `.par-evidence.json` exists. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
-10. **Cleanup**: verify PR was created successfully (`gh pr view` returns data), then `git worktree remove .worktrees/sprint-N`
-11. **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." Then next sprint.
+9. <!-- Stage 5: Ship, Todos 1-2 --> **Push + PR**: verify `.par-evidence.json` exists. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
+10. <!-- Stage 5: Ship, Todo 3 --> **Cleanup**: verify PR was created successfully (`gh pr view` returns data), then `git worktree remove .worktrees/sprint-N`
+11. <!-- Stage 5: Ship, Todo 4 --> **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." Then next sprint.
 
 ## Sprint Completion Checklist
 
