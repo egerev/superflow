@@ -6,7 +6,7 @@ Lightweight Claude Code skill for autonomous product-to-production development. 
 
 ## How It Works
 
-**Phase 0 — Onboarding** (interactive, first run only). Mini-interview via AskUserQuestion, 5 parallel agents (4 Claude + Codex security audit or Claude security fallback), greenfield scaffolding for empty repos, health report, audit/create llms.txt + CLAUDE.md, propose permissions and hooks.
+**Phase 0 — Onboarding** (interactive, first run only). Auto-detection with user confirmation, 5 parallel agents (4 Claude + Codex security audit or Claude security fallback), greenfield scaffolding for empty repos, health report, audit/create llms.txt + CLAUDE.md, propose permissions and hooks. Structured as a 5-stage modular flow.
 
 **Phase 1 — Discovery** (interactive, 12 steps). Research with parallel agents, brainstorming (STOP GATE), approaches, product summary (APPROVAL GATE), product brief, spec, specialized dual-model spec review (Claude=Product, Codex=Technical), plan, dual-model plan review, user approval (FINAL GATE).
 
@@ -68,7 +68,7 @@ Add to `~/.claude/settings.json` for fully autonomous Phase 2 execution **withou
 }
 ```
 
-This is a minimal example. See [Phase 0 onboarding](references/phase0-onboarding.md#step-7-permissions-setup-for-autonomous-execution) for the complete permissions configuration (core + stack-specific), or copy from the proposal generated during your first `superflow` run.
+This is a minimal example. See [Phase 0 onboarding — Stage 4 Setup](references/phase0/stage4-setup.md) for the complete permissions configuration (core + stack-specific), or copy from the proposal generated during your first `superflow` run.
 
 This is the **safer alternative** to `--dangerously-skip-permissions` — Superflow gets autonomy for exactly the commands it needs, nothing more.
 
@@ -137,7 +137,7 @@ You will receive Telegram notifications for sprint starts, completions, failures
 | File | Purpose |
 |------|---------|
 | `SKILL.md` | Thin router — startup checklist, phase references |
-| `references/phase0-onboarding.md` | First-run onboarding (interactive) |
+| `references/phase0-onboarding.md` | Phase 0 router (detection + stage loading) |
 | `references/phase1-discovery.md` | Product discovery (interactive) |
 | `references/phase2-execution.md` | Sprint execution (autonomous) |
 | `references/phase3-merge.md` | Merge flow (user-initiated) |
