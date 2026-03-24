@@ -209,6 +209,23 @@ Record: `{"provider":"split-focus","claude_code_quality":"APPROVE","claude_produ
 
 Agent-to-key mapping: Agent A (Technical) -> `claude_code_quality`, Agent B (Product) -> `claude_product`, Agent C (Architecture) -> `codex_code_review`, Agent D (UX) -> `codex_product`. This ensures the gate always checks the same 4 keys regardless of provider.
 
+## Test Execution Discipline
+
+**One test process at a time.** Never run tests in parallel or spawn a new run before the previous one finishes.
+
+1. Always wrap test commands with timeout: `timeout 120 python3 -m unittest discover -s tests`
+2. If tests hang: `pkill -f unittest` FIRST, then investigate WHY (read the test, find the unmocked call)
+3. **Never retry a hanging test without understanding the cause.** Hanging = a real `subprocess.run()` is being called without a mock. Re-running won't help.
+4. If a test passes individually but fails in the full suite, suspect leaked global state (threading events, shared mocks, file artifacts)
+5. **Never use `run_in_background` for test commands.** Tests must run in the foreground with an explicit timeout.
+
+## Commit Before Review
+
+Codex and other external reviewers see only committed code (they extract HEAD into a temp dir). Uncommitted working tree changes are invisible to them.
+
+- **Commit fixes BEFORE dispatching Codex/secondary provider reviews.** Otherwise reviewers will flag already-fixed issues.
+- If you must review uncommitted code, note that Codex findings need cross-checking against the working tree.
+
 ## Failure & Debugging
 
 1. Read failure output. Identify the failing assertion or error.

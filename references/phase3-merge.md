@@ -100,6 +100,21 @@ Before the first merge, create a dedicated documentation commit on the last spri
 
 > **Reasoning:** Dispatch doc update agents with `subagent_type: "standard-doc-writer"` (opus, effort: medium). Lower than Phase 0's deep tier because Phase 3 is incremental update, not first-time generation.
 
+## Pre-Merge: Exit Worktree
+
+**CRITICAL:** Merge MUST happen from the main repo root, NOT from a worktree. Worktree CWD dies when the branch is deleted.
+
+```
+# 1. Exit worktree BEFORE merging
+cd <main-repo-root>  # e.g., cd /path/to/project (NOT .worktrees/sprint-N)
+
+# 2. Remove worktrees for branches about to be merged
+git worktree remove .worktrees/sprint-N 2>/dev/null
+git worktree prune
+```
+
+If CWD is already inside a worktree, ALL subsequent commands will fail with "Path does not exist" after `--delete-branch` removes the branch. This is unrecoverable within the same shell.
+
 ## Merge Order
 <!-- Stage 2: Merge -->
 
@@ -133,7 +148,7 @@ for each PR in sprint order:
 - **One at a time**: merge sequentially, never parallel
 - **CI gate**: never merge with failing checks — fix first (see CI Failure below)
 - **Force-push after rebase is approved**: `git push --force-with-lease` is the standard post-rebase push and is explicitly permitted in Phase 3 conflict resolution
-- **Worktree cleanup**: after all PRs merged, `git worktree prune`
+- **Worktree cleanup**: BEFORE merge, not after. Remove worktrees for branches about to be merged, then `git worktree prune`
 - **Artifact cleanup**: after all PRs merged, remove `.par-evidence.json` from the working directory (if present). Do NOT commit removal — these are ephemeral gate artifacts.
 
 ## CI Failure During Merge
