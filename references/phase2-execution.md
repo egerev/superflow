@@ -274,22 +274,32 @@ For tasks with 3+ sprints that should run unattended (overnight, multi-hour):
 
 **Key difference:** In supervisor mode, the supervisor creates the worktree and sets the working directory. The Claude session inside does NOT create its own worktree.
 
-## Completion Report (Demo Day Format)
+## Completion Report (Product Release Format)
 
-Present a product-oriented summary — like a demo day, not a tech log. For each sprint:
+Present as a **product release report** — what the team built for users, not a sprint log. Think "release notes for stakeholders", not "git log for developers".
 
-### Per-Sprint Block
-- **Sprint N: [Product-level title]** (e.g., "Inline Transaction Editing")
-  - What it does for the user (1-2 sentences, product language)
-  - Key changes: bullet list of user-visible features/improvements
-  - PR: `#NNN` — link, status (open/merged), CI status
-  - Unified Review: all 4 agents APPROVE/ACCEPTED (if issues: reason + evidence)
-  - Tests: count (passed/failed/skipped)
+### Structure
 
-### Summary Section
-- Total PRs: N
-- All tests passing: yes/no
-- Blocked sprints: N (with reasons, if any)
-- Known issues or follow-ups (if any)
-- **Merge order** (sequential, with dependencies noted)
-- Suggested next action: "Ready to merge — say 'merge' to start Phase 3"
+**1. What's New** — the headline features, grouped by user value (not by sprint):
+
+For each feature group:
+- **Feature name** — what it does in 1-2 sentences, user language
+- Concrete capabilities: bullet list of what the user can now do that they couldn't before
+- How it works: brief explanation of the mechanism (1-2 sentences max)
+
+**2. How It Works Together** — explain how the features connect as a system. This is the "architecture for humans" section: what happens when a user runs the tool end-to-end.
+
+**3. Technical Summary** (collapsed/brief):
+- PRs: list with links and status
+- Tests: total count, all passing
+- Review: holistic review verdict
+- Known limitations or follow-ups
+
+**4. What's Next** — suggested next action: "Ready to merge — say 'merge' to start Phase 3"
+
+### Tone
+- Write for someone who will USE the product, not someone who reviewed the PRs
+- Lead with user value, not implementation details
+- Group by what changed for the user, not by sprint boundaries
+- Concrete examples > abstract descriptions
+- Skip internal process details (PAR, worktrees, review rounds) — those are for the PR descriptions
