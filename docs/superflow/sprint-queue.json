@@ -1,0 +1,62 @@
+{
+  "feature": "auto-supervisor",
+  "created": "2026-03-25T15:00:00+00:00",
+  "generated_from": {
+    "plan_file": "docs/superflow/plans/2026-03-25-auto-supervisor.md",
+    "generated_at": "2026-03-25T15:00:00+00:00"
+  },
+  "sprints": [
+    {
+      "id": 1,
+      "title": "Security Hardening + Shared Parser",
+      "status": "pending",
+      "complexity": "medium",
+      "plan_file": "docs/superflow/plans/2026-03-25-auto-supervisor.md#sprint-1",
+      "branch": "feat/auto-supervisor-sprint-1",
+      "depends_on": [],
+      "pr": null,
+      "retries": 0,
+      "max_retries": 2,
+      "error_log": null
+    },
+    {
+      "id": 2,
+      "title": "Plan-to-Queue Generator",
+      "status": "pending",
+      "complexity": "medium",
+      "plan_file": "docs/superflow/plans/2026-03-25-auto-supervisor.md#sprint-2",
+      "branch": "feat/auto-supervisor-sprint-2",
+      "depends_on": [1],
+      "pr": null,
+      "retries": 0,
+      "max_retries": 2,
+      "error_log": null
+    },
+    {
+      "id": 3,
+      "title": "Launcher + Supervisor Integration",
+      "status": "pending",
+      "complexity": "complex",
+      "plan_file": "docs/superflow/plans/2026-03-25-auto-supervisor.md#sprint-3",
+      "branch": "feat/auto-supervisor-sprint-3",
+      "depends_on": [2],
+      "pr": null,
+      "retries": 0,
+      "max_retries": 2,
+      "error_log": null
+    },
+    {
+      "id": 4,
+      "title": "Phase Docs + Dashboard Mode",
+      "status": "pending",
+      "complexity": "medium",
+      "plan_file": "docs/superflow/plans/2026-03-25-auto-supervisor.md#sprint-4",
+      "branch": "feat/auto-supervisor-sprint-4",
+      "depends_on": [3],
+      "pr": null,
+      "retries": 0,
+      "max_retries": 2,
+      "error_log": null
+    }
+  ]
+}
