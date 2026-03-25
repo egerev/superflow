@@ -258,11 +258,11 @@ governance_mode: "supervised"
 ---
 ```
 
-j*Body):* Free-form notes on scope boundaries, forbidden approaches, or risk areas.
+**Body:** Free-form notes on scope boundaries, forbidden approaches, or risk areas.
 
-Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`. Update `.superflow-state.json` context with `charter_file` path.
+Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`. Update `.superflow-state.json` context with `charter_file` path. Also set `charter_file` in the sprint queue's `metadata` dict so the supervisor can inject it into sprint prompts.
 
-The charter is injected into every sprint prompt, reviewer context, and replanner prompt — serving as the single source of truth for what the autonomous executor is and isn’h allowed to do.
+The charter is injected into every sprint prompt, reviewer context, and replanner prompt — serving as the single source of truth for what the autonomous executor is and isn’t allowed to do.
 
 **Auto-launch flow (primary path):**
 
