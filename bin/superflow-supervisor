@@ -39,10 +39,68 @@ def cmd_run(args):
     )
 
 
+def cmd_launch(args):
+    """Launch supervisor as background process."""
+    from lib.launcher import launch
+    try:
+        repo_root = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True
+        ).stdout.strip()
+        result = launch(
+            queue_path=args.queue,
+            plan_path=args.plan,
+            repo_root=repo_root,
+            timeout=args.timeout,
+        )
+        print(f"Supervisor launched (PID {result.pid})")
+        print(f"  Queue:  {result.queue_path} ({result.sprint_count} sprints)")
+        print(f"  Log:    {result.log_path}")
+        print(f"  Status: superflow-supervisor status")
+        print(f"  Stop:   superflow-supervisor stop")
+    except RuntimeError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_stop(args):
+    """Stop running supervisor."""
+    from lib.launcher import stop
+    try:
+        repo_root = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True
+        ).stdout.strip()
+        stop(repo_root)
+        print("Supervisor stopped.")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def cmd_status(args):
     """Show current queue status."""
     queue = SprintQueue.load(args.queue)
     print_summary(queue)
+
+    # Show launcher status if available
+    try:
+        from lib.launcher import get_status
+        repo_root = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True
+        ).stdout.strip()
+        status = get_status(repo_root)
+        if status.alive:
+            print(f"\nSupervisor: running (PID {status.pid})")
+            if status.heartbeat_age_seconds is not None:
+                print(f"  Heartbeat: {status.heartbeat_age_seconds:.0f}s ago")
+        elif status.crashed:
+            print(f"\nSupervisor: CRASHED (was at sprint {status.sprint}, stage {status.stage})")
+        elif status.pid is None:
+            pass  # No supervisor info — just show queue status
+    except ImportError:
+        pass
 
 
 def cmd_resume(args):
@@ -131,6 +189,17 @@ def main():
     reset_parser.add_argument("--queue", required=True, help="Path to queue.json")
     reset_parser.add_argument("--sprint", type=int, required=True, help="Sprint ID to reset")
     reset_parser.set_defaults(func=cmd_reset)
+
+    # launch
+    launch_parser = subparsers.add_parser("launch", help="Launch supervisor in background")
+    launch_parser.add_argument("--queue", required=True, help="Path to queue.json")
+    launch_parser.add_argument("--plan", default=None, help="Path to plan file")
+    launch_parser.add_argument("--timeout", type=int, default=1800, help="Timeout per sprint")
+    launch_parser.set_defaults(func=cmd_launch)
+
+    # stop
+    stop_parser = subparsers.add_parser("stop", help="Stop running supervisor")
+    stop_parser.set_defaults(func=cmd_stop)
 
     args = parser.parse_args()
     if not args.command:

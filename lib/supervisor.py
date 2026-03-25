@@ -1,4 +1,5 @@
 """Supervisor: worktree lifecycle, prompt building, sprint execution, and run loop."""
+import glob
 import json
 import logging
 import os
@@ -1334,6 +1335,40 @@ def _run_replan(queue, queue_path, plan_path, repo_root, checkpoints_dir, notifi
     return changes
 
 
+def _check_skip_requests(repo_root, queue, queue_path=None):
+    """Check and apply skip requests from the sidecar directory.
+
+    If queue_path is provided, saves the queue to disk after applying skips
+    to prevent skip loss on crash.
+    """
+    skip_dir = os.path.join(repo_root, ".superflow", "skip-requests")
+    if not os.path.isdir(skip_dir):
+        return
+
+    applied = False
+    for filepath in glob.glob(os.path.join(skip_dir, "*.json")):
+        try:
+            with open(filepath) as f:
+                data = json.load(f)
+            sprint_id = data.get("sprint_id")
+            reason = data.get("reason", "skip requested")
+            if sprint_id is not None:
+                queue.mark_skipped(int(sprint_id), reason)
+                applied = True
+                logger.info("Applied skip request for sprint %s: %s", sprint_id, reason)
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.warning("Invalid skip request %s: %s", filepath, e)
+        finally:
+            try:
+                os.unlink(filepath)
+            except OSError:
+                pass
+
+    # Persist skips to prevent loss on crash
+    if applied and queue_path:
+        queue.save(queue_path)
+
+
 def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
         no_replan=False, notifier=None, repo_root=None):
     """Main supervisor run loop.
@@ -1378,6 +1413,18 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
             print("Shutdown requested. Saving state and exiting.")
             queue.save(queue_path)
             break
+
+        # Write heartbeat
+        heartbeat_path = os.path.join(repo_root, ".superflow", "heartbeat")
+        try:
+            os.makedirs(os.path.dirname(heartbeat_path), exist_ok=True)
+            with open(heartbeat_path, 'w') as f:
+                f.write(str(time.time()))
+        except OSError:
+            pass
+
+        # Check skip requests from sidecar
+        _check_skip_requests(repo_root, queue, queue_path)
 
         runnable = queue.next_runnable(max_parallel=max_parallel)
         if not runnable:

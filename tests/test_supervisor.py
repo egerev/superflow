@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import patch, MagicMock, call
 
@@ -16,6 +17,7 @@ from lib.supervisor import (
     _resolve_baseline_cmd, run_baseline_tests,
     run_holistic_review, _detect_codex, _run_single_reviewer,
     _build_holistic_prompt,
+    _check_skip_requests,
     VALID_PASS_VERDICTS, REQUIRED_PAR_KEYS, REQUIRED_HOLISTIC_KEYS, REQUIRED_SUMMARY_KEYS,
 )
 import lib.supervisor as supervisor_module
@@ -3343,6 +3345,133 @@ class TestSprintEnvDenyList(unittest.TestCase):
         self.assertNotIn("STRIPE_SECRET_KEY", env)
         self.assertIn("ANTHROPIC_API_KEY", env)
         self.assertIn("SOME_NORMAL_VAR", env)
+
+
+class TestCheckSkipRequests(unittest.TestCase):
+    """Tests for _check_skip_requests() — applying skip requests from sidecar dir."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.repo_root = self.tmpdir
+        self.skip_dir = os.path.join(self.repo_root, ".superflow", "skip-requests")
+        self.queue = SprintQueue("test", "2026-01-01T00:00:00Z", [
+            _sprint(sid=1, status="pending"),
+            _sprint(sid=2, status="pending"),
+        ])
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_valid_skip_request_applied(self):
+        """Valid skip request marks sprint as skipped."""
+        os.makedirs(self.skip_dir, exist_ok=True)
+        filepath = os.path.join(self.skip_dir, "skip-1-1234.json")
+        with open(filepath, "w") as f:
+            json.dump({"sprint_id": 1, "reason": "user abort"}, f)
+
+        _check_skip_requests(self.repo_root, self.queue)
+
+        self.assertEqual(self.queue.sprints[0]["status"], "skipped")
+        self.assertEqual(self.queue.sprints[0]["error_log"], "user abort")
+        # File should be deleted after processing
+        self.assertFalse(os.path.exists(filepath))
+
+    def test_invalid_json_ignored_and_deleted(self):
+        """Invalid JSON in skip request is ignored and file deleted."""
+        os.makedirs(self.skip_dir, exist_ok=True)
+        filepath = os.path.join(self.skip_dir, "skip-bad-1234.json")
+        with open(filepath, "w") as f:
+            f.write("not valid json{{{")
+
+        _check_skip_requests(self.repo_root, self.queue)
+
+        # No sprints should be affected
+        self.assertEqual(self.queue.sprints[0]["status"], "pending")
+        self.assertEqual(self.queue.sprints[1]["status"], "pending")
+        # File should be deleted even if invalid
+        self.assertFalse(os.path.exists(filepath))
+
+    def test_nonexistent_sprint_id_handled(self):
+        """Skip request with non-existent sprint_id is handled gracefully."""
+        os.makedirs(self.skip_dir, exist_ok=True)
+        filepath = os.path.join(self.skip_dir, "skip-99-1234.json")
+        with open(filepath, "w") as f:
+            json.dump({"sprint_id": 99, "reason": "nope"}, f)
+
+        # Should not raise
+        _check_skip_requests(self.repo_root, self.queue)
+
+        # No sprints should be affected
+        self.assertEqual(self.queue.sprints[0]["status"], "pending")
+        self.assertEqual(self.queue.sprints[1]["status"], "pending")
+        # File should still be deleted
+        self.assertFalse(os.path.exists(filepath))
+
+    def test_empty_skip_dir_noop(self):
+        """Empty skip-requests directory is a no-op."""
+        os.makedirs(self.skip_dir, exist_ok=True)
+
+        _check_skip_requests(self.repo_root, self.queue)
+
+        self.assertEqual(self.queue.sprints[0]["status"], "pending")
+        self.assertEqual(self.queue.sprints[1]["status"], "pending")
+
+    def test_missing_skip_dir_noop(self):
+        """Missing skip-requests directory is a no-op (no error)."""
+        _check_skip_requests(self.repo_root, self.queue)
+
+        self.assertEqual(self.queue.sprints[0]["status"], "pending")
+
+
+class TestHeartbeat(unittest.TestCase):
+    """Tests for heartbeat writing during run loop."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.repo_root = self.tmpdir
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    @patch("lib.supervisor.execute_sprint")
+    @patch("lib.supervisor.preflight", return_value=(True, []))
+    @patch("lib.supervisor.subprocess.run")
+    def test_heartbeat_written_during_run_loop(self, mock_subproc, mock_preflight, mock_exec):
+        """Heartbeat file is written during the run loop."""
+        # Create queue with one sprint that becomes completed after execute
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", [
+            _sprint(sid=1, status="pending"),
+        ])
+        q.save(self.queue_path)
+
+        mock_subproc.return_value = MagicMock(returncode=0, stdout=self.repo_root)
+
+        def fake_execute(sprint, queue, qpath, ckdir, repo, timeout=1800, notifier=None):
+            sprint["status"] = "completed"
+            sprint["pr"] = "https://github.com/test/pr/1"
+            queue.save(qpath)
+
+        mock_exec.side_effect = fake_execute
+
+        # Suppress holistic review / completion report paths
+        with patch("lib.supervisor.run_holistic_review", return_value=True), \
+             patch("lib.supervisor.generate_completion_report", return_value=None):
+            run(
+                queue_path=self.queue_path,
+                plan_path=None,
+                max_parallel=1,
+                timeout=1800,
+                no_replan=True,
+                repo_root=self.repo_root,
+            )
+
+        heartbeat_path = os.path.join(self.repo_root, ".superflow", "heartbeat")
+        self.assertTrue(os.path.exists(heartbeat_path))
+        with open(heartbeat_path) as f:
+            ts = float(f.read().strip())
+        # Heartbeat should be recent (within 10 seconds)
+        self.assertLess(time.time() - ts, 10)
 
 
 if __name__ == "__main__":
