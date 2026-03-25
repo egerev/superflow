@@ -2,54 +2,189 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Superflow State",
   "type": "object",
-  "required": ["version", "phase", "stage", "stage_index", "last_updated"],
+  "required": [
+    "version",
+    "phase",
+    "stage",
+    "stage_index",
+    "last_updated"
+  ],
   "properties": {
-    "version": {"type": "integer", "const": 1},
-    "phase": {"type": "integer", "minimum": 0, "maximum": 3},
-    "phase_label": {"type": "string"},
-    "sprint": {"type": ["integer", "null"]},
-    "stage": {"type": "string"},
-    "stage_index": {"type": "integer"},
-    "tasks_done": {"type": "array", "items": {"type": "integer"}},
-    "tasks_total": {"type": "integer"},
-    "last_updated": {"type": "string", "format": "date-time"},
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "phase": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "phase_label": {
+      "type": "string"
+    },
+    "sprint": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "stage": {
+      "type": "string"
+    },
+    "stage_index": {
+      "type": "integer"
+    },
+    "tasks_done": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "tasks_total": {
+      "type": "integer"
+    },
+    "last_updated": {
+      "type": "string",
+      "format": "date-time"
+    },
     "context": {
       "type": "object",
       "properties": {
-        "user_context": {"type": "object"},
-        "detected_stack": {"type": "string"},
-        "secondary_provider": {"type": ["string", "null"]},
-        "supervisor_available": {"type": "boolean"},
-        "plan_file": {"type": ["string", "null"]},
-        "spec_file": {"type": ["string", "null"]},
-        "queue_file": {"type": ["string", "null"]},
+        "user_context": {
+          "type": "object"
+        },
+        "detected_stack": {
+          "type": "string"
+        },
+        "secondary_provider": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "supervisor_available": {
+          "type": "boolean"
+        },
+        "plan_file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spec_file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "queue_file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "preflight": {
           "type": "object",
           "properties": {
-            "stack": {"type": "string"},
-            "team_size": {"type": "string"},
-            "ci": {"type": "string"},
-            "python3": {"type": "string"},
-            "pm": {"type": "string"},
-            "formatters": {"type": "array", "items": {"type": "string"}}
+            "stack": {
+              "type": "string"
+            },
+            "team_size": {
+              "type": "string"
+            },
+            "ci": {
+              "type": "string"
+            },
+            "python3": {
+              "type": "string"
+            },
+            "pm": {
+              "type": "string"
+            },
+            "formatters": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         },
         "tech_debt": {
           "type": "object",
           "properties": {
-            "total_todos": {"type": "integer"},
-            "files_over_500_loc": {"type": "array", "items": {"type": "string"}},
-            "untested_modules": {"type": "array", "items": {"type": "string"}},
-            "security_issues": {"type": "integer"},
-            "generated_at": {"type": "string", "format": "date-time"}
+            "total_todos": {
+              "type": "integer"
+            },
+            "files_over_500_loc": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "untested_modules": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "security_issues": {
+              "type": "integer"
+            },
+            "generated_at": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         },
         "approval": {
           "type": "object",
           "properties": {
-            "mode": {"type": "string", "enum": ["all", "custom", "skip"]},
-            "items": {"type": "array", "items": {"type": "string"}}
+            "mode": {
+              "type": "string",
+              "enum": [
+                "all",
+                "custom",
+                "skip"
+              ]
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
+        },
+        "brief_file": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Path to the product brief file"
+        },
+        "charter_file": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Path to the project charter file"
+        },
+        "completion_data_file": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Path to completion data JSON"
+        },
+        "governance_mode": {
+          "type": "string",
+          "enum": [
+            "light",
+            "standard",
+            "critical"
+          ],
+          "default": "standard",
+          "description": "Review governance level"
         }
       }
     },
@@ -57,12 +192,23 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["phase", "completed_at"],
+        "required": [
+          "phase",
+          "completed_at"
+        ],
         "properties": {
-          "phase": {"type": "integer"},
-          "sprint": {"type": "integer"},
-          "completed_at": {"type": "string"},
-          "pr": {"type": "string"}
+          "phase": {
+            "type": "integer"
+          },
+          "sprint": {
+            "type": "integer"
+          },
+          "completed_at": {
+            "type": "string"
+          },
+          "pr": {
+            "type": "string"
+          }
         }
       }
     }
