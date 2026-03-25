@@ -264,9 +264,17 @@ _STAGE_INDICES = {"setup": 0, "implementation": 1, "review": 2, "par": 3, "ship"
 
 def _write_state(repo_root: str, phase: int, sprint: int | None,
                  stage: str, queue) -> None:
-    """Write .superflow-state.json as a projection of current state."""
+    state_path = os.path.join(repo_root, ".superflow-state.json")
+    existing = {}
+    try:
+        with open(state_path) as _f:
+            existing = json.load(_f)
+        if not isinstance(existing, dict):
+            existing = {}
+    except (OSError, json.JSONDecodeError):
+        existing = {}
     completed = [s["id"] for s in queue.sprints if s.get("status") == "completed"]
-    state = {
+    existing.update({
         "version": 1,
         "phase": phase,
         "phase_label": _PHASE_LABELS.get(phase, "Unknown"),
@@ -276,12 +284,11 @@ def _write_state(repo_root: str, phase: int, sprint: int | None,
         "tasks_done": completed,
         "tasks_total": len(queue.sprints),
         "last_updated": _now_iso(),
-    }
-    state_path = os.path.join(repo_root, ".superflow-state.json")
+    })
     tmp_path = state_path + ".tmp"
     try:
         with open(tmp_path, "w") as f:
-            json.dump(state, f, indent=2)
+            json.dump(existing, f, indent=2)
         os.replace(tmp_path, state_path)
     except OSError as e:
         logger.warning("Failed to write state file: %s", e)
@@ -1573,6 +1580,9 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
         except Exception as e:
             logger.warning("Notifier error: %s", e)
 
+    # Write completion data JSON (for dashboard / external consumers)
+    _write_completion_data(queue, checkpoints_dir, repo_root)
+
     # Generate completion report (only if there were completed sprints)
     if completed_count > 0:
         report = generate_completion_report(queue, checkpoints_dir)
@@ -1719,6 +1729,71 @@ def generate_completion_report(queue, checkpoints_dir, output_path=None):
             f.write(report)
 
     return report
+
+
+def _write_completion_data(queue, checkpoints_dir, repo_root):
+    from lib.checkpoint import load_all_checkpoints
+    evidence_path = os.path.join(os.path.dirname(checkpoints_dir), ".holistic-review-evidence.json")
+    holistic_data = None
+    try:
+        with open(evidence_path) as _ef: holistic_data = json.load(_ef)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("completion_data: cannot read holistic evidence: %s", e)
+        return None
+    checkpoints = load_all_checkpoints(checkpoints_dir)
+    cp_map = {cp["sprint_id"]: cp for cp in checkpoints}
+    sprints_data = []
+    for sprint in queue.sprints:
+        sid = sprint["id"]
+        cp = cp_map.get(sid, {})
+        summary = cp.get("summary", {})
+        sprints_data.append({
+            "id": sid,
+            "title": sprint["title"],
+            "status": sprint["status"],
+            "pr": sprint.get("pr"),
+            "tests": summary.get("tests"),
+            "par": summary.get("par"),
+        })
+    known_issues = None
+    if isinstance(holistic_data, dict):
+        known_issues = holistic_data.get("known_issues")
+    completion_data = {
+        "feature": queue.feature,
+        "generated_at": _now_iso(),
+        "sprints": sprints_data,
+        "holistic_verdict": holistic_data,
+        "known_issues": known_issues,
+    }
+    out_path = os.path.join(repo_root, "docs", "superflow", "completion-data.json")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    tmp_path = out_path + ".tmp"
+    try:
+        with open(tmp_path, "w") as _tf:
+            json.dump(completion_data, _tf, indent=2)
+        os.replace(tmp_path, out_path)
+    except OSError as e:
+        logger.warning("completion_data: write failed: %s", e)
+        return None
+    state_path = os.path.join(repo_root, ".superflow-state.json")
+    existing_state = {}
+    try:
+        with open(state_path) as _sf:
+            existing_state = json.load(_sf)
+        if not isinstance(existing_state, dict):
+            existing_state = {}
+    except (OSError, json.JSONDecodeError):
+        existing_state = {}
+    ctx = existing_state.setdefault("context", {})
+    ctx["completion_data_file"] = out_path
+    state_tmp = state_path + ".tmp"
+    try:
+        with open(state_tmp, "w") as _stf:
+            json.dump(existing_state, _stf, indent=2)
+        os.replace(state_tmp, state_path)
+    except OSError as e:
+        logger.warning("completion_data: state merge failed: %s", e)
+    return out_path
 
 
 def _check_pr_exists(branch, repo_root):
