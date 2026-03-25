@@ -1379,6 +1379,15 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
             queue.save(queue_path)
             break
 
+        # Write heartbeat
+        heartbeat_path = os.path.join(repo_root, ".superflow", "heartbeat")
+        try:
+            os.makedirs(os.path.dirname(heartbeat_path), exist_ok=True)
+            with open(heartbeat_path, 'w') as f:
+                f.write(str(time.time()))
+        except OSError:
+            pass
+
         runnable = queue.next_runnable(max_parallel=max_parallel)
         if not runnable:
             queue.skip_blocked_sprints()
