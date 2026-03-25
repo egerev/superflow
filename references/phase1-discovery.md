@@ -234,7 +234,13 @@ Present:
 - Merge order and dependencies
 
 **FINAL GATE:** Ask the user: "Ready to start autonomous execution? Say 'go' when ready."
-- User says "go" / "start" / "давай" / affirmative → proceed to Phase 2
+- User says "go" / "start" / "давай" / affirmative → proceed to context reset below
 - User requests changes → update plan, re-present
 
-Before entering Phase 2: re-read `references/phase2-execution.md` and verify worktree prerequisites.
+**Context reset before Phase 2:** After Phase 1 the context window is heavily loaded with brainstorming history, review findings, and intermediate drafts. Phase 2 is a different mode (autonomous manager) and benefits from a clean start.
+
+1. Verify `.superflow-state.json` has phase=2 and plan/spec file paths in context
+2. Tell the user:
+   > "Plan approved. Phase 2 needs a fresh context for best quality.
+   > Run `/clear` then `/superflow` — it will pick up from Phase 2 automatically."
+3. Do NOT proceed to Phase 2 in the same session
