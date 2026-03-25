@@ -509,5 +509,60 @@ class TestPlanFilePathValidation(unittest.TestCase):
         self.assertEqual(len(q.sprints), 1)
 
 
+
+
+class TestQueueMetadata(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmpdir, "queue.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_metadata_round_trip(self):
+        """Metadata should survive load/save cycle."""
+        data = _make_queue_data()
+        data["metadata"] = {
+            "brief_file": "docs/brief.md",
+            "spec_file": "docs/spec.md",
+            "charter_file": "docs/charter.md",
+            "governance_mode": "supervised",
+        }
+        with open(self.path, "w") as f:
+            json.dump(data, f)
+        q = SprintQueue.load(self.path)
+        self.assertEqual(q.metadata["charter_file"], "docs/charter.md")
+        self.assertEqual(q.metadata["governance_mode"], "supervised")
+
+        # Save and reload
+        q.save(self.path)
+        q2 = SprintQueue.load(self.path)
+        self.assertEqual(q2.metadata, q.metadata)
+
+    def test_metadata_defaults_empty(self):
+        """Queue without metadata should default to empty dict."""
+        data = _make_queue_data()
+        with open(self.path, "w") as f:
+            json.dump(data, f)
+        q = SprintQueue.load(self.path)
+        self.assertEqual(q.metadata, {})
+
+    def test_empty_metadata_not_persisted(self):
+        """Empty metadata should not be written to JSON."""
+        q = SprintQueue("test", "2026-01-01", [])
+        q.save(self.path)
+        with open(self.path) as f:
+            raw = json.load(f)
+        self.assertNotIn("metadata", raw)
+
+    def test_metadata_persisted_when_nonempty(self):
+        """Non-empty metadata should be written to JSON."""
+        q = SprintQueue("test", "2026-01-01", [], metadata={"charter_file": "x.md"})
+        q.save(self.path)
+        with open(self.path) as f:
+            raw = json.load(f)
+        self.assertIn("metadata", raw)
+        self.assertEqual(raw["metadata"]["charter_file"], "x.md")
+
 if __name__ == "__main__":
     unittest.main()

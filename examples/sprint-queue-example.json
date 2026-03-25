@@ -1,6 +1,12 @@
 {
   "feature": "my-feature",
   "created": "2026-01-01T00:00:00Z",
+  "metadata": {
+    "brief_file": "docs/superflow/specs/2026-01-01-my-feature-brief.md",
+    "spec_file": "docs/superflow/specs/2026-01-01-my-feature-design.md",
+    "charter_file": "docs/superflow/specs/2026-01-01-my-feature-charter.md",
+    "governance_mode": "supervised"
+  },
   "sprints": [
     {
       "id": 1,
@@ -22,7 +28,9 @@
       "complexity": "medium",
       "plan_file": "docs/superflow/plans/my-plan.md#sprint-2",
       "branch": "feat/my-feature-sprint-2",
-      "depends_on": [1],
+      "depends_on": [
+        1
+      ],
       "pr": null,
       "retries": 0,
       "max_retries": 2,
@@ -35,7 +43,10 @@
       "complexity": "complex",
       "plan_file": "docs/superflow/plans/my-plan.md#sprint-3",
       "branch": "feat/my-feature-sprint-3",
-      "depends_on": [1, 2],
+      "depends_on": [
+        1,
+        2
+      ],
       "pr": null,
       "retries": 0,
       "max_retries": 2,
