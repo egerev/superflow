@@ -99,12 +99,25 @@ def cleanup_worktree(sprint: dict, repo_root: str) -> None:
 def _extract_plan_section(content: str, fragment: str) -> str:
     """Extract a section from markdown content matching the fragment.
 
-    The fragment (e.g. 'sprint-1') matches a heading like '## Sprint 1'.
-    Extracts from that heading until the next same-level heading or EOF.
+    Uses shared sprint heading parser for sprint-type fragments (e.g., 'sprint-1').
+    Falls back to generic heading matching for other fragment types.
     """
-    # Normalize fragment: 'sprint-1' -> 'sprint 1'
-    normalized = fragment.replace("-", " ").lower()
+    from lib.planner import _parse_sprint_headings
 
+    # Check if this is a sprint-type fragment
+    sprint_match = re.match(r'^sprint[- ](\d+)$', fragment.lower())
+    if sprint_match:
+        sprint_id = int(sprint_match.group(1))
+        headings = _parse_sprint_headings(content)
+        for h in headings:
+            if h["id"] == sprint_id:
+                lines = content.split("\n")
+                return "\n".join(lines[h["start_line"]:h["end_line"]]).strip()
+        # Sprint not found — fall through to generic logic
+        return content
+
+    # Generic heading matching (non-sprint fragments)
+    normalized = fragment.replace("-", " ").lower()
     lines = content.split("\n")
     start_idx = None
     heading_level = None
@@ -115,8 +128,7 @@ def _extract_plan_section(content: str, fragment: str) -> str:
             level = len(match.group(1))
             title = match.group(2).strip().lower()
             # Normalize title for comparison
-            title_normalized = re.sub(r"[:\-_]", " ", title).strip()
-            # Match exact heading (avoid "sprint 1" matching "sprint 12")
+            title_normalized = re.sub(r"[:\-—_]", " ", title).strip()
             if normalized == title_normalized or normalized == title_normalized.rstrip(':'):
                 start_idx = i
                 heading_level = level
