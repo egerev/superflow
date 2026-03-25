@@ -12,7 +12,7 @@ Superflow is a Claude Code skill (hybrid: Markdown prompts + Python companion CL
 
 ## Architecture
 ```
-SKILL.md (entry point, ~118 lines)
+SKILL.md (entry point, ~142 lines)
   ├── superflow-enforcement.md (durable rules → ~/.claude/rules/)
   ├── references/
   │   ├── phase0-onboarding.md (router — detection, recovery matrix, stage loading)
@@ -58,7 +58,7 @@ SKILL.md (entry point, ~118 lines)
   │   └── sprint-queue-example.json (queue template)
   └── tests/
       ├── test_supervisor.py, test_queue.py, test_replanner.py, ...
-      └── test_integration.py (138 tests total)
+      └── test_integration.py (333 tests total)
 ```
 
 Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor orchestrates multi-sprint execution with crash recovery, parallel execution, and adaptive replanning. Enforcement rules survive context compaction via `~/.claude/rules/`.
@@ -66,7 +66,7 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 ## Key Files
 | File | Lines | Purpose |
 |------|-------|---------|
-| `SKILL.md` | ~126 | Entry point — startup checklist, provider detection, state management, phase routing |
+| `SKILL.md` | ~142 | Entry point — startup checklist, provider detection, state management, dashboard commands, phase routing |
 | `superflow-enforcement.md` | 80 | 9 hard rules, specialized 2-agent reviews (Claude=Product, secondary=Technical), rationalization prevention, phase gates |
 | `references/phase0-onboarding.md` | ~80 | Router — detection, recovery matrix, stage loading |
 | `references/phase0/stage1-detect.md` | ~214 | Parallel preflight, auto-detection, confirmation |
@@ -75,8 +75,8 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 | `references/phase0/stage4-setup.md` | ~238 | 3 concurrent branches, strict file ownership |
 | `references/phase0/stage5-completion.md` | ~163 | Markers, tech debt persistence, restart |
 | `references/phase0/greenfield.md` | ~350 | Greenfield path G1-G6 |
-| `references/phase1-discovery.md` | 263 | 11 steps, 5 stages, merged Product Approval gate, specialized reviews (Claude=Product, Codex=Technical) |
-| `references/phase2-execution.md` | 293 | Per-sprint stages, 2-agent specialized review (Claude Product + Codex Technical), holistic review |
+| `references/phase1-discovery.md` | ~287 | 11 steps, 5 stages, merged Product Approval gate, auto-launch flow |
+| `references/phase2-execution.md` | ~343 | Per-sprint stages, 2-agent specialized review, dashboard mode, holistic review |
 | `references/phase3-merge.md` | 184 | 3 stages, sequential rebase merge with CI gate |
 | `prompts/implementer.md` | 81 | Red-Green-Refactor TDD cycle for code agents |
 | `prompts/llms-txt-writer.md` | 154 | llmstxt.org standard, no hard size limit |
