@@ -1,5 +1,9 @@
 """Plan parsing utilities — shared heading parser for planner and supervisor."""
+import hashlib
+import json
+import os
 import re
+from datetime import datetime, timezone
 
 
 def _parse_sprint_headings(content: str) -> list:
@@ -37,3 +41,173 @@ def _parse_sprint_headings(content: str) -> list:
             h["end_line"] = len(lines)
 
     return headings
+
+
+def _extract_sprint_section(lines: list, start_line: int, end_line: int) -> str:
+    """Return the text slice for a sprint section."""
+    return "\n".join(lines[start_line:end_line])
+
+
+def plan_to_queue(plan_path: str, feature: str, base_branch: str = "feat") -> dict:
+    """Parse a plan file and return a queue dict matching the queue schema.
+
+    Raises ValueError for:
+    - No sprints found
+    - Duplicate sprint IDs
+    - Dependency references to non-existent sprint IDs
+    - Circular dependencies
+    """
+    with open(plan_path) as f:
+        content = f.read()
+
+    headings = _parse_sprint_headings(content)
+    if not headings:
+        raise ValueError(f"No sprint headings found in plan file: {plan_path}")
+
+    lines = content.split("\n")
+
+    # Check for duplicate IDs
+    ids = [h["id"] for h in headings]
+    seen = set()
+    for sid in ids:
+        if sid in seen:
+            raise ValueError(f"Duplicate sprint ID: {sid}")
+        seen.add(sid)
+
+    id_set = set(ids)
+
+    # Allow optional markdown bold markers (**) after the colon
+    _complexity_re = re.compile(r'(?:complexity|Complexity):\s*\*?\*?\s*(\w+)', re.IGNORECASE)
+    _depends_re = re.compile(
+        r'(?:depends.on|Dependencies):\s*\*?\*?\s*(?:Sprint\s+)?(\d+(?:\s*,\s*(?:Sprint\s+)?\d+)*)',
+        re.IGNORECASE,
+    )
+
+    sprints = []
+    for h in headings:
+        section = _extract_sprint_section(lines, h["start_line"], h["end_line"])
+
+        # Extract complexity
+        cm = _complexity_re.search(section)
+        complexity = cm.group(1).lower() if cm else "medium"
+
+        # Extract depends_on
+        dm = _depends_re.search(section)
+        if dm:
+            raw = dm.group(1)
+            parts = re.split(r'\s*,\s*', raw)
+            depends_on = []
+            for part in parts:
+                # Strip optional "Sprint " prefix from each part
+                part = re.sub(r'(?i)^sprint\s+', '', part.strip())
+                if part:
+                    depends_on.append(int(part))
+        else:
+            depends_on = []
+
+        # Validate dependency references exist
+        for dep in depends_on:
+            if dep not in id_set:
+                raise ValueError(
+                    f"Sprint {h['id']} depends on Sprint {dep}, which does not exist"
+                )
+
+        sprints.append({
+            "id": h["id"],
+            "title": h["title"],
+            "status": "pending",
+            "complexity": complexity,
+            "plan_file": f"{plan_path}#sprint-{h['id']}",
+            "branch": f"{base_branch}/{feature}-sprint-{h['id']}",
+            "depends_on": depends_on,
+            "pr": None,
+            "retries": 0,
+            "max_retries": 2,
+            "error_log": None,
+        })
+
+    # Topological sort check for circular dependencies
+    _check_no_cycles(sprints)
+
+    # Compute content hash
+    content_hash = f"sha256:{hashlib.sha256(content.encode()).hexdigest()}"
+    now = datetime.now(timezone.utc).isoformat()
+
+    return {
+        "feature": feature,
+        "created": now,
+        "generated_from": {
+            "plan_file": plan_path,
+            "content_hash": content_hash,
+            "generated_at": now,
+        },
+        "sprints": sprints,
+    }
+
+
+def _check_no_cycles(sprints: list) -> None:
+    """Kahn's algorithm topological sort — raises ValueError on cycle."""
+    graph = {s["id"]: list(s["depends_on"]) for s in sprints}
+    in_degree = {s["id"]: 0 for s in sprints}
+    for deps in graph.values():
+        for dep in deps:
+            in_degree[dep] = in_degree.get(dep, 0)  # ensure key exists
+    # Count incoming edges for each node
+    in_degree = {sid: 0 for sid in graph}
+    for sid, deps in graph.items():
+        for dep in deps:
+            # dep -> sid means sid has one more in-degree? No:
+            # deps = what sid depends ON, so dep must come BEFORE sid
+            # edge: dep -> sid, so sid gets +1 in-degree
+            pass
+    # Build adjacency: if sid depends on dep, then dep -> sid
+    adjacency = {sid: [] for sid in graph}
+    in_degree = {sid: 0 for sid in graph}
+    for sid, deps in graph.items():
+        for dep in deps:
+            adjacency[dep].append(sid)
+            in_degree[sid] += 1
+
+    queue = [sid for sid, deg in in_degree.items() if deg == 0]
+    visited = 0
+    while queue:
+        node = queue.pop(0)
+        visited += 1
+        for neighbor in adjacency[node]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if visited != len(graph):
+        raise ValueError("Circular dependency detected in sprint dependencies")
+
+
+def save_queue(queue_dict: dict, path: str) -> None:
+    """Save queue dict to JSON file atomically."""
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w") as f:
+        json.dump(queue_dict, f, indent=2)
+    os.replace(tmp_path, path)
+
+
+def validate_queue_freshness(queue_path: str, plan_path: str) -> tuple:
+    """Check if queue was generated from the current plan content.
+
+    Returns (is_fresh: bool, reason: str).
+    """
+    with open(queue_path) as f:
+        queue_data = json.load(f)
+
+    generated_from = queue_data.get("generated_from")
+    if not generated_from:
+        return (False, "queue has no generated_from metadata")
+
+    stored_hash = generated_from.get("content_hash", "")
+
+    with open(plan_path) as f:
+        current_content = f.read()
+    current_hash = f"sha256:{hashlib.sha256(current_content.encode()).hexdigest()}"
+
+    if stored_hash == current_hash:
+        return (True, "")
+    return (False, "plan modified since queue was generated")
