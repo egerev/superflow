@@ -130,16 +130,10 @@ Tradeoff: autonomy vs safety. Decline to keep manual approval for each command.
 
 ## Step 3.4 — 3-Path Approval Gate
 
-```
-AskUserQuestion(
-  question: "Does this plan look right?",
-  options: [
-    {"value": "all",    "label": "Approve all — set up everything"},
-    {"value": "custom", "label": "Customize — let me choose what to set up"},
-    {"value": "skip",   "label": "Docs only — skip permissions and hooks"}
-  ]
-)
-```
+Ask as plain text (remote-friendly — works via Telegram):
+
+> "Does this plan look right?
+> Reply **'go'** to approve all, **'customize'** to choose what to set up, or **'docs only'** to skip permissions and hooks."
 
 **"Customize" sub-flow** — show checklist and ask for toggles (free text acceptable):
 ```

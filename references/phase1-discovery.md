@@ -122,19 +122,10 @@ Your next action MUST be a question or proposal to the user. Do NOT jump to Prod
 - Proposals must be genuinely new (not rephrasing user's own words)
 - Three lenses: Product ("users expect X"), Architecture ("data model supports X"), Domain ("best practice is Y")
 
-Use AskUserQuestion when options are enumerable, free text for open-ended exploration.
+Use plain text questions (remote-friendly — works via Telegram). List options inline when they're enumerable.
 
 **For priority questions:**
-```
-AskUserQuestion(
-  question: "What matters most for this feature?",
-  options: [
-    {"value": "speed", "label": "Ship fast — MVP first"},
-    {"value": "quality", "label": "Get it right — thorough implementation"},
-    {"value": "flexibility", "label": "Keep options open — extensible design"}
-  ]
-)
-```
+> "What matters most for this feature? (a) Ship fast — MVP first, (b) Get it right — thorough implementation, (c) Keep options open — extensible design"
 
 ## Step 5: Approaches + Recommendation
 <!-- Stage 2: Brainstorming, Todo 2 -->
@@ -143,18 +134,12 @@ Present 2-3 approaches with trade-offs. Lead with recommendation.
 For each approach: strengths, risks, effort level.
 **Mandatory step** — even if one approach seems obvious, present alternatives. The user must see options before Product Summary.
 
-**For approach selection, use AskUserQuestion:**
-```
-AskUserQuestion(
-  question: "I see three approaches. Which direction appeals to you?",
-  options: [
-    {"value": "a", "label": "Approach A: [name] — [1-line tradeoff]"},
-    {"value": "b", "label": "Approach B: [name] — [1-line tradeoff]"},
-    {"value": "c", "label": "Approach C: [name] — [1-line tradeoff]"},
-    {"value": "details", "label": "Tell me more about each"}
-  ]
-)
-```
+**For approach selection, ask as plain text:**
+> "I see three approaches:
+> (a) Approach A: [name] — [1-line tradeoff]
+> (b) Approach B: [name] — [1-line tradeoff]
+> (c) Approach C: [name] — [1-line tradeoff]
+> Which direction? Reply a/b/c or 'details' for more on each."
 
 ## Step 6: Product Approval (MERGED GATE)
 <!-- Stage 3: Product Approval, Todos 1-2 -->
@@ -183,20 +168,12 @@ This brief is shared with:
 
 Keep it short (< 1 page). No frameworks — just clarity about what we're building and for whom.
 
-**APPROVAL GATE:**
-```
-AskUserQuestion(
-  question: "Does this capture what we're building? Approve to proceed to technical spec.",
-  options: [
-    {"value": "approve", "label": "Approve — write the spec"},
-    {"value": "changes", "label": "Needs changes"},
-    {"value": "restart", "label": "Start over — wrong direction"}
-  ]
-)
-```
+**APPROVAL GATE** (plain text — remote-friendly):
 
-- "approve" → proceed to Step 7 (Spec)
-- "changes" → ask what to change, update, re-present
+> "Does this capture what we're building? Reply **'go'** to proceed to spec, **'fix ...'** to request changes, or **'restart'** to go back to brainstorming."
+
+- "go" / "approve" → proceed to Step 7 (Spec)
+- "fix ..." / "changes" → ask what to change, update, re-present
 - "restart" → go back to Step 4 (brainstorming)
 
 ## Step 7: Spec Document

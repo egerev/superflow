@@ -136,20 +136,12 @@ This is a greenfield or near-empty project (e.g., only README.md + LICENSE, no m
 
 ## Step 5: Present Confirmation
 
-Compose a one-line summary and ask with AskUserQuestion:
+Compose a one-line summary and ask as plain text (remote-friendly — works via Telegram):
 
-```
-AskUserQuestion(
-  question: "Detected: [stack] + [framework], [team_size] developer(s), CI: [ci]. I'll audit docs, code quality, and security. ~2 min.",
-  options: [
-    {"value": "confirm",  "label": "Looks right — start Phase 0"},
-    {"value": "correct",  "label": "Correct something first"},
-    {"value": "skip",     "label": "Skip Phase 0 — go straight to Phase 1"}
-  ]
-)
-```
+> "Detected: [stack] + [framework], [team_size] developer(s), CI: [ci]. I'll audit docs, code quality, and security. ~2 min.
+> Reply **'go'** to start, **'fix ...'** to correct something, or **'skip'** to go straight to Phase 1."
 
-If AskUserQuestion is unavailable (non-interactive), proceed with `confirm` automatically.
+If no response within a reasonable time (non-interactive mode), proceed with `confirm` automatically.
 
 ---
 
@@ -180,15 +172,8 @@ json.dump(s, open('.superflow-state.json', 'w'), indent=2)
 
 Then proceed to Stage 2 (`references/phase0/stage2-analysis.md`).
 
-### "correct"
-Ask for free-text correction:
-
-```
-AskUserQuestion(
-  question: "What should I correct?",
-  placeholder: "e.g. stack is Next.js, team is 3 people"
-)
-```
+### "fix ..." / "correct"
+User provides correction inline (e.g., "fix: stack is Next.js, team is 3 people"). Parse the correction from their message.
 
 Update `$PREFLIGHT` with the correction, re-display the confirmation (Step 5), repeat.
 
