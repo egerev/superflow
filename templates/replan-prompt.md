@@ -9,6 +9,9 @@ You are the Superflow adaptive replanner. Analyze completed sprint results and d
 ## Original Plan
 {plan_content}
 
+## Autonomy Charter
+{charter}
+
 ## Instructions
 Based on what was learned from completed sprints, determine if any remaining sprint plans should change.
 

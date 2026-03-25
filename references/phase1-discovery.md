@@ -34,6 +34,7 @@ Stage 5: "Planning"
   - "Dual-model plan review"
   - "Fix review findings"
   - "Get user final approval"
+  - "Generate Autonomy Charter"
 ```
 
 ### State Management
@@ -236,6 +237,32 @@ Present:
 **FINAL GATE:** Ask the user: "Ready to start autonomous execution? Say 'go' when ready."
 - User says "go" / "start" / "давай" / affirmative → proceed to auto-launch flow below
 - User requests changes → update plan, re-present
+
+## Step 12: Generate Autonomy Charter
+<!-- Stage 5: Planning, Todo 5 -->
+
+After user approval and before auto-launch, generate an Autonomy Charter from the brief, spec, and plan:
+
+**Charter structure** (YAML frontmatter + Markdown body):
+
+```yaml
+---
+goal: "One-sentence Goal from the brief"
+non_negotiables:
+  - "Hard constraint 1 (from spec/plan boundaries)"
+  - "Hard constraint 2"
+success_criteria:
+  - "Measurable outcome 1 (from brief success criteria)"
+  - "Measurable outcome 2"
+governance_mode: "supervised"
+---
+```
+
+j*Body):* Free-form notes on scope boundaries, forbidden approaches, or risk areas.
+
+Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`. Update `.superflow-state.json` context with `charter_file` path.
+
+The charter is injected into every sprint prompt, reviewer context, and replanner prompt — serving as the single source of truth for what the autonomous executor is and isn’h allowed to do.
 
 **Auto-launch flow (primary path):**
 

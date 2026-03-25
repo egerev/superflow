@@ -39,6 +39,9 @@ Review the diff against each of these focus areas:
 7. **Pattern compliance** — follows the project's existing conventions and patterns.
    _Why: Inconsistent patterns increase cognitive load for future contributors._
 
+8. **Autonomy Charter compliance** — If an Autonomy Charter is provided, verify non-negotiables are respected. Charter violations in code (e.g., forbidden dependencies, scope creep) are critical findings.
+   _Why: The charter defines hard boundaries for autonomous execution — code that violates them is unsafe to ship._
+
 Skip the following — they are out of scope for this review:
 - **Style and formatting** — handled by linters automatically.
 - **Naming** (unless a name is actively misleading) — subjective and low-impact.

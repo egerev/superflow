@@ -221,6 +221,70 @@ class TestBuildPrompt(unittest.TestCase):
         self.assertIn("Do the second thing.", result)
 
 
+
+
+class TestBuildPromptCharter(unittest.TestCase):
+    """Tests for charter injection in build_prompt."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(
+                "Sprint {sprint_id}: {sprint_title}\n"
+                "Plan: {sprint_plan}\n"
+                "Claude: {claude_md}\n"
+                "LLMs: {llms_txt}\n"
+                "Charter: {charter}\n"
+                "Branch: {branch}\n"
+                "Complexity: {complexity}\n"
+                "Tier: {implementation_tier}\n"
+                "Model: {impl_model}\n"
+                "Effort: {impl_effort}\n"
+            )
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+        with open(os.path.join(self.tmpdir, "CLAUDE.md"), "w") as f:
+            f.write("Rules")
+        with open(os.path.join(self.tmpdir, "llms.txt"), "w") as f:
+            f.write("Context")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_charter_injected_from_file(self):
+        """Charter file contents should be injected into prompt."""
+        os.makedirs(os.path.join(self.tmpdir, "docs"))
+        charter_path = os.path.join(self.tmpdir, "docs", "charter.md")
+        with open(charter_path, "w") as f:
+            f.write("goal: Build X\nnon_negotiables:\n  - No hacks")
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        meta = {"charter_file": "docs/charter.md"}
+        result = build_prompt(sprint, self.tmpdir, queue_metadata=meta)
+        self.assertIn("goal: Build X", result)
+        self.assertIn("No hacks", result)
+
+    def test_charter_missing_file_fallback(self):
+        """Missing charter file should inject comment placeholder."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        meta = {"charter_file": "docs/nonexistent-charter.md"}
+        result = build_prompt(sprint, self.tmpdir, queue_metadata=meta)
+        self.assertIn("No Autonomy Charter provided", result)
+
+    def test_charter_no_metadata(self):
+        """No metadata should inject comment placeholder."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("No Autonomy Charter provided", result)
+
+    def test_charter_empty_metadata(self):
+        """Empty metadata dict should inject comment placeholder."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir, queue_metadata={})
+        self.assertIn("No Autonomy Charter provided", result)
+
+
 class TestExecuteSprint(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()

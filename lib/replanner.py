@@ -53,6 +53,16 @@ def replan(queue, queue_path, plan_path, repo_root, checkpoints_dir):
         with open(plan_path) as f:
             plan_content = f.read()
 
+
+    # Read charter file from queue metadata
+    charter = ""
+    charter_file = getattr(queue, "metadata", {}).get("charter_file", "")
+    if charter_file:
+        charter_path = os.path.join(repo_root, charter_file)
+        if os.path.exists(charter_path):
+            with open(charter_path) as f:
+                charter = f.read()
+
     # Use string replacement instead of str.format() because the template
     # contains literal JSON braces that conflict with Python format strings
     prompt = template
@@ -63,6 +73,7 @@ def replan(queue, queue_path, plan_path, repo_root, checkpoints_dir):
         indent=2,
     ))
     prompt = prompt.replace("{plan_content}", plan_content)
+    prompt = prompt.replace("{charter}", charter)
 
     # 4. Launch claude subprocess
     try:

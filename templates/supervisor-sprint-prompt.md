@@ -11,6 +11,9 @@ You are executing Sprint {sprint_id}: {sprint_title} of the Superflow workflow a
 ### llms.txt
 {llms_txt}
 
+### Autonomy Charter
+{charter}
+
 ## Reasoning Tier
 
 - **Complexity:** {complexity}

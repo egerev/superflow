@@ -34,6 +34,9 @@ Evaluate the implementation from a product and user perspective:
 4. **Completeness** — A user can complete the full task without dead ends or missing steps.
    _Why: Incomplete flows force users to find workarounds or abandon the feature._
 
+5. **Autonomy Charter compliance** — If an Autonomy Charter is provided, validate against its goal, non-negotiables, and success criteria. Deviations from charter constraints are blockers.
+   _Why: The charter defines the boundaries of autonomous execution — violating it undermines user trust._
+
 Skip the following — they are handled by the code quality reviewer:
 - **Code style and architecture** — already reviewed for technical quality.
 - **Test coverage** — already verified by the code reviewer.
