@@ -237,5 +237,83 @@ class TestCLITelegramFlagsRemoved(unittest.TestCase):
         self.assertNotIn("--telegram-chat", self._help("resume"))
 
 
+class TestCLILaunchSubcommand(unittest.TestCase):
+    """Test that launch subcommand is available and parses args correctly."""
+
+    def setUp(self):
+        self.cli_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "bin", "superflow-supervisor",
+        )
+
+    def test_launch_help(self):
+        """launch subcommand should show help."""
+        result = subprocess.run(
+            [sys.executable, self.cli_path, "launch", "--help"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("--queue", result.stdout)
+        self.assertIn("--plan", result.stdout)
+        self.assertIn("--timeout", result.stdout)
+
+    def test_launch_requires_queue(self):
+        """launch without --queue should fail."""
+        result = subprocess.run(
+            [sys.executable, self.cli_path, "launch"],
+            capture_output=True, text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+
+
+class TestCLIStopSubcommand(unittest.TestCase):
+    """Test that stop subcommand is available."""
+
+    def setUp(self):
+        self.cli_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "bin", "superflow-supervisor",
+        )
+
+    def test_stop_help(self):
+        """stop subcommand should show help."""
+        result = subprocess.run(
+            [sys.executable, self.cli_path, "stop", "--help"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+
+
+class TestCLIStatusShowsLauncher(unittest.TestCase):
+    """Test that enhanced status command shows launcher info."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        self.cli_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "bin", "superflow-supervisor",
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_status_still_works_without_launcher(self):
+        """status command should still work even when no supervisor is running."""
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", [
+            _sprint(sid=1, status="completed"),
+            _sprint(sid=2, status="pending"),
+        ])
+        q.sprints[0]["pr"] = "https://github.com/pr/1"
+        q.save(self.queue_path)
+
+        result = subprocess.run(
+            [sys.executable, self.cli_path, "status", "--queue", self.queue_path],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("completed", result.stdout.lower())
+
+
 if __name__ == "__main__":
     unittest.main()
