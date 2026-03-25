@@ -89,16 +89,20 @@ def launch(queue_path, plan_path, repo_root, timeout=1800):
     # Open log file (append mode)
     log_file = open(log_path, "a")
 
+    # Resolve paths to absolute before spawning (child runs with cwd=repo_root)
+    abs_queue = os.path.abspath(queue_path)
+    abs_plan = os.path.abspath(plan_path) if plan_path else None
+
     # Build command
     cmd = [
         sys.executable,
         os.path.join(repo_root, "bin", "superflow-supervisor"),
         "run",
-        "--queue", queue_path,
+        "--queue", abs_queue,
         "--timeout", str(timeout),
     ]
-    if plan_path:
-        cmd.extend(["--plan", plan_path])
+    if abs_plan:
+        cmd.extend(["--plan", abs_plan])
 
     # Launch
     proc = subprocess.Popen(
