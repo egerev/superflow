@@ -123,10 +123,10 @@ def launch(queue_path, plan_path, repo_root, timeout=1800):
         f.write(str(proc.pid))
     os.replace(tmp_pid, pid_path)
 
-    # Write launch.json
+    # Write launch.json (absolute paths for cross-directory access)
     launch_data = {
-        "queue_path": queue_path,
-        "plan_path": plan_path,
+        "queue_path": abs_queue,
+        "plan_path": abs_plan,
         "timeout": timeout,
         "log_path": log_path,
         "pid": proc.pid,
