@@ -27,6 +27,8 @@ superflow/
   lib/
     supervisor.py        — Core: worktree lifecycle, execution, run loop, completion report
     queue.py             — Sprint queue with DAG dependency resolution
+    planner.py           — Plan-to-queue generator, shared heading parser
+    launcher.py          — Launch/stop/status/restart supervisor
     checkpoint.py        — Checkpoint save/load for crash recovery
     parallel.py          — Parallel execution via ThreadPoolExecutor
     replanner.py         — Adaptive replanner (adjusts remaining sprints)
@@ -74,7 +76,8 @@ superflow/
 8. **Deploy agent definitions** (if missing): `test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null`
 9. **Run Phase 0** if first run (see detection in `references/phase0-onboarding.md`)
 10. Check `.superflow-state.json` for resume context (crash recovery, session restore)
-11. Read CLAUDE.md and project docs
+11. **Detect running supervisor**: check `launcher.get_status()`. If alive=True, enter dashboard mode. If crashed=True, offer restart.
+12. Read CLAUDE.md and project docs
 
 ## Secondary Provider Detection
 
@@ -98,6 +101,19 @@ Use detected provider silently. No warnings about missing providers.
 Hooks read state for context restoration:
 - **PostCompact hook** (`~/.claude/settings.json`): after context compaction, injects current phase/stage so the LLM can re-read the right phase doc
 - **SessionStart hook** (`~/.claude/settings.json`): on `claude --resume`, restores Superflow context from state file
+
+## Dashboard Commands
+
+When supervisor is running in background (auto-launched from Phase 1 or manually), these commands are available:
+
+| Command | Action |
+|---------|--------|
+| `status` | Show supervisor status (PID, sprint, heartbeat) |
+| `log` | Show last 50 lines of supervisor log |
+| `stop` | Stop supervisor (SIGTERM to process group) |
+| `restart` | Stop + resume crashed sprints + relaunch |
+| `skip N` | Skip sprint N (writes sidecar request) |
+| `merge` | Transition to Phase 3 (all sprints must be complete) |
 
 ## Timeout Helper
 
