@@ -29,11 +29,15 @@ Stage 3: "Post-merge"
 
 ### State Management
 
-At the start of Phase 3, write `.superflow-state.json`:
+At the start of Phase 3, merge-update `.superflow-state.json` (preserves `context.*`):
 ```bash
-cat > .superflow-state.json << STATEEOF
-{"version":1,"phase":3,"phase_label":"Merge","stage":"pre-merge","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
-STATEEOF
+python3 -c "
+import json, datetime, os
+p = '.superflow-state.json'
+s = json.load(open(p)) if os.path.exists(p) else {}
+s.update({'version':1,'phase':3,'phase_label':'Merge','stage':'pre-merge','stage_index':0,'last_updated':datetime.datetime.now(datetime.timezone.utc).isoformat()})
+json.dump(s, open(p,'w'), indent=2)
+"
 ```
 
 After each stage transition, update via python3:
@@ -82,6 +86,11 @@ TaskCreate(
 <!-- Stage 1: Pre-merge -->
 
 Before merging any PR:
+0. **Read completion data** — load `context.completion_data_file` from `.superflow-state.json`:
+   ```bash
+   python3 -c "import json; s=json.load(open('.superflow-state.json')); p=s.get('context',{}).get('completion_data_file'); print(open(p).read() if p else 'No completion data')"
+   ```
+   Fallback: if file missing or no path, enumerate PRs with `gh pr list --state open --author @me --json number,title,headRefName --jq 'sort_by(.number)'`
 1. **CI must pass** on all PRs — check with `gh pr checks <number>`
 2. **No unresolved review comments** — check with `gh pr view <number>`
 3. **CLAUDE.md is up to date** — audit against current codebase:
@@ -161,6 +170,16 @@ If `gh pr checks <number>` shows failing checks:
 5. Wait for CI to pass (poll `gh pr checks <number>`, max 5 minutes)
 6. If CI still fails after 2 fix attempts: stop and report to user with error details
 7. Resume merge sequence from the failed PR
+
+## Post-Merge Verification
+<!-- Stage 2: Merge (final step) -->
+
+After all PRs are merged, run the full test suite on main to verify integration:
+```bash
+git checkout main && git pull origin main
+python3 -c "import json; q=json.load(open('docs/superflow/sprint-queue.json')); print(q.get('baseline_cmd','No baseline command found'))"
+```
+Execute the baseline test command. If tests fail: warn the user with specific failures before ending the session. Do NOT proceed to Post-Merge Report until tests pass or user acknowledges failures.
 
 ## Post-Merge Report
 <!-- Stage 3: Post-merge -->
