@@ -23,20 +23,11 @@ Enter at Step G1 below. After G6, rejoin at Stage 4 Branch B.
 ## Step G1: Project Vision Interview
 <!-- Greenfield Stage 1: Vision -->
 
-```
-AskUserQuestion(
-  question: "What are you building?",
-  options: [
-    {"value": "webapp", "label": "Web application"},
-    {"value": "api", "label": "API / Backend service"},
-    {"value": "cli", "label": "CLI tool"},
-    {"value": "library", "label": "Library / Package"},
-    {"value": "other", "label": "Something else..."}
-  ]
-)
-```
+Ask as plain text (remote-friendly):
 
-If "other" → free text follow-up: "Describe what you're building in a sentence or two."
+> "What are you building? (a) Web application, (b) API / Backend service, (c) CLI tool, (d) Library / Package, (e) Something else"
+
+If "something else" → follow up: "Describe what you're building in a sentence or two."
 
 Then ask for a one-liner description (free text):
 > "One more — give me a one-liner for the project. What does it do?"
@@ -58,89 +49,31 @@ The `name` is derived from the current directory name, or asked if the directory
 ## Step G2: Stack Selection
 <!-- Greenfield Stage 2: Stack -->
 
-Present stack options based on project type. Use AskUserQuestion with relevant options.
+Present stack options based on project type. Ask as plain text (remote-friendly):
 
 **For webapp:**
-```
-AskUserQuestion(
-  question: "Which stack do you want to use?",
-  options: [
-    {"value": "nextjs", "label": "Next.js (React + SSR + API routes)"},
-    {"value": "react_vite", "label": "React + Vite (SPA)"},
-    {"value": "python", "label": "Python (FastAPI / Flask / Django)"},
-    {"value": "other", "label": "Other — I'll describe the stack"}
-  ]
-)
-```
+> "Which stack? (a) Next.js (React + SSR + API routes), (b) React + Vite (SPA), (c) Python (FastAPI / Flask / Django), (d) Other"
 
 **For API:**
-```
-AskUserQuestion(
-  question: "Which stack for the API?",
-  options: [
-    {"value": "express", "label": "Express.js / Node.js"},
-    {"value": "fastapi", "label": "FastAPI / Python"},
-    {"value": "other", "label": "Other — I'll describe the stack"}
-  ]
-)
-```
+> "Which stack for the API? (a) Express.js / Node.js, (b) FastAPI / Python, (c) Other"
 
 **For CLI:**
-```
-AskUserQuestion(
-  question: "Which language for the CLI?",
-  options: [
-    {"value": "python_click", "label": "Python (Click/Typer)"},
-    {"value": "go_cobra", "label": "Go (Cobra)"},
-    {"value": "node_commander", "label": "Node.js (Commander)"},
-    {"value": "rust_clap", "label": "Rust (Clap)"},
-    {"value": "other", "label": "Other — I'll specify"}
-  ]
-)
-```
+> "Which language for the CLI? (a) Python (Click/Typer), (b) Go (Cobra), (c) Node.js (Commander), (d) Rust (Clap), (e) Other"
 
 **For library:**
-```
-AskUserQuestion(
-  question: "Which language for the library?",
-  options: [
-    {"value": "python", "label": "Python (PyPI package)"},
-    {"value": "node", "label": "Node.js / TypeScript (npm package)"},
-    {"value": "go", "label": "Go module"},
-    {"value": "rust", "label": "Rust crate"},
-    {"value": "other", "label": "Other — I'll specify"}
-  ]
-)
-```
+> "Which language? (a) Python (PyPI), (b) Node.js / TypeScript (npm), (c) Go module, (d) Rust crate, (e) Other"
 
 If "other" → free text: "What stack/language do you want to use?"
 
 Store as `$STACK_CHOICE`.
 
-**Follow-up questions (conditional):**
+**Follow-up questions (conditional, plain text):**
 
-```
-AskUserQuestion(
-  question: "TypeScript or JavaScript?",
-  options: [
-    {"value": "typescript", "label": "TypeScript (recommended)"},
-    {"value": "javascript", "label": "JavaScript"}
-  ]
-)
-// Only asked if stack is Node.js-based
+If Node.js-based:
+> "TypeScript or JavaScript? (TypeScript recommended)"
 
-AskUserQuestion(
-  question: "Do you want a database?",
-  options: [
-    {"value": "postgres", "label": "PostgreSQL"},
-    {"value": "sqlite", "label": "SQLite (simple, no server)"},
-    {"value": "mongo", "label": "MongoDB"},
-    {"value": "none", "label": "No database yet"},
-    {"value": "other", "label": "Other"}
-  ]
-)
-// Only asked for webapp/api types
-```
+If webapp/api:
+> "Database? (a) PostgreSQL, (b) SQLite, (c) MongoDB, (d) No database yet, (e) Other"
 
 ---
 
@@ -150,19 +83,11 @@ AskUserQuestion(
 After stack selection, present a proposal listing all files that will be created. This prevents
 unexpected file creation.
 
-```
-AskUserQuestion(
-  question: "I'll create these files to set up your project. Approve to proceed.",
-  options: [
-    {"value": "approve", "label": "Approve — create the project"},
-    {"value": "edit", "label": "Let me adjust..."},
-    {"value": "cancel", "label": "Cancel — I'll set up manually"}
-  ]
-)
-```
+Show the file list from the selected template, then ask:
 
-Show the file list from the selected template (e.g., for Next.js: package.json, tsconfig.json,
-src/app/layout.tsx, etc.). Only proceed to scaffolding after approval.
+> "I'll create these files. Reply **'go'** to proceed, **'edit ...'** to adjust, or **'cancel'** to set up manually."
+
+Only proceed to scaffolding after approval.
 
 ---
 
@@ -205,16 +130,9 @@ bundle install   # Rails
 ## Step G4: CI Setup
 <!-- Greenfield Stage 4: CI -->
 
-```
-AskUserQuestion(
-  question: "Set up GitHub Actions CI?",
-  options: [
-    {"value": "yes", "label": "Yes — basic CI (lint + test + build)"},
-    {"value": "no", "label": "No CI for now"},
-    {"value": "advanced", "label": "Yes — with preview deployments"}
-  ]
-)
-```
+Ask as plain text:
+
+> "Set up GitHub Actions CI? (a) Yes — basic CI (lint + test + build), (b) No CI for now, (c) Yes — with preview deployments"
 
 If yes, copy from `templates/ci/github-actions-<stack>.yml` to `.github/workflows/ci.yml`:
 - Node.js → `templates/ci/github-actions-node.yml`
