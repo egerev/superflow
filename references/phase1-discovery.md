@@ -239,11 +239,12 @@ Present:
 
 **Auto-launch flow (primary path):**
 
-**1. Pre-launch check** — verify supervisor is not already running:
+**1. Pre-launch check** — verify supervisor is not already running or crashed:
 ```bash
-python3 -c "from lib.launcher import get_status; s=get_status('.'); print('alive' if s.alive else 'not running')"
+python3 -c "from lib.launcher import get_status; s=get_status('.'); print(f'alive={s.alive} crashed={s.crashed} sprint={s.sprint}')"
 ```
-If alive: show current status and enter dashboard mode (poll + sprint transitions). Do not re-launch.
+- If alive: show current status and enter dashboard mode. Do not re-launch.
+- If crashed: offer restart (`restart()` calls `resume()` to recover in-progress sprints, then relaunches). Do NOT regenerate the queue — it would overwrite completed sprint state.
 
 **2. Generate sprint queue** from the approved plan:
 ```bash

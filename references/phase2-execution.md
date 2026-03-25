@@ -269,9 +269,13 @@ When the supervisor is launched automatically from Phase 1 Step 11, the Claude s
 
 ### Sprint Transition Monitoring
 
-Poll `.superflow-state.json` every 30 seconds via background command:
+Poll both `.superflow-state.json` and launcher status every 30 seconds via background command:
 ```bash
-while true; do cat .superflow-state.json 2>/dev/null; sleep 30; done
+while true; do
+  cat .superflow-state.json 2>/dev/null
+  python3 -c "from lib.launcher import get_status; s=get_status('.'); print(f'alive={s.alive} crashed={s.crashed} heartbeat={s.heartbeat_age_seconds}')" 2>/dev/null
+  sleep 30
+done
 ```
 
 On state change (sprint number or stage changed), display update:
@@ -280,7 +284,10 @@ Sprint 2/4 completed: "API endpoints" — PR #46 created
 Sprint 3/4 in progress: "Frontend components"
 ```
 
-On supervisor completion (all sprints done or PID gone): display summary and offer merge.
+On supervisor death (`alive=False`):
+- If `crashed=True`: display crash notice, offer `restart`
+- If all sprints complete: display summary, offer `merge`
+- Otherwise: display unexpected stop, offer `restart` or `log`
 
 ### Interactive Commands
 
