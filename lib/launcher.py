@@ -291,7 +291,7 @@ def get_status(repo_root):
 
 
 def restart(repo_root, queue_path=None, plan_path=None, timeout=1800):
-    """Stop supervisor, then relaunch."""
+    """Stop supervisor, resume crashed sprints, then relaunch."""
     stop(repo_root)
 
     # Read paths from launch.json if not provided
@@ -306,6 +306,10 @@ def restart(repo_root, queue_path=None, plan_path=None, timeout=1800):
 
     if not queue_path:
         raise RuntimeError("No queue_path provided and launch.json not found")
+
+    # Resume crashed sprints (reset in_progress → pending)
+    from lib.supervisor import resume
+    resume(queue_path, repo_root)
 
     return launch(queue_path, plan_path, repo_root, timeout=timeout)
 
