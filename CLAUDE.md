@@ -1,7 +1,7 @@
 # Superflow — Claude Instructions
 
 ## Project Overview
-Superflow is a Claude Code skill (hybrid: Markdown prompts + Python companion CLI) that orchestrates a 4-phase dev workflow: onboarding, product discovery, autonomous execution, merge. The Python supervisor enables multi-hour autonomous sprint execution outside Claude's context window. v3.4.0, MIT License.
+Superflow is a Claude Code skill (hybrid: Markdown prompts + Python companion CLI) that orchestrates a 4-phase dev workflow: onboarding, product discovery, autonomous execution, merge. The Python supervisor enables multi-hour autonomous sprint execution outside Claude's context window. v3.5.0, MIT License.
 
 ## Key Rules
 - All documentation output in English — user communication follows their language preference
@@ -12,7 +12,7 @@ Superflow is a Claude Code skill (hybrid: Markdown prompts + Python companion CL
 
 ## Architecture
 ```
-SKILL.md (entry point, ~118 lines)
+SKILL.md (entry point, ~142 lines)
   ├── superflow-enforcement.md (durable rules → ~/.claude/rules/)
   ├── references/
   │   ├── phase0-onboarding.md (router — detection, recovery matrix, stage loading)
@@ -42,6 +42,8 @@ SKILL.md (entry point, ~118 lines)
   ├── lib/
   │   ├── supervisor.py (core: worktree lifecycle, sprint execution, run loop, state projection)
   │   ├── queue.py (DAG-based sprint queue)
+  │   ├── planner.py (plan-to-queue generator, shared heading parser)
+  │   ├── launcher.py (launch/stop/status/restart supervisor as background process)
   │   ├── checkpoint.py (crash recovery)
   │   ├── parallel.py (ThreadPoolExecutor concurrency + state writes)
   │   ├── replanner.py (adaptive LLM-powered replanning)
@@ -56,7 +58,7 @@ SKILL.md (entry point, ~118 lines)
   │   └── sprint-queue-example.json (queue template)
   └── tests/
       ├── test_supervisor.py, test_queue.py, test_replanner.py, ...
-      └── test_integration.py (138 tests total)
+      └── test_integration.py (333 tests total)
 ```
 
 Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor orchestrates multi-sprint execution with crash recovery, parallel execution, and adaptive replanning. Enforcement rules survive context compaction via `~/.claude/rules/`.
@@ -64,7 +66,7 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 ## Key Files
 | File | Lines | Purpose |
 |------|-------|---------|
-| `SKILL.md` | ~126 | Entry point — startup checklist, provider detection, state management, phase routing |
+| `SKILL.md` | ~142 | Entry point — startup checklist, provider detection, state management, dashboard commands, phase routing |
 | `superflow-enforcement.md` | 80 | 9 hard rules, specialized 2-agent reviews (Claude=Product, secondary=Technical), rationalization prevention, phase gates |
 | `references/phase0-onboarding.md` | ~80 | Router — detection, recovery matrix, stage loading |
 | `references/phase0/stage1-detect.md` | ~214 | Parallel preflight, auto-detection, confirmation |
@@ -73,15 +75,17 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 | `references/phase0/stage4-setup.md` | ~238 | 3 concurrent branches, strict file ownership |
 | `references/phase0/stage5-completion.md` | ~163 | Markers, tech debt persistence, restart |
 | `references/phase0/greenfield.md` | ~350 | Greenfield path G1-G6 |
-| `references/phase1-discovery.md` | 263 | 11 steps, 5 stages, merged Product Approval gate, specialized reviews (Claude=Product, Codex=Technical) |
-| `references/phase2-execution.md` | 293 | Per-sprint stages, 2-agent specialized review (Claude Product + Codex Technical), holistic review |
+| `references/phase1-discovery.md` | ~287 | 11 steps, 5 stages, merged Product Approval gate, auto-launch flow |
+| `references/phase2-execution.md` | ~343 | Per-sprint stages, 2-agent specialized review, dashboard mode, holistic review |
 | `references/phase3-merge.md` | 184 | 3 stages, sequential rebase merge with CI gate |
 | `prompts/implementer.md` | 81 | Red-Green-Refactor TDD cycle for code agents |
 | `prompts/llms-txt-writer.md` | 154 | llmstxt.org standard, no hard size limit |
 | `prompts/claude-md-writer.md` | 148 | Verified paths/commands, <200 lines target |
-| `bin/superflow-supervisor` | 148 | CLI: run, status, resume, reset commands |
-| `lib/supervisor.py` | 1749 (~1370 LOC) | Core supervisor: worktree lifecycle, sprint execution, run loop, validation gates, holistic review |
-| `lib/queue.py` | 122 (~105 LOC) | Sprint queue with DAG dependency resolution, atomic saves, baseline_cmd |
+| `bin/superflow-supervisor` | 213 | CLI: run, status, resume, reset, launch, stop commands |
+| `lib/supervisor.py` | 1822 (~1450 LOC) | Core supervisor: worktree lifecycle, sprint execution, run loop, validation gates, holistic review, heartbeat, skip-request |
+| `lib/queue.py` | 133 (~115 LOC) | Sprint queue with DAG dependency resolution, atomic saves, baseline_cmd, generated_from |
+| `lib/planner.py` | 220 (~180 LOC) | Plan-to-queue generator, shared sprint heading parser, queue freshness validation |
+| `lib/launcher.py` | 334 (~280 LOC) | Launch/stop/status/restart supervisor, PID management, skip-request writer |
 | `lib/checkpoint.py` | 52 (~44 LOC) | Checkpoint save/load for crash recovery, string IDs, named checkpoints |
 | `lib/parallel.py` | 61 (~50 LOC) | ThreadPoolExecutor concurrency with queue_lock |
 | `lib/replanner.py` | 212 (~168 LOC) | Adaptive replanner — adjusts remaining sprints via Claude |
@@ -90,7 +94,7 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 | `templates/replan-prompt.md` | 26 | Replanner prompt with placeholders |
 | `templates/superflow-state-schema.json` | ~70 | JSON Schema for .superflow-state.json |
 | `examples/sprint-queue-example.json` | 45 | Queue file template for new users |
-| `tests/` | ~5134 | 228 tests: unit (all modules) + integration (happy path, crash, retry) |
+| `tests/` | ~6200 | 333 tests: unit (all modules) + integration (happy path, crash, retry) |
 
 ## Conventions
 - Hybrid project: Markdown skill files (no dependencies) + Python supervisor (stdlib only, no pip install)
@@ -108,4 +112,4 @@ Hybrid project: Markdown prompts drive Claude Code sessions; Python supervisor o
 - Greenfield templates (nextjs.md, python.md) provide config files but not source file contents — LLM generates those
 - `_verify_steps()` is advisory-only (warns but does not block incomplete sprints)
 
-<!-- updated-by-superflow:2026-03-24 -->
+<!-- updated-by-superflow:2026-03-25 -->

@@ -234,10 +234,52 @@ Present:
 - Merge order and dependencies
 
 **FINAL GATE:** Ask the user: "Ready to start autonomous execution? Say 'go' when ready."
-- User says "go" / "start" / "давай" / affirmative → proceed to context reset below
+- User says "go" / "start" / "давай" / affirmative → proceed to auto-launch flow below
 - User requests changes → update plan, re-present
 
-**Context reset before Phase 2:** After Phase 1 the context window is heavily loaded with brainstorming history, review findings, and intermediate drafts. Phase 2 is a different mode (autonomous manager) and benefits from a clean start.
+**Auto-launch flow (primary path):**
+
+**1. Pre-launch check** — verify supervisor is not already running or crashed:
+```bash
+python3 -c "from lib.launcher import get_status; s=get_status('.'); print(f'alive={s.alive} crashed={s.crashed} sprint={s.sprint}')"
+```
+- If alive: show current status and enter dashboard mode. Do not re-launch.
+- If crashed: offer restart (`restart()` calls `resume()` to recover in-progress sprints, then relaunches). Do NOT regenerate the queue — it would overwrite completed sprint state.
+
+**2. Generate sprint queue** from the approved plan:
+```bash
+python3 -c "
+from lib.planner import plan_to_queue, save_queue
+q = plan_to_queue('PLAN_PATH', 'FEATURE')
+save_queue(q, 'docs/superflow/sprint-queue.json')
+print(f'{len(q[\"sprints\"])} sprints queued')
+"
+```
+Replace `PLAN_PATH` with the actual plan file path (e.g. `docs/superflow/plans/YYYY-MM-DD-feature.md`) and `FEATURE` with the feature name.
+
+**3. Confirm launch** — ask the user (plain text, remote-friendly):
+> "Ready to start. N sprints queued. Launch supervisor in background? (yes/no)"
+
+**4. On yes — launch supervisor:**
+```bash
+python3 -c "
+from lib.launcher import launch
+r = launch('docs/superflow/sprint-queue.json', 'PLAN_PATH', '.')
+print(f'PID {r.pid}, log: {r.log_path}')
+"
+```
+Show launch receipt: PID, log path, sprint count. Update `.superflow-state.json` to phase=2.
+
+**5. If launch fails** — show the error message and first 20 lines of the log file, then offer:
+> "Launch failed. Check the log above. Fix the issue and say 'retry', or say 'manual' to fall back to the manual path."
+
+**6. Enter dashboard mode** — transition to Phase 2 dashboard: poll supervisor status every 30 seconds, surface sprint transitions and errors as they happen.
+
+---
+
+**Fallback path (if user says "no" to launch, or on repeated launch failure):**
+
+After Phase 1 the context window is heavily loaded with brainstorming history, review findings, and intermediate drafts. Phase 2 is a different mode (autonomous manager) and benefits from a clean start.
 
 1. Verify `.superflow-state.json` has phase=2 and plan/spec file paths in context
 2. Tell the user:

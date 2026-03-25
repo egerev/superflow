@@ -9,7 +9,7 @@ Four phases: onboarding, discovery, execution, merge.
 
 Phase 0 (auto, first run only): Detect markers > Auto-detect + confirm > Analyze codebase (5 parallel agents) > Health report > Proposal (approval gate) > Docs + Environment (3 parallel branches) > Markers > Restart instruction
 Phase 1 (with user, 11 steps): Context > Research (parallel agents) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Approval (MERGED GATE) > Spec > Spec Review (dual-model) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE)
-Phase 2 (autonomous, 10 steps per sprint + wave-based parallel dispatch): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers (parallel waves) > Unified Review (4 agents) > Test verification > Push+PR > Cleanup > Telegram
+Phase 2 (autonomous, 10 steps per sprint + wave-based parallel dispatch): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers (parallel waves) > Unified Review (2 agents) > Test verification > Push+PR > Cleanup > Telegram
 Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase merge (with CI failure handling) > Post-merge report
 
 Durable rules live in `.claude/rules/superflow-enforcement.md` (survives compaction).
@@ -27,6 +27,8 @@ superflow/
   lib/
     supervisor.py        — Core: worktree lifecycle, execution, run loop, completion report
     queue.py             — Sprint queue with DAG dependency resolution
+    planner.py           — Plan-to-queue generator, shared heading parser
+    launcher.py          — Launch/stop/status/restart supervisor
     checkpoint.py        — Checkpoint save/load for crash recovery
     parallel.py          — Parallel execution via ThreadPoolExecutor
     replanner.py         — Adaptive replanner (adjusts remaining sprints)
@@ -55,7 +57,7 @@ superflow/
       stage4-setup.md    — 3 concurrent branches, strict file ownership
       stage5-completion.md — Markers, tech debt, restart
       greenfield.md      — Empty project path, G1-G6
-  tests/                 — Unit and integration tests (140+ tests)
+  tests/                 — Unit and integration tests (333 tests)
 ```
 
 ## Startup Checklist
@@ -74,7 +76,8 @@ superflow/
 8. **Deploy agent definitions** (if missing): `test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null`
 9. **Run Phase 0** if first run (see detection in `references/phase0-onboarding.md`)
 10. Check `.superflow-state.json` for resume context (crash recovery, session restore)
-11. Read CLAUDE.md and project docs
+11. **Detect running supervisor**: check `launcher.get_status()`. If alive=True, enter dashboard mode. If crashed=True, offer restart.
+12. Read CLAUDE.md and project docs
 
 ## Secondary Provider Detection
 
@@ -99,6 +102,19 @@ Hooks read state for context restoration:
 - **PostCompact hook** (`~/.claude/settings.json`): after context compaction, injects current phase/stage so the LLM can re-read the right phase doc
 - **SessionStart hook** (`~/.claude/settings.json`): on `claude --resume`, restores Superflow context from state file
 
+## Dashboard Commands
+
+When supervisor is running in background (auto-launched from Phase 1 or manually), these commands are available:
+
+| Command | Action |
+|---------|--------|
+| `status` | Show supervisor status (PID, sprint, heartbeat) |
+| `log` | Show last 50 lines of supervisor log |
+| `stop` | Stop supervisor (SIGTERM to process group) |
+| `restart` | Stop + resume crashed sprints + relaunch |
+| `skip N` | Skip sprint N (writes sidecar request) |
+| `merge` | Transition to Phase 3 (all sprints must be complete) |
+
 ## Timeout Helper
 
 ```bash
@@ -119,7 +135,7 @@ fi
 - Testing: `prompts/testing-guidelines.md`
 - Agent definitions: `agents/deep-implementer.md`, `agents/standard-implementer.md`, `agents/fast-implementer.md`, `agents/deep-code-reviewer.md`, `agents/standard-code-reviewer.md`, `agents/deep-product-reviewer.md`, `agents/standard-product-reviewer.md`, `agents/deep-spec-reviewer.md`, `agents/standard-spec-reviewer.md`, `agents/deep-doc-writer.md`, `agents/standard-doc-writer.md`, `agents/deep-analyst.md`
 - Codex prompts: `prompts/codex/code-reviewer.md`, `prompts/codex/product-reviewer.md`, `prompts/codex/audit.md`
-- Supervisor: `bin/superflow-supervisor`, `lib/supervisor.py`, `lib/queue.py`, `lib/checkpoint.py`, `lib/parallel.py`, `lib/replanner.py`, `lib/notifications.py`
+- Supervisor: `bin/superflow-supervisor`, `lib/supervisor.py`, `lib/queue.py`, `lib/planner.py`, `lib/launcher.py`, `lib/checkpoint.py`, `lib/parallel.py`, `lib/replanner.py`, `lib/notifications.py`
 - Templates: `templates/supervisor-sprint-prompt.md`, `templates/replan-prompt.md`
 - State: `templates/superflow-state-schema.json` (schema), `.superflow-state.json` (runtime, gitignored)
 

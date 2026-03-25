@@ -259,8 +259,65 @@ For tasks with 3+ sprints that should run unattended (overnight, multi-hour):
 - 1-2 sprints → single-session (this file's normal flow)
 - 3+ sprints → supervisor recommended
 - Overnight/unattended → supervisor required
+- Auto-launch from Phase 1 → dashboard mode recommended for all multi-sprint features
 
 **Key difference:** In supervisor mode, the supervisor creates the worktree and sets the working directory. The Claude session inside does NOT create its own worktree.
+
+## Dashboard Mode (Auto-Launch)
+
+When the supervisor is launched automatically from Phase 1 Step 11, the Claude session enters dashboard mode. The session monitors the background supervisor and provides interactive commands.
+
+### Sprint Transition Monitoring
+
+Poll both `.superflow-state.json` and launcher status every 30 seconds via background command:
+```bash
+while true; do
+  cat .superflow-state.json 2>/dev/null
+  python3 -c "from lib.launcher import get_status; s=get_status('.'); print(f'alive={s.alive} crashed={s.crashed} heartbeat={s.heartbeat_age_seconds}')" 2>/dev/null
+  sleep 30
+done
+```
+
+On state change (sprint number or stage changed), display update:
+```
+Sprint 2/4 completed: "API endpoints" — PR #46 created
+Sprint 3/4 in progress: "Frontend components"
+```
+
+On supervisor death (`alive=False`):
+- If `crashed=True`: display crash notice, offer `restart`
+- If all sprints complete: display summary, offer `merge`
+- Otherwise: display unexpected stop, offer `restart` or `log`
+
+### Interactive Commands
+
+| Command | Implementation |
+|---------|----------------|
+| `status` | `python3 -c "from lib.launcher import get_status; ..."` → formatted status |
+| `log` | `tail -50 .superflow/supervisor.log` |
+| `stop` | `python3 -c "from lib.launcher import stop; ..."` → confirm, then SIGTERM |
+| `restart` | `python3 -c "from lib.launcher import restart; ..."` → resume + relaunch |
+| `skip N` | `python3 -c "from lib.launcher import write_skip_request; ..."` → write sidecar file |
+| `merge` | Only if all sprints complete. Transition to Phase 3 (read `references/phase3-merge.md`). |
+
+### Reconnection Scenarios
+
+**New session while supervisor running:**
+1. Read `.superflow-state.json` — phase=2
+2. Check `launcher.get_status()` — alive=True
+3. Enter dashboard mode automatically
+4. Display current progress
+
+**Supervisor has finished:**
+1. Read state — phase=2, stage="ship"
+2. Check `get_status()` — alive=False, crashed=False
+3. Display completion summary
+4. Offer merge
+
+**Supervisor has crashed:**
+1. Read state — phase=2, mid-sprint
+2. Check `get_status()` — alive=False, crashed=True
+3. Offer restart (resume + relaunch)
 
 ## Completion Report (Product Release Format)
 
