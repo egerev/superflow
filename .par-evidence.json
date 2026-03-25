@@ -1,8 +1,7 @@
 {
-  "sprint": 2,
+  "sprint": 1,
   "claude_product": "ACCEPTED",
   "technical_review": "APPROVE",
   "provider": "codex",
-  "ts": "2026-03-25T01:50:00Z",
-  "notes": "Both approved after fixes: partial recovery routes through Stage 1, stale step references, line counts"
+  "ts": "2026-03-25T15:45:00+00:00"
 }

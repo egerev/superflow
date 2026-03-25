@@ -99,12 +99,25 @@ def cleanup_worktree(sprint: dict, repo_root: str) -> None:
 def _extract_plan_section(content: str, fragment: str) -> str:
     """Extract a section from markdown content matching the fragment.
 
-    The fragment (e.g. 'sprint-1') matches a heading like '## Sprint 1'.
-    Extracts from that heading until the next same-level heading or EOF.
+    Uses shared sprint heading parser for sprint-type fragments (e.g., 'sprint-1').
+    Falls back to generic heading matching for other fragment types.
     """
-    # Normalize fragment: 'sprint-1' -> 'sprint 1'
-    normalized = fragment.replace("-", " ").lower()
+    from lib.planner import _parse_sprint_headings
 
+    # Check if this is a sprint-type fragment
+    sprint_match = re.match(r'^sprint[- ](\d+)$', fragment.lower())
+    if sprint_match:
+        sprint_id = int(sprint_match.group(1))
+        headings = _parse_sprint_headings(content)
+        for h in headings:
+            if h["id"] == sprint_id:
+                lines = content.split("\n")
+                return "\n".join(lines[h["start_line"]:h["end_line"]]).strip()
+        # Sprint not found — fall through to generic logic
+        return content
+
+    # Generic heading matching (non-sprint fragments)
+    normalized = fragment.replace("-", " ").lower()
     lines = content.split("\n")
     start_idx = None
     heading_level = None
@@ -115,8 +128,7 @@ def _extract_plan_section(content: str, fragment: str) -> str:
             level = len(match.group(1))
             title = match.group(2).strip().lower()
             # Normalize title for comparison
-            title_normalized = re.sub(r"[:\-_]", " ", title).strip()
-            # Match exact heading (avoid "sprint 1" matching "sprint 12")
+            title_normalized = re.sub(r"[:\-—_]", " ", title).strip()
             if normalized == title_normalized or normalized == title_normalized.rstrip(':'):
                 start_idx = i
                 heading_level = level
@@ -168,6 +180,11 @@ def build_prompt(sprint: dict, repo_root: str) -> str:
         fragment = None
 
     plan_path = os.path.join(repo_root, file_part)
+    # Security: validate path stays within repo
+    real_plan = os.path.realpath(plan_path)
+    real_repo = os.path.realpath(repo_root)
+    if not real_plan.startswith(real_repo + os.sep) and real_plan != real_repo:
+        raise ValueError(f"Path traversal detected: {plan_file} resolves outside repo")
     if os.path.exists(plan_path):
         with open(plan_path) as f:
             plan_content = f.read()
@@ -304,17 +321,26 @@ def _parse_json_summary(output: str) -> dict | None:
     return None
 
 
-_DENIED_ENV_KEYS = {
+# Tier 2: sprint subprocess deny-list. ANTHROPIC_API_KEY and GITHUB_TOKEN intentionally excluded (required by claude -p and gh).
+_SPRINT_ENV_DENY_LIST = {
     "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
     "DATABASE_URL", "DB_PASSWORD",
     "OPENAI_API_KEY", "GOOGLE_API_KEY",
-    "HCLOUD_TOKEN",
+    "HCLOUD_TOKEN", "SECRET_KEY",
+    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+    "SLACK_TOKEN", "SLACK_BOT_TOKEN",
+    "STRIPE_SECRET_KEY", "STRIPE_API_KEY",
+    "SSH_AUTH_SOCK", "SSH_AGENT_PID",
+    "NPM_TOKEN",
+    "DOCKER_PASSWORD",
+    "HEROKU_API_KEY",
+    "SENTRY_DSN",
 }
 
 
 def _filtered_env():
     """Filter env vars: pass everything except known sensitive keys."""
-    return {k: v for k, v in os.environ.items() if k not in _DENIED_ENV_KEYS}
+    return {k: v for k, v in os.environ.items() if k not in _SPRINT_ENV_DENY_LIST}
 
 
 def _validate_evidence_verdicts(data, required_keys, context="PAR"):

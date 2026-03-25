@@ -167,8 +167,9 @@ Check ~/.claude/rules/superflow-enforcement.md exists. If missing, copy from ski
 **/.gitignore:**
 Ensure these entries exist (append if missing, never remove existing lines):
   .worktrees/
-  CLAUDE.local.md
+  .superflow/
   .superflow-state.json
+  CLAUDE.local.md
 
 **CLAUDE.local.md (if 'claude_local' in items or mode='all'):**
 Create personal preferences file (gitignored) based on context.user_context:

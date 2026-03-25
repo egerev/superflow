@@ -3241,5 +3241,109 @@ class TestGenerateCompletionReport(unittest.TestCase):
         self.assertTrue(file_content.startswith("# Completion Report"))
 
 
+class TestBuildPromptPathTraversal(unittest.TestCase):
+    """Task 1.1: path traversal validation in build_prompt()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        templates_dir = os.path.join(self.tmpdir, "templates")
+        os.makedirs(templates_dir)
+        with open(os.path.join(templates_dir, "supervisor-sprint-prompt.md"), "w") as f:
+            f.write("Sprint {sprint_id}: {sprint_plan}\n")
+        plans_dir = os.path.join(self.tmpdir, "plans")
+        os.makedirs(plans_dir)
+        with open(os.path.join(plans_dir, "plan.md"), "w") as f:
+            f.write("# Plan\n## Sprint 1\nDo the thing.\n")
+        with open(os.path.join(self.tmpdir, "CLAUDE.md"), "w") as f:
+            f.write("")
+        with open(os.path.join(self.tmpdir, "llms.txt"), "w") as f:
+            f.write("")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_path_traversal_raises_value_error(self):
+        """plan_file with ../ that escapes repo_root raises ValueError."""
+        sprint = _sprint(sid=1, plan_file="../outside_repo/evil.md")
+        with self.assertRaises(ValueError) as ctx:
+            build_prompt(sprint, self.tmpdir)
+        self.assertIn("Path traversal detected", str(ctx.exception))
+
+    def test_normal_plan_path_does_not_raise(self):
+        """A legitimate plan_file within repo_root does not raise."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        # Should not raise
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("Sprint 1", result)
+
+    def test_absolute_path_outside_repo_raises(self):
+        """An absolute path pointing outside the repo raises ValueError."""
+        sprint = _sprint(sid=1, plan_file="/etc/passwd")
+        with self.assertRaises(ValueError) as ctx:
+            build_prompt(sprint, self.tmpdir)
+        self.assertIn("Path traversal detected", str(ctx.exception))
+
+
+class TestSprintEnvDenyList(unittest.TestCase):
+    """Task 1.3: _SPRINT_ENV_DENY_LIST rename and expansion."""
+
+    def test_deny_list_name_exists(self):
+        """_SPRINT_ENV_DENY_LIST must exist on the module."""
+        import lib.supervisor as sv
+        self.assertTrue(hasattr(sv, "_SPRINT_ENV_DENY_LIST"),
+                        "_SPRINT_ENV_DENY_LIST not found on supervisor module")
+
+    def test_old_name_removed(self):
+        """_DENIED_ENV_KEYS must NOT exist — it has been renamed."""
+        import lib.supervisor as sv
+        self.assertFalse(hasattr(sv, "_DENIED_ENV_KEYS"),
+                         "_DENIED_ENV_KEYS should have been renamed to _SPRINT_ENV_DENY_LIST")
+
+    def test_existing_keys_preserved(self):
+        """Original keys are still present in the new deny-list."""
+        import lib.supervisor as sv
+        for key in ("AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+                    "DATABASE_URL", "DB_PASSWORD",
+                    "OPENAI_API_KEY", "GOOGLE_API_KEY", "HCLOUD_TOKEN"):
+            self.assertIn(key, sv._SPRINT_ENV_DENY_LIST,
+                          f"{key} missing from _SPRINT_ENV_DENY_LIST")
+
+    def test_new_keys_added(self):
+        """Newly added keys are present in the expanded deny-list."""
+        import lib.supervisor as sv
+        new_keys = [
+            "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+            "SLACK_TOKEN", "SLACK_BOT_TOKEN",
+            "STRIPE_SECRET_KEY", "STRIPE_API_KEY",
+            "SSH_AUTH_SOCK", "SSH_AGENT_PID",
+            "NPM_TOKEN", "DOCKER_PASSWORD",
+            "HEROKU_API_KEY", "SENTRY_DSN",
+        ]
+        for key in new_keys:
+            self.assertIn(key, sv._SPRINT_ENV_DENY_LIST,
+                          f"{key} missing from _SPRINT_ENV_DENY_LIST")
+
+    def test_auth_keys_not_in_deny_list(self):
+        """ANTHROPIC_API_KEY and GITHUB_TOKEN are intentionally excluded."""
+        import lib.supervisor as sv
+        self.assertNotIn("ANTHROPIC_API_KEY", sv._SPRINT_ENV_DENY_LIST)
+        self.assertNotIn("GITHUB_TOKEN", sv._SPRINT_ENV_DENY_LIST)
+
+    def test_filtered_env_uses_deny_list(self):
+        """_filtered_env() strips keys from _SPRINT_ENV_DENY_LIST."""
+        import lib.supervisor as sv
+        with patch.dict(os.environ, {
+            "TELEGRAM_BOT_TOKEN": "secret-tg",
+            "STRIPE_SECRET_KEY": "sk_live_abc",
+            "ANTHROPIC_API_KEY": "sk-ant-keep-me",
+            "SOME_NORMAL_VAR": "keep-me",
+        }):
+            env = sv._filtered_env()
+        self.assertNotIn("TELEGRAM_BOT_TOKEN", env)
+        self.assertNotIn("STRIPE_SECRET_KEY", env)
+        self.assertIn("ANTHROPIC_API_KEY", env)
+        self.assertIn("SOME_NORMAL_VAR", env)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -22,6 +22,13 @@ class SprintQueue:
         """Load a sprint queue from a JSON file."""
         with open(path) as f:
             data = json.load(f)
+        for sprint_data in data["sprints"]:
+            pf = sprint_data.get("plan_file", "")
+            file_part = pf.split("#")[0] if "#" in pf else pf
+            if os.path.isabs(file_part):
+                raise ValueError(f"Absolute path not allowed in plan_file: {pf}")
+            if ".." in file_part.split(os.sep):
+                raise ValueError(f"Path traversal (..) not allowed in plan_file: {pf}")
         return cls(
             feature=data["feature"],
             created=data["created"],
