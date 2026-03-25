@@ -11,11 +11,12 @@ class SprintQueue:
         Optional: tasks (list of task dicts for intra-sprint tracking)
     """
 
-    def __init__(self, feature: str, created: str, sprints: list, baseline_cmd=None):
+    def __init__(self, feature: str, created: str, sprints: list, baseline_cmd=None, generated_from=None):
         self.feature = feature
         self.created = created
         self.sprints = sprints
         self.baseline_cmd = baseline_cmd
+        self.generated_from = generated_from
 
     @classmethod
     def load(cls, path: str) -> "SprintQueue":
@@ -34,6 +35,7 @@ class SprintQueue:
             created=data["created"],
             sprints=data["sprints"],
             baseline_cmd=data.get("baseline_cmd"),
+            generated_from=data.get("generated_from"),
         )
 
     def save(self, path: str) -> None:
@@ -44,6 +46,8 @@ class SprintQueue:
             "baseline_cmd": self.baseline_cmd,
             "sprints": self.sprints,
         }
+        if self.generated_from is not None:
+            data["generated_from"] = self.generated_from
         tmp_path = path + ".tmp"
         with open(tmp_path, "w") as f:
             json.dump(data, f, indent=2)
