@@ -203,5 +203,39 @@ print_summary(q)
         self.assertIn("pending", result.stdout.lower())
 
 
+class TestCLITelegramFlagsRemoved(unittest.TestCase):
+    """Verify --telegram-token and --telegram-chat no longer appear in CLI help."""
+
+    def setUp(self):
+        self.cli_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "bin", "superflow-supervisor",
+        )
+
+    def _help(self, *args):
+        result = subprocess.run(
+            [sys.executable, self.cli_path] + list(args) + ["--help"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        return result.stdout
+
+    def test_run_has_no_telegram_token_flag(self):
+        """run subcommand must not expose --telegram-token."""
+        self.assertNotIn("--telegram-token", self._help("run"))
+
+    def test_run_has_no_telegram_chat_flag(self):
+        """run subcommand must not expose --telegram-chat."""
+        self.assertNotIn("--telegram-chat", self._help("run"))
+
+    def test_resume_has_no_telegram_token_flag(self):
+        """resume subcommand must not expose --telegram-token."""
+        self.assertNotIn("--telegram-token", self._help("resume"))
+
+    def test_resume_has_no_telegram_chat_flag(self):
+        """resume subcommand must not expose --telegram-chat."""
+        self.assertNotIn("--telegram-chat", self._help("resume"))
+
+
 if __name__ == "__main__":
     unittest.main()

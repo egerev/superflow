@@ -9,13 +9,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.queue import SprintQueue
-from lib.supervisor import run, resume, print_summary, generate_completion_report
+from lib.supervisor import run, resume, print_summary
 
 
 def _make_notifier(args):
-    """Create a Notifier from CLI args or env vars."""
-    token = getattr(args, 'telegram_token', None) or os.environ.get('TELEGRAM_BOT_TOKEN')
-    chat = getattr(args, 'telegram_chat', None) or os.environ.get('TELEGRAM_CHAT_ID')
+    """Create a Notifier from env vars."""
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat = os.environ.get('TELEGRAM_CHAT_ID')
     if token and chat:
         try:
             from lib.notifications import Notifier
@@ -110,8 +110,6 @@ def main():
     run_parser.add_argument("--parallel", type=int, default=1, help="Max parallel sprints")
     run_parser.add_argument("--timeout", type=int, default=1800, help="Timeout per sprint (seconds)")
     run_parser.add_argument("--no-replan", action="store_true", help="Disable adaptive replanning")
-    run_parser.add_argument("--telegram-token", default=None, help="Telegram bot token")
-    run_parser.add_argument("--telegram-chat", default=None, help="Telegram chat ID")
     run_parser.set_defaults(func=cmd_run)
 
     # status
@@ -126,8 +124,6 @@ def main():
     resume_parser.add_argument("--parallel", type=int, default=1, help="Max parallel sprints")
     resume_parser.add_argument("--timeout", type=int, default=1800, help="Timeout per sprint (seconds)")
     resume_parser.add_argument("--no-replan", action="store_true", help="Disable adaptive replanning")
-    resume_parser.add_argument("--telegram-token", default=None, help="Telegram bot token")
-    resume_parser.add_argument("--telegram-chat", default=None, help="Telegram chat ID")
     resume_parser.set_defaults(func=cmd_resume)
 
     # reset

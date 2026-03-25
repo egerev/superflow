@@ -1,6 +1,7 @@
 """Tests for the Notifier class."""
 
 import unittest
+import unittest.mock
 
 from lib.notifications import Notifier
 
@@ -169,6 +170,38 @@ class TestNewNotificationMethods(unittest.TestCase):
         self.assertIn("Recovered 3 sprints", output)
         self.assertIn("reset 1 to pending", output)
         self.assertIn("6 total", output)
+
+
+class TestNotifierEnvFallback(unittest.TestCase):
+    """Test Notifier falls back to env vars when no args given."""
+
+    def test_init_reads_token_from_env(self):
+        """Notifier picks up TELEGRAM_BOT_TOKEN from environment."""
+        import os
+        env = {"TELEGRAM_BOT_TOKEN": "envtok", "TELEGRAM_CHAT_ID": "envchat"}
+        with unittest.mock.patch.dict(os.environ, env, clear=False):
+            n = Notifier()
+        self.assertEqual(n.bot_token, "envtok")
+        self.assertEqual(n.chat_id, "envchat")
+
+    def test_explicit_args_take_precedence_over_env(self):
+        """Explicit bot_token/chat_id win over env vars."""
+        import os
+        env = {"TELEGRAM_BOT_TOKEN": "envtok", "TELEGRAM_CHAT_ID": "envchat"}
+        with unittest.mock.patch.dict(os.environ, env, clear=False):
+            n = Notifier(bot_token="explicit", chat_id="000")
+        self.assertEqual(n.bot_token, "explicit")
+        self.assertEqual(n.chat_id, "000")
+
+    def test_init_without_env_stays_none(self):
+        """Notifier stays None when env vars absent and no args given."""
+        import os
+        env_clean = {k: v for k, v in os.environ.items()
+                     if k not in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")}
+        with unittest.mock.patch.dict(os.environ, env_clean, clear=True):
+            n = Notifier()
+        self.assertIsNone(n.bot_token)
+        self.assertIsNone(n.chat_id)
 
 
 if __name__ == "__main__":

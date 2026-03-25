@@ -5,6 +5,7 @@ Sends messages via Telegram when configured, falls back to stdout.
 
 import json
 import logging
+import os
 import urllib.request
 import urllib.error
 
@@ -15,8 +16,8 @@ class Notifier:
     """Sends supervisor notifications via Telegram or stdout."""
 
     def __init__(self, bot_token=None, chat_id=None, total_sprints=0):
-        self.bot_token = bot_token
-        self.chat_id = chat_id
+        self.bot_token = bot_token or os.environ.get('TELEGRAM_BOT_TOKEN')
+        self.chat_id = chat_id or os.environ.get('TELEGRAM_CHAT_ID')
         self.total_sprints = total_sprints
 
     @property
