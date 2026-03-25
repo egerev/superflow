@@ -159,3 +159,168 @@ def launch(queue_path, plan_path, repo_root, timeout=1800):
         queue_path=queue_path,
         sprint_count=len(queue.sprints),
     )
+
+
+@dataclass
+class SupervisorStatus:
+    alive: bool
+    pid: int | None = None
+    phase: int | None = None
+    sprint: int | None = None
+    stage: str | None = None
+    tasks_done: list = None
+    tasks_total: int | None = None
+    heartbeat_age_seconds: float | None = None
+    crashed: bool = False
+    log_path: str | None = None
+
+    def __post_init__(self):
+        if self.tasks_done is None:
+            self.tasks_done = []
+
+
+def stop(repo_root, wait_timeout=60):
+    """Stop supervisor by sending SIGTERM to process group, then SIGKILL if needed."""
+    sf_dir = _superflow_dir(repo_root)
+    pid_path = os.path.join(sf_dir, "supervisor.pid")
+
+    pid = read_pid(pid_path)
+    if pid is None:
+        return True  # Already stopped
+
+    # Send SIGTERM to process group
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        # Already dead
+        try:
+            os.unlink(pid_path)
+        except OSError:
+            pass
+        return True
+
+    # Wait for process to die
+    for _ in range(wait_timeout):
+        try:
+            os.kill(pid, 0)
+            time.sleep(1)
+        except (OSError, ProcessLookupError):
+            break
+    else:
+        # Still alive — escalate to SIGKILL
+        try:
+            os.killpg(pid, signal.SIGKILL)
+            time.sleep(1)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    # Clean PID file
+    try:
+        os.unlink(pid_path)
+    except OSError:
+        pass
+
+    return True
+
+
+def get_status(repo_root):
+    """Get supervisor status from PID file, state file, and heartbeat."""
+    sf_dir = _superflow_dir(repo_root)
+    pid_path = os.path.join(sf_dir, "supervisor.pid")
+    heartbeat_path = os.path.join(sf_dir, "heartbeat")
+    state_path = os.path.join(repo_root, ".superflow-state.json")
+    log_path = os.path.join(sf_dir, "supervisor.log")
+
+    pid = read_pid(pid_path)
+    alive = pid is not None
+
+    # Read heartbeat
+    heartbeat_age = None
+    if os.path.exists(heartbeat_path):
+        try:
+            with open(heartbeat_path) as f:
+                ts = float(f.read().strip())
+            heartbeat_age = time.time() - ts
+        except (ValueError, OSError):
+            pass
+
+    # Read state
+    phase = sprint = stage = None
+    tasks_done = []
+    tasks_total = None
+    if os.path.exists(state_path):
+        try:
+            with open(state_path) as f:
+                state = json.load(f)
+            phase = state.get("phase")
+            sprint = state.get("sprint")
+            stage = state.get("stage")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Read queue for task counts
+    launch_json = os.path.join(sf_dir, "launch.json")
+    if os.path.exists(launch_json):
+        try:
+            with open(launch_json) as f:
+                ldata = json.load(f)
+            qpath = ldata.get("queue_path")
+            if qpath and os.path.exists(qpath):
+                from lib.queue import SprintQueue
+                queue = SprintQueue.load(qpath)
+                tasks_done = [s["id"] for s in queue.sprints if s["status"] == "completed"]
+                tasks_total = len(queue.sprints)
+        except (json.JSONDecodeError, OSError, KeyError):
+            pass
+
+    # Crash detection: dead but state shows mid-execution
+    crashed = not alive and stage is not None and stage not in ("ship", "done")
+
+    return SupervisorStatus(
+        alive=alive,
+        pid=pid,
+        phase=phase,
+        sprint=sprint,
+        stage=stage,
+        tasks_done=tasks_done,
+        tasks_total=tasks_total,
+        heartbeat_age_seconds=heartbeat_age,
+        crashed=crashed,
+        log_path=log_path if os.path.exists(log_path) else None,
+    )
+
+
+def restart(repo_root, queue_path=None, plan_path=None, timeout=1800):
+    """Stop supervisor, then relaunch."""
+    stop(repo_root)
+
+    # Read paths from launch.json if not provided
+    if queue_path is None or plan_path is None:
+        launch_json = os.path.join(_superflow_dir(repo_root), "launch.json")
+        if os.path.exists(launch_json):
+            with open(launch_json) as f:
+                ldata = json.load(f)
+            queue_path = queue_path or ldata.get("queue_path")
+            plan_path = plan_path or ldata.get("plan_path")
+            timeout = ldata.get("timeout", timeout)
+
+    if not queue_path:
+        raise RuntimeError("No queue_path provided and launch.json not found")
+
+    return launch(queue_path, plan_path, repo_root, timeout=timeout)
+
+
+def write_skip_request(repo_root, sprint_id, reason="user requested"):
+    """Write a skip request for the supervisor to pick up."""
+    sf_dir = _superflow_dir(repo_root)
+    skip_dir = os.path.join(sf_dir, "skip-requests")
+    os.makedirs(skip_dir, exist_ok=True)
+
+    filename = f"skip-{sprint_id}-{int(time.time())}.json"
+    filepath = os.path.join(skip_dir, filename)
+
+    data = {"sprint_id": sprint_id, "reason": reason}
+    tmp = filepath + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, filepath)
