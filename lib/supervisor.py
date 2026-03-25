@@ -309,17 +309,26 @@ def _parse_json_summary(output: str) -> dict | None:
     return None
 
 
-_DENIED_ENV_KEYS = {
+# Tier 2: sprint subprocess deny-list. ANTHROPIC_API_KEY and GITHUB_TOKEN intentionally excluded (required by claude -p and gh).
+_SPRINT_ENV_DENY_LIST = {
     "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
     "DATABASE_URL", "DB_PASSWORD",
     "OPENAI_API_KEY", "GOOGLE_API_KEY",
     "HCLOUD_TOKEN",
+    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+    "SLACK_TOKEN", "SLACK_BOT_TOKEN",
+    "STRIPE_SECRET_KEY", "STRIPE_API_KEY",
+    "SSH_AUTH_SOCK", "SSH_AGENT_PID",
+    "NPM_TOKEN",
+    "DOCKER_PASSWORD",
+    "HEROKU_API_KEY",
+    "SENTRY_DSN",
 }
 
 
 def _filtered_env():
     """Filter env vars: pass everything except known sensitive keys."""
-    return {k: v for k, v in os.environ.items() if k not in _DENIED_ENV_KEYS}
+    return {k: v for k, v in os.environ.items() if k not in _SPRINT_ENV_DENY_LIST}
 
 
 def _validate_evidence_verdicts(data, required_keys, context="PAR"):

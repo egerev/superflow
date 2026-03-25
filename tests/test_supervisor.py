@@ -3284,5 +3284,66 @@ class TestBuildPromptPathTraversal(unittest.TestCase):
         self.assertIn("Path traversal detected", str(ctx.exception))
 
 
+class TestSprintEnvDenyList(unittest.TestCase):
+    """Task 1.3: _SPRINT_ENV_DENY_LIST rename and expansion."""
+
+    def test_deny_list_name_exists(self):
+        """_SPRINT_ENV_DENY_LIST must exist on the module."""
+        import lib.supervisor as sv
+        self.assertTrue(hasattr(sv, "_SPRINT_ENV_DENY_LIST"),
+                        "_SPRINT_ENV_DENY_LIST not found on supervisor module")
+
+    def test_old_name_removed(self):
+        """_DENIED_ENV_KEYS must NOT exist — it has been renamed."""
+        import lib.supervisor as sv
+        self.assertFalse(hasattr(sv, "_DENIED_ENV_KEYS"),
+                         "_DENIED_ENV_KEYS should have been renamed to _SPRINT_ENV_DENY_LIST")
+
+    def test_existing_keys_preserved(self):
+        """Original keys are still present in the new deny-list."""
+        import lib.supervisor as sv
+        for key in ("AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+                    "DATABASE_URL", "DB_PASSWORD",
+                    "OPENAI_API_KEY", "GOOGLE_API_KEY", "HCLOUD_TOKEN"):
+            self.assertIn(key, sv._SPRINT_ENV_DENY_LIST,
+                          f"{key} missing from _SPRINT_ENV_DENY_LIST")
+
+    def test_new_keys_added(self):
+        """Newly added keys are present in the expanded deny-list."""
+        import lib.supervisor as sv
+        new_keys = [
+            "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+            "SLACK_TOKEN", "SLACK_BOT_TOKEN",
+            "STRIPE_SECRET_KEY", "STRIPE_API_KEY",
+            "SSH_AUTH_SOCK", "SSH_AGENT_PID",
+            "NPM_TOKEN", "DOCKER_PASSWORD",
+            "HEROKU_API_KEY", "SENTRY_DSN",
+        ]
+        for key in new_keys:
+            self.assertIn(key, sv._SPRINT_ENV_DENY_LIST,
+                          f"{key} missing from _SPRINT_ENV_DENY_LIST")
+
+    def test_auth_keys_not_in_deny_list(self):
+        """ANTHROPIC_API_KEY and GITHUB_TOKEN are intentionally excluded."""
+        import lib.supervisor as sv
+        self.assertNotIn("ANTHROPIC_API_KEY", sv._SPRINT_ENV_DENY_LIST)
+        self.assertNotIn("GITHUB_TOKEN", sv._SPRINT_ENV_DENY_LIST)
+
+    def test_filtered_env_uses_deny_list(self):
+        """_filtered_env() strips keys from _SPRINT_ENV_DENY_LIST."""
+        import lib.supervisor as sv
+        with patch.dict(os.environ, {
+            "TELEGRAM_BOT_TOKEN": "secret-tg",
+            "STRIPE_SECRET_KEY": "sk_live_abc",
+            "ANTHROPIC_API_KEY": "sk-ant-keep-me",
+            "SOME_NORMAL_VAR": "keep-me",
+        }):
+            env = sv._filtered_env()
+        self.assertNotIn("TELEGRAM_BOT_TOKEN", env)
+        self.assertNotIn("STRIPE_SECRET_KEY", env)
+        self.assertIn("ANTHROPIC_API_KEY", env)
+        self.assertIn("SOME_NORMAL_VAR", env)
+
+
 if __name__ == "__main__":
     unittest.main()
