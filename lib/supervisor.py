@@ -168,6 +168,11 @@ def build_prompt(sprint: dict, repo_root: str) -> str:
         fragment = None
 
     plan_path = os.path.join(repo_root, file_part)
+    # Security: validate path stays within repo
+    real_plan = os.path.realpath(plan_path)
+    real_repo = os.path.realpath(repo_root)
+    if not real_plan.startswith(real_repo + os.sep) and real_plan != real_repo:
+        raise ValueError(f"Path traversal detected: {plan_file} resolves outside repo")
     if os.path.exists(plan_path):
         with open(plan_path) as f:
             plan_content = f.read()

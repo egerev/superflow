@@ -3241,5 +3241,48 @@ class TestGenerateCompletionReport(unittest.TestCase):
         self.assertTrue(file_content.startswith("# Completion Report"))
 
 
+class TestBuildPromptPathTraversal(unittest.TestCase):
+    """Task 1.1: path traversal validation in build_prompt()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        templates_dir = os.path.join(self.tmpdir, "templates")
+        os.makedirs(templates_dir)
+        with open(os.path.join(templates_dir, "supervisor-sprint-prompt.md"), "w") as f:
+            f.write("Sprint {sprint_id}: {sprint_plan}\n")
+        plans_dir = os.path.join(self.tmpdir, "plans")
+        os.makedirs(plans_dir)
+        with open(os.path.join(plans_dir, "plan.md"), "w") as f:
+            f.write("# Plan\n## Sprint 1\nDo the thing.\n")
+        with open(os.path.join(self.tmpdir, "CLAUDE.md"), "w") as f:
+            f.write("")
+        with open(os.path.join(self.tmpdir, "llms.txt"), "w") as f:
+            f.write("")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_path_traversal_raises_value_error(self):
+        """plan_file with ../ that escapes repo_root raises ValueError."""
+        sprint = _sprint(sid=1, plan_file="../outside_repo/evil.md")
+        with self.assertRaises(ValueError) as ctx:
+            build_prompt(sprint, self.tmpdir)
+        self.assertIn("Path traversal detected", str(ctx.exception))
+
+    def test_normal_plan_path_does_not_raise(self):
+        """A legitimate plan_file within repo_root does not raise."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        # Should not raise
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("Sprint 1", result)
+
+    def test_absolute_path_outside_repo_raises(self):
+        """An absolute path pointing outside the repo raises ValueError."""
+        sprint = _sprint(sid=1, plan_file="/etc/passwd")
+        with self.assertRaises(ValueError) as ctx:
+            build_prompt(sprint, self.tmpdir)
+        self.assertIn("Path traversal detected", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
