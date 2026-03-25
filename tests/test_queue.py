@@ -450,5 +450,64 @@ class TestQueueTasksField(unittest.TestCase):
         self.assertNotIn("tasks", q.sprints[0])
 
 
+class TestPlanFilePathValidation(unittest.TestCase):
+    """Task 1.2: plan_file path validation in SprintQueue.load()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmpdir, "queue.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _write_queue(self, plan_file):
+        data = {
+            "feature": "test", "created": "2026-01-01",
+            "sprints": [{
+                "id": 1, "title": "Test", "status": "pending",
+                "plan_file": plan_file, "branch": "feat/test",
+                "depends_on": [], "pr": None, "retries": 0,
+                "max_retries": 2, "error_log": None,
+            }]
+        }
+        with open(self.path, "w") as f:
+            json.dump(data, f)
+
+    def test_absolute_path_raises_value_error(self):
+        self._write_queue("/etc/passwd")
+        with self.assertRaises(ValueError):
+            SprintQueue.load(self.path)
+
+    def test_dotdot_component_raises_value_error(self):
+        self._write_queue("../secret/plan.md")
+        with self.assertRaises(ValueError):
+            SprintQueue.load(self.path)
+
+    def test_dotdot_in_middle_raises_value_error(self):
+        self._write_queue("docs/../../etc/passwd")
+        with self.assertRaises(ValueError):
+            SprintQueue.load(self.path)
+
+    def test_relative_path_with_fragment_is_valid(self):
+        self._write_queue("docs/superflow/plans/plan.md#sprint-1")
+        q = SprintQueue.load(self.path)
+        self.assertEqual(len(q.sprints), 1)
+
+    def test_dotdot_with_fragment_raises_value_error(self):
+        self._write_queue("../plans/plan.md#sprint-1")
+        with self.assertRaises(ValueError):
+            SprintQueue.load(self.path)
+
+    def test_absolute_path_with_fragment_raises_value_error(self):
+        self._write_queue("/abs/path/plan.md#sprint-1")
+        with self.assertRaises(ValueError):
+            SprintQueue.load(self.path)
+
+    def test_normal_relative_path_is_valid(self):
+        self._write_queue("docs/superflow/plans/plan.md")
+        q = SprintQueue.load(self.path)
+        self.assertEqual(len(q.sprints), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
