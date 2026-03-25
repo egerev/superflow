@@ -62,6 +62,8 @@ def replan(queue, queue_path, plan_path, repo_root, checkpoints_dir):
         if os.path.exists(charter_path):
             with open(charter_path) as f:
                 charter = f.read()
+    if not charter:
+        charter = "<!-- No Autonomy Charter provided -->"
 
     # Use string replacement instead of str.format() because the template
     # contains literal JSON braces that conflict with Python format strings
