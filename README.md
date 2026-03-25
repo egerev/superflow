@@ -1,48 +1,64 @@
 # superflow v3.4.0
 
-Lightweight Claude Code skill for autonomous product-to-production development. Designed for modern models (Opus 4.6+) — minimal instructions, maximum autonomy.
+Autonomous dev workflow for Claude Code. Describe a feature — get reviewed PRs.
 
-**Philosophy:** Many AI coding skills are heavyweight — hundreds of rules that fill context and degrade quality. Superflow trusts the model and keeps instructions minimal. Instead of preventing errors with verbose rules, it catches them through cross-model reviews (Claude + secondary provider). Less context overhead, better output.
+## Why
+
+The more autonomous AI coding gets, the less you see what's happening. Telegram integrations, remote sessions, overnight runs — you're no longer watching every line. That's powerful, but it needs structure.
+
+Superflow gives that structure: a 4-phase workflow that takes a feature from idea to merged PRs. You brainstorm together, approve a plan, then walk away. The agent executes sprints, writes tests, runs cross-model reviews, creates PRs. You come back to reviewed code ready to merge.
+
+Built after testing Telegram + Claude Code integration and realizing: unstructured autonomy produces unstructured results. Superflow is the structured alternative.
 
 ## How It Works
-
-**Phase 0 — Onboarding** (interactive, first run only). Auto-detection with user confirmation, 5 parallel agents (4 Claude + Codex security audit or Claude security fallback), greenfield scaffolding for empty repos, health report, audit/create llms.txt + CLAUDE.md, propose permissions and hooks. Structured as a 5-stage modular flow.
-
-**Phase 1 — Discovery** (interactive, 12 steps). Research with parallel agents, brainstorming (STOP GATE), approaches, product summary (APPROVAL GATE), product brief, spec, specialized dual-model spec review (Claude=Product, Codex=Technical), plan, dual-model plan review, user approval (FINAL GATE).
-
-**Phase 2 — Execution** (autonomous, zero interaction, 10 steps per sprint). PR per sprint, git worktrees, baseline test gate, specialized 2-agent review (Claude Product + Codex Technical — no duplication), PAR evidence validation with retry, milestone checkpoints, holistic review gate before completion report. Reports results in Demo Day format.
-
-**Phase 3 — Merge** (interactive, user-initiated). 3-stage process: pre-merge checklist with doc updates, sequential rebase merges with CI failure recovery, post-merge report with cleanup.
 
 ```
 You: "superflow — upgrade analytics"
 Agent: [Phase 0: skip — already onboarded]
-Agent: [Phase 1: research → brainstorm → brief → spec → plan] "4 sprints, 28 steps. Go?"
+Agent: [Phase 1: research → brainstorm → spec → plan] "4 sprints. Go?"
 You: "go"
-Agent: [Phase 2: Sprint 1 → PR #1 → Sprint 2 → PR #2 → Sprint 3 → PR #3 → Sprint 4 → PR #4]
-Agent: "Done. 4 PRs ready. Say 'merge' to start Phase 3."
+Agent: [Phase 2: Sprint 1 → PR → Sprint 2 → PR → Sprint 3 → PR → Sprint 4 → PR]
+Agent: "4 PRs ready. Say 'merge'."
 You: "merge"
-Agent: [Phase 3: update docs → merge PRs → cleanup]
+Agent: [Phase 3: docs → merge → cleanup]
 ```
+
+**Phase 0 — Onboarding.** Auto-detects your stack, runs 5 parallel audit agents, sets up docs and permissions. Once per project.
+
+**Phase 1 — Discovery.** Interactive brainstorming, then spec and plan with dual-model review (Claude + Codex). You approve before anything gets built.
+
+**Phase 2 — Execution.** Fully autonomous. PR per sprint, git worktrees, TDD, 2-agent specialized review on every PR. No questions asked.
+
+**Phase 3 — Merge.** You say "merge" — sequential rebase merge with CI checks and doc updates.
+
+## Overnight Run
+
+The main use case: charge up a task before bed, wake up to finished PRs.
+
+```bash
+# 1. Plan together (Phase 1)
+claude
+> superflow — implement payment webhooks
+
+# 2. Approve the plan, then let the supervisor handle execution overnight
+./bin/superflow-supervisor run \
+  --queue sprint-queue.json \
+  --plan plans/payment-webhooks.md \
+  --parallel 2 \
+  --timeout 3600
+
+# 3. Get Telegram updates while you sleep
+export TELEGRAM_BOT_TOKEN="your-token"
+export TELEGRAM_CHAT_ID="your-chat"
+```
+
+The supervisor runs each sprint as a fresh Claude session (no context degradation), handles retries, crash recovery, and adaptive replanning.
 
 ## When to Use
 
-**Good fit:** Multi-file features, new subsystems, architectural refactors (5+ files, needs a plan).
+**Good fit:** Multi-file features, new subsystems, refactors — anything that benefits from a plan and review cycle.
 
-**Not a good fit:** Quick fixes, config tweaks, single-file changes. Just use Claude Code directly.
-
-## Key Behaviors
-
-- **PR per sprint** — small, reviewable, deployable
-- **Git worktrees** — isolated workspace per sprint
-- **TDD** — write failing test → verify fail → implement → verify pass
-- **2-agent specialized review** — Claude Product + Codex Technical (specialize, don't duplicate), or 2 Claude split-focus fallback
-- **Review gate** — unified review before every push, `.par-evidence.json` required
-- **llms.txt** — standard project documentation for all LLMs (llmstxt.org)
-- **Product brief** — Jobs to be Done + user stories before technical spec
-- **Verification discipline** — no claims without pasted test output
-- **Max parallelism** — parallelize independent tasks, sequentialize dependent ones
-- **Agent definitions with effort frontmatter** — CLAUDE.md and llms.txt audits use deep-doc-writer agent tier to prevent hallucinated documentation
+**Not a good fit:** Quick fixes, single-file changes. Just use Claude Code directly.
 
 ## Install
 
@@ -51,11 +67,11 @@ git clone https://github.com/egerev/superflow.git
 ln -s $(pwd)/superflow ~/.claude/skills/superflow
 ```
 
-Phase 0 will automatically verify that `superflow-enforcement.md` is copied to `~/.claude/rules/` on first run. If missing, it copies it for you.
+Phase 0 runs automatically on first `/superflow` — sets up permissions, hooks, and documentation.
 
-### Recommended Permissions
+### Permissions
 
-Add to `~/.claude/settings.json` for fully autonomous Phase 2 execution **without** `--dangerously-skip-permissions`:
+Add to `~/.claude/settings.json` for autonomous execution without `--dangerously-skip-permissions`:
 
 ```json
 {
@@ -68,95 +84,43 @@ Add to `~/.claude/settings.json` for fully autonomous Phase 2 execution **withou
 }
 ```
 
-This is a minimal example. See [Phase 0 onboarding — Stage 4 Setup](references/phase0/stage4-setup.md) for the complete permissions configuration (core + stack-specific), or copy from the proposal generated during your first `superflow` run.
-
-This is the **safer alternative** to `--dangerously-skip-permissions` — Superflow gets autonomy for exactly the commands it needs, nothing more.
-
-### Alternative: Full Skip Permissions
-
-If you prefer zero prompts and accept the risk:
-
-```bash
-claude --dangerously-skip-permissions
-```
-
-**Safety:** Only use inside an isolated environment — Docker container or VPS. Never on a machine with sensitive data outside the project directory.
-
-```bash
-# Docker example
-docker run -it --rm -v $(pwd):/workspace -w /workspace node:22 bash
-# install claude, then: claude --dangerously-skip-permissions
-```
+Minimal example. Phase 0 generates the full list for your stack — [see Stage 4 Setup](references/phase0/stage4-setup.md).
 
 ## Requirements
 
-- **Python 3.10+** (for supervisor features)
 - **Claude Code CLI**
-- **Secondary provider** (optional): Codex (`npm i -g @openai/codex`), Gemini CLI, or other
+- **Python 3.10+** (supervisor)
 - **GitHub CLI** (`gh`)
+- **Secondary provider** (optional): Codex, Gemini CLI, or other
 - **macOS**: `brew install coreutils` for `gtimeout`
 
-## Supervisor
+## Supervisor CLI
 
-The Supervisor is a Python companion CLI that orchestrates autonomous multi-sprint execution. It manages a sprint queue with DAG-based dependency resolution, creates isolated git worktrees per sprint, invokes Claude Code for each sprint, handles retries and failure recovery, and generates completion reports. Supports parallel execution of independent sprints and adaptive replanning between sprints.
+| Command | What |
+|---------|------|
+| `run --queue Q` | Execute sprint queue |
+| `status --queue Q` | Show queue status |
+| `resume --queue Q` | Resume after crash |
+| `reset --queue Q --sprint N` | Reset sprint to pending |
 
-### Quick Start
+Options: `--parallel N`, `--timeout S`, `--plan FILE`, `--telegram-token`, `--telegram-chat`.
 
-```bash
-./bin/superflow-supervisor run --queue path/to/sprint-queue.json
+## Architecture
+
+```
+SKILL.md                        — Entry point, startup checklist
+superflow-enforcement.md        — Durable rules (→ ~/.claude/rules/)
+references/
+  phase0-onboarding.md          — Router (detection + stage loading)
+  phase0/                       — 5 modular stage files + greenfield path
+  phase1-discovery.md           — Interactive brainstorming + spec + plan
+  phase2-execution.md           — Autonomous sprint execution
+  phase3-merge.md               — Sequential rebase merge
+prompts/                        — Agent templates (implementer, reviewers, doc writers)
+agents/                         — 12 agent definitions (deep/standard/fast tiers)
+bin/superflow-supervisor        — Supervisor CLI
+lib/                            — supervisor.py, queue.py, checkpoint.py, parallel.py, replanner.py, notifications.py
+tests/                          — 235 tests
 ```
 
-### CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `run --queue Q` | Execute the full sprint queue |
-| `status --queue Q` | Show current queue status table |
-| `resume --queue Q` | Resume after crash (detects PRs, resets stale sprints) |
-| `reset --queue Q --sprint N` | Reset sprint N to pending |
-
-Options: `--parallel N` (max concurrent sprints), `--timeout S` (seconds per sprint), `--plan FILE` (enable replanning), `--no-replan`, `--telegram-token`, `--telegram-chat`.
-
-### Example: Overnight Run with Telegram
-
-```bash
-export TELEGRAM_BOT_TOKEN="your-bot-token"
-export TELEGRAM_CHAT_ID="your-chat-id"
-
-./bin/superflow-supervisor run \
-  --queue sprint-queue.json \
-  --plan plans/feature-plan.md \
-  --parallel 2 \
-  --timeout 3600
-```
-
-You will receive Telegram notifications for sprint starts, completions, failures, and the final completion report.
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `SKILL.md` | Thin router — startup checklist, phase references |
-| `references/phase0-onboarding.md` | Phase 0 router (detection + stage loading) |
-| `references/phase1-discovery.md` | Product discovery (interactive) |
-| `references/phase2-execution.md` | Sprint execution (autonomous) |
-| `references/phase3-merge.md` | Merge flow (user-initiated) |
-| `prompts/*.md` | Agent templates (implementer, reviewers, doc writers) |
-| `templates/*.md` | Supervisor prompt templates (sprint execution, replanning) |
-| `superflow-enforcement.md` | Durable rules (copy to `~/.claude/rules/`) |
-| `bin/superflow-supervisor` | Supervisor CLI entry point |
-| `lib/supervisor.py` | Core supervisor: worktree lifecycle, sprint execution, run loop |
-| `lib/queue.py` | Sprint queue with DAG-based dependency resolution |
-| `lib/checkpoint.py` | Checkpoint save/load for crash recovery |
-| `lib/parallel.py` | Parallel sprint execution via ThreadPoolExecutor |
-| `lib/replanner.py` | Adaptive replanner (adjusts remaining sprints after completion) |
-| `lib/notifications.py` | Telegram/stdout notification system |
-| `tests/` | Unit and integration tests (228 tests) |
-
-## Origin
-
-Originally inspired by [Superpowers](https://github.com/obra/superpowers) (Jesse Vincent, MIT). Superflow has evolved into an independent skill optimized for autonomous execution with modern models.
-
-## License
-
-MIT
+Originally inspired by [Superpowers](https://github.com/obra/superpowers) (Jesse Vincent). MIT License.
