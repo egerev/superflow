@@ -218,8 +218,10 @@ class TestPlanToQueue(unittest.TestCase):
     def test_plan_file_fragment(self):
         result = plan_to_queue(self.plan_path, "my-feature")
         sprints = {s["id"]: s for s in result["sprints"]}
-        self.assertEqual(sprints[1]["plan_file"], f"{self.plan_path}#sprint-1")
-        self.assertEqual(sprints[2]["plan_file"], f"{self.plan_path}#sprint-2")
+        # plan_path is normalized to relative by plan_to_queue
+        rel_path = os.path.relpath(self.plan_path)
+        self.assertEqual(sprints[1]["plan_file"], f"{rel_path}#sprint-1")
+        self.assertEqual(sprints[2]["plan_file"], f"{rel_path}#sprint-2")
 
     def test_sprint_status_is_pending(self):
         result = plan_to_queue(self.plan_path, "my-feature")
@@ -252,7 +254,8 @@ class TestPlanToQueue(unittest.TestCase):
 
     def test_generated_from_plan_file_path(self):
         result = plan_to_queue(self.plan_path, "my-feature")
-        self.assertEqual(result["generated_from"]["plan_file"], self.plan_path)
+        rel_path = os.path.relpath(self.plan_path)
+        self.assertEqual(result["generated_from"]["plan_file"], rel_path)
 
     def test_reject_duplicate_sprint_ids(self):
         plan = "## Sprint 1: First\ncontent\n## Sprint 1: Duplicate\ncontent"

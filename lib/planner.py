@@ -57,6 +57,13 @@ def plan_to_queue(plan_path: str, feature: str, base_branch: str = "feat") -> di
     - Dependency references to non-existent sprint IDs
     - Circular dependencies
     """
+    # Normalize to relative path — absolute paths would be rejected by SprintQueue.load()
+    if os.path.isabs(plan_path):
+        try:
+            plan_path = os.path.relpath(plan_path)
+        except ValueError:
+            pass  # On Windows cross-drive, relpath can fail; keep as-is
+
     with open(plan_path) as f:
         content = f.read()
 
