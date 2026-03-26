@@ -14,8 +14,8 @@ Stage 1: "Research"
 
 Stage 2: "Brainstorming"
   Todos:
-  - "Conduct multi-expert brainstorming (3-5 questions)"
-  - "Present approaches with trade-offs"
+  - "Dispatch expert panel, synthesize Board Memo"
+  - "User reaction + direction lock"
 
 Stage 3: "Product Approval"
   Todos:
@@ -111,29 +111,88 @@ Wait for all background tasks to complete. If research yields insufficient resul
 
 Present a brief summary of research results to the user before brainstorming. Include product expert proposals. This ensures the user sees what was discovered and can steer the conversation.
 
-## Step 4: Multi-Expert Brainstorming
+## Step 4: Dispatch Expert Panel
 <!-- Stage 2: Brainstorming, Todo 1 -->
 
-**STOP GATE — Do NOT proceed past this step without user interaction.**
-Your next action MUST be a question or proposal to the user. Do NOT jump to Product Summary.
+Dispatch 3-4 parallel background agents, each with a distinct expert persona. Use the prompt template from `prompts/expert-panel.md`, filling in `{project_context}` (CLAUDE.md + llms.txt content), `{tech_debt}` (Phase 0 tech_debt findings), `{user_problem}` (user's initial description), and `{research}` (Step 2-3 findings).
 
-- Understand WHY and FOR WHOM before WHAT and HOW
-- Rhythm: ask 3-5 questions total (one at a time), then concrete proposals, then follow-up questions
-- One question per message — wait for answer before the next
-- Proposals must be genuinely new (not rephrasing user's own words)
-- Three lenses: Product ("users expect X"), Architecture ("data model supports X"), Domain ("best practice is Y")
+| Agent | Persona | Focus |
+|-------|---------|-------|
+| Product GM | "What would users love?" | User pain, adoption, competitive edge |
+| Staff Engineer | "What's the right technical foundation?" | Architecture, scalability, maintenance |
+| UX/Workflow Expert | "How does this feel to use?" | Interaction flow, remote UX, cognitive load |
+| Domain Expert | "What does the industry do?" | Best practices, standards, prior art |
 
-Use plain text questions (remote-friendly — works via Telegram). List options inline when they're enumerable.
+Dispatch all in parallel:
+```
+Agent(model: opus, description: "Product GM expert panel", run_in_background: true)
+  → use prompts/expert-panel.md with persona="Product GM", focus="User pain, adoption, competitive edge"
 
-**For priority questions:**
-> "What matters most for this feature? (a) Ship fast — MVP first, (b) Get it right — thorough implementation, (c) Keep options open — extensible design"
+Agent(model: opus, description: "Staff Engineer expert panel", run_in_background: true)
+  → use prompts/expert-panel.md with persona="Staff Engineer", focus="Architecture, scalability, maintenance"
 
-## Step 5: Approaches + Recommendation
+Agent(model: opus, description: "UX/Workflow Expert expert panel", run_in_background: true)
+  → use prompts/expert-panel.md with persona="UX/Workflow Expert", focus="Interaction flow, remote UX, cognitive load"
+```
+
+If secondary provider is available, use it for the Domain Expert instead of a fourth Agent:
+```bash
+$TIMEOUT_CMD 600 $SECONDARY_PROVIDER "[paste expert-panel.md with persona=Domain Expert filled in]" 2>&1
+```
+
+Otherwise dispatch as a fourth Agent:
+```
+Agent(model: opus, description: "Domain Expert expert panel", run_in_background: true)
+  → use prompts/expert-panel.md with persona="Domain Expert", focus="Best practices, standards, prior art"
+```
+
+Wait for all agents to complete before proceeding.
+
+## Step 5: Synthesize Board Memo
+<!-- Stage 2: Brainstorming, Todo 1 (continued) -->
+
+Orchestrator synthesizes all expert outputs into a single Board Memo. Present to the user as one message:
+
+```
+## Board Memo: [Feature Name]
+
+### Consensus — where all experts agree
+[Points all experts converged on]
+
+### Disagreements — where experts diverge
+[Each expert's distinct position on contested points]
+
+### Risks Identified
+[Challenges each expert raised, especially "challenge" sections]
+
+### Recommended Direction
+[Synthesized recommendation based on expert consensus + disagreements]
+
+### Decisions Needed From You
+[1-2 questions requiring human judgment — direction choices the experts couldn't resolve]
+```
+
+This replaces 3-5 sequential questions. The user gets the full picture in one message and can react once.
+
+**STOP GATE — Do NOT proceed to Step 6 without user reaction.**
+
+## Step 6: User Reaction + Direction Lock
 <!-- Stage 2: Brainstorming, Todo 2 -->
 
-Present 2-3 approaches with trade-offs. Lead with recommendation.
-For each approach: strengths, risks, effort level.
-**Mandatory step** — even if one approach seems obvious, present alternatives. The user must see options before Product Summary.
+After user reacts to the Board Memo:
+
+- **User picks a direction** → offer optional Devil's Advocate: "Want me to challenge this direction? (yes/skip)"
+  - If yes: argue against the chosen direction — steelman the alternatives. Then confirm direction.
+  - If skip: lock the direction and proceed.
+- **User has questions** → answer, re-present the relevant Board Memo section, confirm direction.
+- **User has their own ideas** → integrate into the proposal, update Recommended Direction, confirm.
+
+Target: 2-3 round-trips total. Do not extend into a 7-question interview.
+
+**Approaches presentation:**
+
+- If expert panel converged on one approach: present as recommendation with "Alternatives Considered" sidebar.
+- If experts genuinely disagreed: present full multi-approach comparison (2-3 options, strengths/risks/effort each), ask for direction.
 
 **For approach selection, ask as plain text:**
 > "I see three approaches:
@@ -142,7 +201,7 @@ For each approach: strengths, risks, effort level.
 > (c) Approach C: [name] — [1-line tradeoff]
 > Which direction? Reply a/b/c or 'details' for more on each."
 
-## Step 6: Product Approval (MERGED GATE)
+## Step 7: Product Approval (MERGED GATE)
 <!-- Stage 3: Product Approval, Todos 1-2 -->
 
 Present Product Summary + Product Brief together as a single document for approval.
@@ -173,11 +232,11 @@ Keep it short (< 1 page). No frameworks — just clarity about what we're buildi
 
 > "Does this capture what we're building? Reply **'go'** to proceed to spec, **'fix ...'** to request changes, or **'restart'** to go back to brainstorming."
 
-- "go" / "approve" → proceed to Step 7 (Spec)
+- "go" / "approve" → proceed to Step 8 (Spec)
 - "fix ..." / "changes" → ask what to change, update, re-present
-- "restart" → go back to Step 4 (brainstorming)
+- "restart" → go back to Step 4 (expert panel)
 
-## Step 7: Spec Document
+## Step 8: Spec Document
 <!-- Stage 4: Specification, Todo 1 -->
 
 Write to `docs/superflow/specs/YYYY-MM-DD-<topic>-design.md`. Reference the product brief.
@@ -192,7 +251,7 @@ Include:
 
 Create `docs/superflow/specs/` if it doesn't exist.
 
-## Step 8: Spec Review (dual-model parallel)
+## Step 9: Spec Review (dual-model parallel)
 <!-- Stage 4: Specification, Todos 2-3 -->
 
 Run two reviewers in parallel. Both reviewers receive the product brief AND the spec.
@@ -206,14 +265,14 @@ Run two reviewers in parallel. Both reviewers receive the product brief AND the 
 Wait for both. If either returns NEEDS_REVISION: fix issues, re-run both reviews.
 Both must return PASS to proceed.
 
-## Step 9: Implementation Plan
+## Step 10: Implementation Plan
 <!-- Stage 5: Planning, Todo 1 -->
 
 Write to `docs/superflow/plans/YYYY-MM-DD-<topic>.md`. Create `docs/superflow/plans/` if it doesn't exist.
 
 Break into sprints (independently deployable), 3-8 tasks each, each task 2-5 min. Include: files, steps, commit message.
 
-## Step 10: Plan Review (dual-model parallel)
+## Step 11: Plan Review (dual-model parallel)
 <!-- Stage 5: Planning, Todos 2-3 -->
 
 Run two reviewers in parallel (same mechanism as Step 8):
@@ -226,7 +285,7 @@ Run two reviewers in parallel (same mechanism as Step 8):
 
 Both must APPROVE. If either returns NEEDS_REVISION: fix, re-review.
 
-## Step 11: User Approval (FINAL GATE)
+## Step 12: User Approval (FINAL GATE)
 <!-- Stage 5: Planning, Todo 4 -->
 
 Present:
@@ -238,7 +297,7 @@ Present:
 - User says "go" / "start" / "давай" / affirmative → proceed to auto-launch flow below
 - User requests changes → update plan, re-present
 
-## Step 12: Generate Autonomy Charter
+## Step 13: Generate Autonomy Charter
 <!-- Stage 5: Planning, Todo 5 -->
 
 After user approval and before auto-launch, generate an Autonomy Charter from the brief, spec, and plan:
