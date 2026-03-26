@@ -8,7 +8,7 @@ description: "Use when user says 'superflow', 'суперфлоу', or asks for 
 Four phases: onboarding, discovery, execution, merge.
 
 Phase 0 (auto, first run only): Detect markers > Auto-detect + confirm > Analyze codebase (5 parallel agents) > Health report > Proposal (approval gate) > Docs + Environment (3 parallel branches) > Markers > Restart instruction
-Phase 1 (with user, 11 steps): Context > Research (parallel agents) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Approval (MERGED GATE) > Spec > Spec Review (dual-model) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE)
+Phase 1 (with user, 13 steps): Context > Governance Mode (light/standard/critical) > Research (parallel agents, skip in light) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Approval (MERGED GATE) > Spec > Spec Review (dual-model, skip in light) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE) > Charter
 Phase 2 (autonomous, 10 steps per sprint + wave-based parallel dispatch): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers (parallel waves) > Unified Review (2 agents) > Test verification > Push+PR > Cleanup > Telegram
 Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase merge (with CI failure handling) > Post-merge report
 
