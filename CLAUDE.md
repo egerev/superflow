@@ -1,7 +1,7 @@
 # Superflow — Claude Instructions
 
 ## Project Overview
-Superflow is a Claude Code skill (Markdown prompts + Python utility modules) that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, autonomous execution with PR-per-sprint, and merge. v4.1.0, MIT License.
+Superflow is a pure Markdown Claude Code skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, autonomous execution with PR-per-sprint, and merge. v4.1.0, MIT License.
 
 ## Key Rules
 - All documentation output in English — user communication follows their language preference
@@ -38,18 +38,10 @@ SKILL.md (entry point, ~110 lines)
   │   ├── security-audit.md (Claude security fallback for Phase 0)
   │   └── codex/ (Codex-specific prompts: code-reviewer, product-reviewer, audit)
   ├── agents/ (12 agent definitions — deep/standard/fast tiers with effort frontmatter)
-  ├── lib/
-  │   ├── queue.py (DAG-based sprint queue + metadata dict)
-  │   └── planner.py (plan-to-queue + charter-to-queue generator)
   ├── templates/
   │   ├── superflow-state-schema.json (state file JSON Schema)
   │   ├── greenfield/ (stack scaffolding: nextjs.md, python.md, generic.md)
   │   └── ci/ (CI workflows: github-actions-node.yml, github-actions-python.yml)
-  ├── examples/
-  │   └── sprint-queue-example.json (queue template with metadata)
-  └── tests/
-      ├── test_queue.py, test_planner.py
-      └── (49+ tests total)
 ```
 
 **Key v4.0 artifacts:**
@@ -75,11 +67,9 @@ SKILL.md (entry point, ~110 lines)
 | `prompts/expert-panel.md` | Expert persona prompt — proposals, challenge, recommendation |
 | `prompts/llms-txt-writer.md` | llmstxt.org standard, no hard size limit |
 | `prompts/claude-md-writer.md` | Verified paths/commands, <200 lines target |
-| `lib/queue.py` | Sprint queue with DAG resolution, metadata dict, atomic saves |
-| `lib/planner.py` | Plan-to-queue + charter-to-queue generator, shared heading parser |
 
 ## Conventions
-- Markdown skill files (no pip dependencies) + Python utility modules (stdlib only)
+- Pure Markdown skill (no Python, no pip dependencies)
 - File references use relative paths from project root
 - Phase docs are re-read at every phase/sprint boundary (compaction erases skill content)
 - Markers: `<!-- updated-by-superflow:YYYY-MM-DD -->` appended to generated files
