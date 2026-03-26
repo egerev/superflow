@@ -2,6 +2,18 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.1.2] - 2026-03-27
+
+### Fixed — Reasoning Tier Alignment
+- **Implementers are sonnet across all tiers**: `deep-implementer` changed from opus to sonnet — all implementation agents now use sonnet (code execution on pre-sliced tasks doesn't need opus)
+- **Enforcement table corrected**: reasoning tiers table now accurately reflects implementers as sonnet, reviewers/analysts/doc-writers as opus
+- **Expert panel effort: high**: Phase 1 brainstorming agents now explicitly set `effort: high` for deeper creative analysis
+- **Phase 3 compaction-safe merge rule**: added `gh pr merge --rebase --delete-branch` to enforcement (survives compaction), preventing fallback to local `git merge` that leaves PRs open
+- **Rationalization prevention**: added "I'll just git merge locally" guard
+
+### Known Issues Documented
+- Phase 3 post-compaction merge regression: context compaction during merge loop can cause agent to use local `git merge` instead of `gh pr merge`. Mitigated by enforcement rule; full fix requires re-reading phase3-merge.md before each PR merge
+
 ## [4.1.1] - 2026-03-27
 
 ### Changed — Startup Optimization
