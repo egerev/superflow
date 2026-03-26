@@ -45,6 +45,14 @@ You are executing Sprint {sprint_id}: {sprint_title} of the Superflow workflow a
 6. Output a JSON summary as the LAST line of your response:
    {"status":"completed","pr_url":"...","tests":{"passed":0,"failed":0},"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"},"steps_completed":["baseline_tests","implementation","internal_review","test_verification","par","pr_created"]}
 
+## Intra-Sprint Progress
+
+After completing each major step, write progress to `.superflow/sprint-progress.json`:
+```json
+{"sprint_id": 1, "step": "review", "steps_completed": ["baseline_tests", "implementation"], "ts": "ISO-8601"}
+```
+Steps: baseline_tests, implementation, internal_review, test_verification, par, pr_created
+
 ## Step Verification
 After each step, verify completion before proceeding:
 - After worktree setup: verify branch with `git branch --show-current`

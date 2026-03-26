@@ -204,5 +204,173 @@ class TestNotifierEnvFallback(unittest.TestCase):
         self.assertIsNone(n.chat_id)
 
 
+class TestNotifySprintProgress(unittest.TestCase):
+    """Test notify_sprint_progress() formatting."""
+
+    def _capture(self, notifier, *args, **kwargs):
+        from io import StringIO
+        import sys
+        captured = StringIO()
+        old_stdout = sys.stdout
+        sys.stdout = captured
+        try:
+            notifier.notify_sprint_progress(*args, **kwargs)
+        finally:
+            sys.stdout = old_stdout
+        return captured.getvalue().strip()
+
+    def test_format_contains_progress_tag(self):
+        """notify_sprint_progress output contains [progress] tag."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, sprint_id=2, title="Auth Module", step="implementation")
+        self.assertIn("[progress]", output)
+
+    def test_format_contains_sprint_id_and_total(self):
+        """notify_sprint_progress output contains sprint id and total."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, sprint_id=2, title="Auth Module", step="implementation")
+        self.assertIn("2/5", output)
+
+    def test_format_contains_step(self):
+        """notify_sprint_progress output contains the step name."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, sprint_id=2, title="Auth Module", step="implementation")
+        self.assertIn("implementation", output)
+
+    def test_format_contains_started(self):
+        """notify_sprint_progress message indicates step started."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, sprint_id=2, title="Auth Module", step="review")
+        self.assertIn("started", output)
+
+
+class TestNotifyProgressDigest(unittest.TestCase):
+    """Test notify_progress_digest() formatting."""
+
+    def _capture(self, notifier, *args, **kwargs):
+        from io import StringIO
+        import sys
+        captured = StringIO()
+        old_stdout = sys.stdout
+        sys.stdout = captured
+        try:
+            notifier.notify_progress_digest(*args, **kwargs)
+        finally:
+            sys.stdout = old_stdout
+        return captured.getvalue().strip()
+
+    def test_format_contains_digest_tag(self):
+        """notify_progress_digest output contains [digest] tag."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, completed=2, remaining=3, elapsed_minutes=45, pr_urls=[])
+        self.assertIn("[digest]", output)
+
+    def test_format_contains_completed_and_total(self):
+        """notify_progress_digest output shows completed/total."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, completed=2, remaining=3, elapsed_minutes=45, pr_urls=[])
+        self.assertIn("2/5", output)
+
+    def test_format_contains_elapsed_minutes(self):
+        """notify_progress_digest output shows elapsed minutes."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, completed=2, remaining=3, elapsed_minutes=45, pr_urls=[])
+        self.assertIn("45", output)
+
+    def test_format_contains_pr_urls(self):
+        """notify_progress_digest output shows PR URLs."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, completed=2, remaining=3, elapsed_minutes=45,
+                               pr_urls=["https://github.com/foo/bar/pull/1"])
+        self.assertIn("https://github.com/foo/bar/pull/1", output)
+
+    def test_format_contains_next_sprint_info(self):
+        """notify_progress_digest output shows next sprint info when provided."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, completed=2, remaining=3, elapsed_minutes=45,
+                               pr_urls=[], next_id=3, next_title="API Layer")
+        self.assertIn("3", output)
+        self.assertIn("API Layer", output)
+
+
+class TestNotifyBlockerEscalation(unittest.TestCase):
+    """Test notify_blocker_escalation() formatting."""
+
+    def _capture(self, notifier, *args, **kwargs):
+        from io import StringIO
+        import sys
+        captured = StringIO()
+        old_stdout = sys.stdout
+        sys.stdout = captured
+        try:
+            notifier.notify_blocker_escalation(*args, **kwargs)
+        finally:
+            sys.stdout = old_stdout
+        return captured.getvalue().strip()
+
+    def test_format_contains_blocker_tag(self):
+        """notify_blocker_escalation output contains [BLOCKER] tag."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, sprint_id=3, blocker_type="PAR_FAILED",
+                               description="Review failed twice.", recommended_action="Fix tests")
+        self.assertIn("[BLOCKER]", output)
+
+    def test_format_contains_sprint_id(self):
+        """notify_blocker_escalation output contains sprint id."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, sprint_id=3, blocker_type="PAR_FAILED",
+                               description="Review failed twice.", recommended_action="Fix tests")
+        self.assertIn("3", output)
+
+    def test_format_contains_blocker_type(self):
+        """notify_blocker_escalation output contains blocker_type."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, sprint_id=3, blocker_type="PAR_FAILED",
+                               description="Review failed twice.", recommended_action="Fix tests")
+        self.assertIn("PAR_FAILED", output)
+
+    def test_format_contains_description(self):
+        """notify_blocker_escalation output contains description."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, sprint_id=3, blocker_type="PAR_FAILED",
+                               description="Review failed twice.", recommended_action="Fix tests")
+        self.assertIn("Review failed twice.", output)
+
+    def test_format_contains_recommended_action(self):
+        """notify_blocker_escalation output contains recommended action."""
+        n = Notifier(total_sprints=5)
+        output = self._capture(n, sprint_id=3, blocker_type="PAR_FAILED",
+                               description="Review failed twice.", recommended_action="Fix tests")
+        self.assertIn("Fix tests", output)
+
+
+class TestNotifyMergeReminder(unittest.TestCase):
+    """Test notify_merge_reminder() formatting."""
+
+    def _capture(self, notifier, *args, **kwargs):
+        from io import StringIO
+        import sys
+        captured = StringIO()
+        old_stdout = sys.stdout
+        sys.stdout = captured
+        try:
+            notifier.notify_merge_reminder(*args, **kwargs)
+        finally:
+            sys.stdout = old_stdout
+        return captured.getvalue().strip()
+
+    def test_format_contains_all_sprints_complete(self):
+        """notify_merge_reminder message mentions all sprints complete."""
+        n = Notifier()
+        output = self._capture(n)
+        self.assertIn("sprints complete", output.lower())
+
+    def test_format_contains_merge_instruction(self):
+        """notify_merge_reminder message contains /merge instruction."""
+        n = Notifier()
+        output = self._capture(n)
+        self.assertIn("/merge", output)
+
+
 if __name__ == "__main__":
     unittest.main()

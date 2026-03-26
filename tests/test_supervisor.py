@@ -19,6 +19,7 @@ from lib.supervisor import (
     _build_holistic_prompt,
     _check_skip_requests,
     _check_hold_request,
+    _read_sprint_progress,
     VALID_PASS_VERDICTS, REQUIRED_PAR_KEYS, REQUIRED_HOLISTIC_KEYS, REQUIRED_SUMMARY_KEYS,
     _write_completion_data,
 )
@@ -35,6 +36,23 @@ def _sprint(sid=1, title="Test Sprint", status="pending", branch="feat/test-spri
         "depends_on": depends_on or [],
         "pr": None, "retries": 0, "max_retries": 2, "error_log": None,
     }
+
+
+def _make_popen_mock(returncode=0, stdout="", stderr=""):
+    """Build a subprocess.Popen mock compatible with the polling loop in _attempt_sprint.
+
+    poll() returns None once (loop body runs), then returncode (loop exits).
+    communicate() returns (stdout, stderr).
+    stdin supports write/close.
+    """
+    mock_proc = MagicMock()
+    mock_proc.poll.side_effect = [None, returncode]
+    mock_proc.communicate.return_value = (stdout, stderr)
+    mock_proc.returncode = returncode
+    mock_proc.stdin = MagicMock()
+    mock_proc.stdin.write = MagicMock()
+    mock_proc.stdin.close = MagicMock()
+    return mock_proc
 
 
 class TestCreateWorktree(unittest.TestCase):
@@ -458,8 +476,9 @@ class TestExecuteSprint(unittest.TestCase):
     @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
-    def test_execute_sprint_success(self, mock_run, mock_create_wt, mock_cleanup_wt,
+    def test_execute_sprint_success(self, mock_run, mock_popen, mock_create_wt, mock_cleanup_wt,
                                      mock_baseline, mock_par, mock_sleep):
         """Successful execution: claude returns JSON, exit 0, PR verified."""
         q = self._make_queue()
@@ -470,16 +489,16 @@ class TestExecuteSprint(unittest.TestCase):
         mock_par.return_value = (True, {"claude_product": "APPROVE",
                                          "technical_review": "APPROVE"}, [])
 
-        # Claude subprocess
+        # Claude subprocess via Popen
         claude_output = (
             "Working on sprint...\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/1",'
             '"tests":{"passed":5,"failed":0},"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
-        claude_result = MagicMock(returncode=0, stdout=claude_output, stderr="")
-        # gh pr view subprocess
+        mock_popen.return_value = _make_popen_mock(returncode=0, stdout=claude_output, stderr="")
+        # gh pr view subprocess (still uses subprocess.run)
         gh_result = MagicMock(returncode=0, stdout="OPEN")
-        mock_run.side_effect = [claude_result, gh_result]
+        mock_run.return_value = gh_result
 
         cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
 
@@ -491,8 +510,9 @@ class TestExecuteSprint(unittest.TestCase):
     @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
-    def test_execute_sprint_failure_marks_failed(self, mock_run, mock_create_wt,
+    def test_execute_sprint_failure_marks_failed(self, mock_run, mock_popen, mock_create_wt,
                                                   mock_cleanup_wt, mock_baseline):
         """After max_retries failures, sprint is marked failed."""
         sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
@@ -504,9 +524,8 @@ class TestExecuteSprint(unittest.TestCase):
         mock_create_wt.return_value = wt_path
         mock_baseline.return_value = (True, "ok", False)
 
-        # Claude subprocess fails
-        claude_result = MagicMock(returncode=1, stdout="Error occurred", stderr="crash")
-        mock_run.return_value = claude_result
+        # Claude subprocess fails via Popen
+        mock_popen.return_value = _make_popen_mock(returncode=1, stdout="Error occurred", stderr="crash")
 
         cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
 
@@ -519,9 +538,11 @@ class TestExecuteSprint(unittest.TestCase):
     @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
-    def test_execute_sprint_retry_on_failure(self, mock_run, mock_create_wt, mock_cleanup_wt,
-                                              mock_baseline, mock_par, mock_sleep):
+    def test_execute_sprint_retry_on_failure(self, mock_run, mock_popen, mock_create_wt,
+                                              mock_cleanup_wt, mock_baseline, mock_par,
+                                              mock_sleep):
         """On failure with retries left, should retry and eventually succeed."""
         sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
         sprint_data["max_retries"] = 2
@@ -535,15 +556,17 @@ class TestExecuteSprint(unittest.TestCase):
                                          "technical_review": "APPROVE"}, [])
 
         # First attempt fails (exit 1), retry succeeds
-        fail_result = MagicMock(returncode=1, stdout="Error", stderr="")
         success_output = (
             "Done.\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/2",'
             '"tests":{"passed":3,"failed":0},"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
-        success_result = MagicMock(returncode=0, stdout=success_output, stderr="")
+        mock_popen.side_effect = [
+            _make_popen_mock(returncode=1, stdout="Error", stderr=""),
+            _make_popen_mock(returncode=0, stdout=success_output, stderr=""),
+        ]
         gh_result = MagicMock(returncode=0, stdout="OPEN")
-        mock_run.side_effect = [fail_result, success_result, gh_result]
+        mock_run.return_value = gh_result
 
         cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
 
@@ -555,10 +578,11 @@ class TestExecuteSprint(unittest.TestCase):
     @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
-    def test_execute_sprint_json_parse_error_retries(self, mock_run, mock_create_wt,
-                                                      mock_cleanup_wt, mock_baseline,
-                                                      mock_par, mock_sleep):
+    def test_execute_sprint_json_parse_error_retries(self, mock_run, mock_popen,
+                                                      mock_create_wt, mock_cleanup_wt,
+                                                      mock_baseline, mock_par, mock_sleep):
         """Exit 0 but no valid JSON on last line should retry with appended instruction."""
         sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
         sprint_data["max_retries"] = 2
@@ -571,17 +595,18 @@ class TestExecuteSprint(unittest.TestCase):
         mock_par.return_value = (True, {"claude_product": "APPROVE",
                                          "technical_review": "APPROVE"}, [])
 
-        # First: exit 0 but no JSON
-        no_json = MagicMock(returncode=0, stdout="Done but forgot JSON", stderr="")
-        # Retry: exit 0 with proper JSON
+        # First: exit 0 but no JSON; Retry: exit 0 with proper JSON
         good_output = (
             "Done.\n"
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/3",'
             '"tests":{"passed":1,"failed":0},"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
-        good_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        mock_popen.side_effect = [
+            _make_popen_mock(returncode=0, stdout="Done but forgot JSON", stderr=""),
+            _make_popen_mock(returncode=0, stdout=good_output, stderr=""),
+        ]
         gh_result = MagicMock(returncode=0, stdout="OPEN")
-        mock_run.side_effect = [no_json, good_result, gh_result]
+        mock_run.return_value = gh_result
 
         cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
 
@@ -593,9 +618,11 @@ class TestExecuteSprint(unittest.TestCase):
     @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
-    def test_execute_sprint_saves_output_log(self, mock_run, mock_create_wt, mock_cleanup_wt,
-                                              mock_baseline, mock_par, mock_sleep):
+    def test_execute_sprint_saves_output_log(self, mock_run, mock_popen, mock_create_wt,
+                                              mock_cleanup_wt, mock_baseline, mock_par,
+                                              mock_sleep):
         """Output should be saved to sprint-{id}-output.log."""
         q = self._make_queue()
         sprint = q.sprints[0]
@@ -610,9 +637,9 @@ class TestExecuteSprint(unittest.TestCase):
             '{"status":"completed","pr_url":"https://github.com/test/repo/pull/1",'
             '"tests":{"passed":1,"failed":0},"par":{"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex"}}'
         )
-        claude_result = MagicMock(returncode=0, stdout=claude_output, stderr="")
+        mock_popen.return_value = _make_popen_mock(returncode=0, stdout=claude_output, stderr="")
         gh_result = MagicMock(returncode=0, stdout="OPEN")
-        mock_run.side_effect = [claude_result, gh_result]
+        mock_run.return_value = gh_result
 
         execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
 
@@ -1915,10 +1942,12 @@ class TestPARIntegration(unittest.TestCase):
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.run_baseline_tests")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor._validate_par_evidence")
-    def test_par_integration_retry_separate_counter(self, mock_par, mock_run, mock_baseline,
-                                                     mock_create_wt, mock_cleanup_wt, mock_sleep):
+    def test_par_integration_retry_separate_counter(self, mock_par, mock_run, mock_popen,
+                                                     mock_baseline, mock_create_wt,
+                                                     mock_cleanup_wt, mock_sleep):
         """PAR retry uses separate counter from Claude retry. PAR fail doesn't consume Claude retries."""
         sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
         sprint_data["max_retries"] = 2
@@ -1929,11 +1958,13 @@ class TestPARIntegration(unittest.TestCase):
         mock_baseline.return_value = (True, "ok", False)
 
         good_output = "Done.\n" + self._good_summary_json()
-        claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        # Claude calls: 1st success, 2nd success (PAR retry re-invokes Claude)
+        mock_popen.side_effect = [
+            _make_popen_mock(returncode=0, stdout=good_output, stderr=""),
+            _make_popen_mock(returncode=0, stdout=good_output, stderr=""),
+        ]
         gh_result = MagicMock(returncode=0, stdout="OPEN")
-        # Claude calls: 1st success, 2nd success (PAR retry re-invokes Claude),
-        # then gh pr view
-        mock_run.side_effect = [claude_result, claude_result, gh_result]
+        mock_run.return_value = gh_result
 
         # First PAR call fails, second PAR call passes
         mock_par.side_effect = [
@@ -1952,10 +1983,12 @@ class TestPARIntegration(unittest.TestCase):
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.run_baseline_tests")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor._validate_par_evidence")
-    def test_par_integration_max_retries_fails(self, mock_par, mock_run, mock_baseline,
-                                                mock_create_wt, mock_cleanup_wt, mock_sleep):
+    def test_par_integration_max_retries_fails(self, mock_par, mock_run, mock_popen,
+                                                mock_baseline, mock_create_wt,
+                                                mock_cleanup_wt, mock_sleep):
         """2 PAR retries exceeded -> mark_failed."""
         sprint_data = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
         sprint_data["max_retries"] = 5  # High Claude retries — PAR should fail first
@@ -1966,9 +1999,12 @@ class TestPARIntegration(unittest.TestCase):
         mock_baseline.return_value = (True, "ok", False)
 
         good_output = "Done.\n" + self._good_summary_json()
-        claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
         # 3 Claude invocations (initial + 2 PAR retries)
-        mock_run.side_effect = [claude_result, claude_result, claude_result]
+        mock_popen.side_effect = [
+            _make_popen_mock(returncode=0, stdout=good_output, stderr=""),
+            _make_popen_mock(returncode=0, stdout=good_output, stderr=""),
+            _make_popen_mock(returncode=0, stdout=good_output, stderr=""),
+        ]
 
         # PAR always fails
         mock_par.return_value = (False, {}, ["PAR: missing .par-evidence.json"])
@@ -2014,9 +2050,10 @@ class TestPRValidationRetry(unittest.TestCase):
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.run_baseline_tests")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor._validate_par_evidence")
-    def test_pr_validation_retry_3_times(self, mock_par, mock_run, mock_baseline,
+    def test_pr_validation_retry_3_times(self, mock_par, mock_run, mock_popen, mock_baseline,
                                           mock_create_wt, mock_cleanup_wt, mock_sleep):
         """Transient gh pr view failure retried up to 3 times, then succeeds."""
         q = self._make_queue()
@@ -2028,11 +2065,11 @@ class TestPRValidationRetry(unittest.TestCase):
                                          "technical_review": "APPROVE"}, [])
 
         good_output = "Done.\n" + self._good_summary_json()
-        claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        mock_popen.return_value = _make_popen_mock(returncode=0, stdout=good_output, stderr="")
         gh_fail = MagicMock(returncode=1, stdout="", stderr="network error")
         gh_ok = MagicMock(returncode=0, stdout="OPEN")
-        # Claude, then 2 gh fails, 1 gh success
-        mock_run.side_effect = [claude_result, gh_fail, gh_fail, gh_ok]
+        # 2 gh fails, 1 gh success
+        mock_run.side_effect = [gh_fail, gh_fail, gh_ok]
 
         cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
 
@@ -2042,10 +2079,12 @@ class TestPRValidationRetry(unittest.TestCase):
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.run_baseline_tests")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor._validate_par_evidence")
-    def test_pr_validation_hard_fail_after_retries(self, mock_par, mock_run, mock_baseline,
-                                                    mock_create_wt, mock_cleanup_wt, mock_sleep):
+    def test_pr_validation_hard_fail_after_retries(self, mock_par, mock_run, mock_popen,
+                                                    mock_baseline, mock_create_wt,
+                                                    mock_cleanup_wt, mock_sleep):
         """3 gh pr view failures -> mark_failed (NOT re-invoke Claude)."""
         q = self._make_queue()
         sprint = q.sprints[0]
@@ -2056,18 +2095,17 @@ class TestPRValidationRetry(unittest.TestCase):
                                          "technical_review": "APPROVE"}, [])
 
         good_output = "Done.\n" + self._good_summary_json()
-        claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        mock_popen.return_value = _make_popen_mock(returncode=0, stdout=good_output, stderr="")
         gh_fail = MagicMock(returncode=1, stdout="", stderr="network error")
-        # Claude once, then 3 gh failures
-        mock_run.side_effect = [claude_result, gh_fail, gh_fail, gh_fail]
+        # 3 gh failures
+        mock_run.side_effect = [gh_fail, gh_fail, gh_fail]
 
         cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
 
         self.assertEqual(cp["status"], "failed")
         self.assertIn("PR", sprint.get("error_log", ""))
-        # Claude should only be called ONCE — no re-invocation
-        claude_calls = [c for c in mock_run.call_args_list if "claude" in str(c)]
-        self.assertEqual(len(claude_calls), 1)
+        # Popen should only be called ONCE — no re-invocation for gh failures
+        self.assertEqual(mock_popen.call_count, 1)
 
 
 class TestMilestoneWrites(unittest.TestCase):
@@ -2105,10 +2143,12 @@ class TestMilestoneWrites(unittest.TestCase):
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
     @patch("lib.supervisor.run_baseline_tests")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor._validate_par_evidence")
-    def test_milestone_writes_in_checkpoint(self, mock_par, mock_run, mock_baseline,
-                                             mock_create_wt, mock_cleanup_wt, mock_sleep):
+    def test_milestone_writes_in_checkpoint(self, mock_par, mock_run, mock_popen,
+                                             mock_baseline, mock_create_wt,
+                                             mock_cleanup_wt, mock_sleep):
         """Full success path writes all milestones to checkpoint."""
         q = self._make_queue()
         sprint = q.sprints[0]
@@ -2119,9 +2159,9 @@ class TestMilestoneWrites(unittest.TestCase):
                                          "technical_review": "APPROVE"}, [])
 
         good_output = "Done.\n" + self._good_summary_json()
-        claude_result = MagicMock(returncode=0, stdout=good_output, stderr="")
+        mock_popen.return_value = _make_popen_mock(returncode=0, stdout=good_output, stderr="")
         gh_ok = MagicMock(returncode=0, stdout="OPEN")
-        mock_run.side_effect = [claude_result, gh_ok]
+        mock_run.return_value = gh_ok
 
         cp = execute_sprint(sprint, q, self.queue_path, self.cp_dir, self.tmpdir)
 
@@ -4151,6 +4191,63 @@ class TestCheckHoldRequest(unittest.TestCase):
         result = _check_hold_request(self.tmpdir)
 
         self.assertFalse(result)
+
+
+class TestReadSprintProgress(unittest.TestCase):
+    """Tests for _read_sprint_progress()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_returns_none_when_file_missing(self):
+        """_read_sprint_progress returns None when file doesn't exist."""
+        result = _read_sprint_progress(self.tmpdir)
+        self.assertIsNone(result)
+
+    def test_returns_dict_when_file_exists(self):
+        """_read_sprint_progress returns parsed dict when file exists."""
+        progress_data = {
+            "sprint_id": 1,
+            "step": "implementation",
+            "steps_completed": ["baseline_tests"],
+            "ts": "2026-01-01T00:00:00Z",
+        }
+        infra = os.path.join(self.tmpdir, ".superflow")
+        os.makedirs(infra)
+        with open(os.path.join(infra, "sprint-progress.json"), "w") as f:
+            json.dump(progress_data, f)
+        result = _read_sprint_progress(self.tmpdir)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["sprint_id"], 1)
+        self.assertEqual(result["step"], "implementation")
+
+    def test_returns_none_when_file_invalid_json(self):
+        """_read_sprint_progress returns None when file contains invalid JSON."""
+        infra = os.path.join(self.tmpdir, ".superflow")
+        os.makedirs(infra)
+        with open(os.path.join(infra, "sprint-progress.json"), "w") as f:
+            f.write("not-json")
+        result = _read_sprint_progress(self.tmpdir)
+        self.assertIsNone(result)
+
+    def test_reads_steps_completed_list(self):
+        """_read_sprint_progress preserves steps_completed list."""
+        progress_data = {
+            "sprint_id": 2,
+            "step": "par",
+            "steps_completed": ["baseline_tests", "implementation", "internal_review"],
+            "ts": "2026-01-01T00:00:00Z",
+        }
+        infra = os.path.join(self.tmpdir, ".superflow")
+        os.makedirs(infra)
+        with open(os.path.join(infra, "sprint-progress.json"), "w") as f:
+            json.dump(progress_data, f)
+        result = _read_sprint_progress(self.tmpdir)
+        self.assertEqual(result["steps_completed"],
+                         ["baseline_tests", "implementation", "internal_review"])
 
 
 if __name__ == "__main__":
