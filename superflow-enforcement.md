@@ -35,8 +35,8 @@ $TIMEOUT_CMD 600 $SECONDARY_PROVIDER <non-interactive-flag> "PROMPT" 2>&1       
 
 | Tier | Claude Agent (subagent_type) | Codex | When |
 |------|-------------------------------|-------|------|
-| **deep** | `deep-spec-reviewer`, `deep-code-reviewer`, `deep-product-reviewer`, `deep-analyst`, `deep-doc-writer`, `deep-implementer` (opus, effort: high) | `-c model_reasoning_effort=high` + `prompts/codex/` | Phase 0 audit+security, Phase 1 spec review, Phase 2 final holistic, llms.txt/CLAUDE.md generation |
-| **standard** | `standard-spec-reviewer`, `standard-code-reviewer`, `standard-product-reviewer`, `standard-doc-writer`, `standard-implementer` (opus, effort: medium) | `-c model_reasoning_effort=high` + `prompts/codex/` | Phase 1 plan review, Phase 2 unified review, Phase 3 doc updates |
+| **deep** | `deep-spec-reviewer`, `deep-code-reviewer`, `deep-product-reviewer`, `deep-analyst`, `deep-doc-writer` (opus, effort: high); `deep-implementer` (sonnet, effort: high) | `-c model_reasoning_effort=high` + `prompts/codex/` | Phase 0 audit+security, Phase 1 spec review, Phase 2 final holistic, llms.txt/CLAUDE.md generation |
+| **standard** | `standard-spec-reviewer`, `standard-code-reviewer`, `standard-product-reviewer`, `standard-doc-writer` (opus, effort: medium); `standard-implementer` (sonnet, effort: medium) | `-c model_reasoning_effort=high` + `prompts/codex/` | Phase 1 plan review, Phase 2 unified review, Phase 3 doc updates |
 | **fast** | `fast-implementer` (sonnet, effort: low) | `-c model_reasoning_effort=medium` | Simple implementation tasks |
 
 Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` during SKILL.md startup (step 3). Agent() does NOT accept inline `effort` — controlled via agent definition files only.

@@ -1,7 +1,7 @@
 ---
 name: deep-implementer
 description: "Deep implementation agent for complex tasks (new architecture, security-sensitive)"
-model: opus
+model: sonnet
 effort: high
 ---
 

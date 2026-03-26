@@ -143,10 +143,10 @@ In light mode, the charter body contains the sprint breakdown directly. Charter 
 Dispatch **parallel background research** using the Agent tool (`run_in_background: true` for each):
 
 ```
-Agent(description: "Domain best practices research", run_in_background: true)
+Agent(model: opus, description: "Domain best practices research", run_in_background: true)
   → domain best practices, relevant libraries, competitor approaches, design patterns
 
-Agent(description: "Independent product expert", run_in_background: true)
+Agent(model: opus, description: "Independent product expert", run_in_background: true)
   → "Analyze [project]. Propose 3-5 concrete product improvements. For each: what, why, how."
 ```
 
@@ -157,7 +157,7 @@ $TIMEOUT_CMD 600 $SECONDARY_PROVIDER "Analyze [project]. Propose 3-5 concrete pr
 
 Wait for all background tasks to complete. If research yields insufficient results for a domain, note the gap — rely on codebase analysis and user input during brainstorming.
 
-> **Reasoning:** Research agents use inline `Agent(model: opus)` dispatch. No `subagent_type` or `effort` — research tasks are ad-hoc and don't require deep reasoning tier.
+> **Reasoning:** Research agents use inline `Agent(model: opus)` dispatch with no `subagent_type`. Effort is not specified — inherits session default (medium). Sufficient for fact-gathering; deep reasoning not needed here.
 
 **NOT optional.** Synthesize findings before proceeding.
 
@@ -180,13 +180,13 @@ Dispatch 3-4 parallel background agents, each with a distinct expert persona. Us
 
 Dispatch all in parallel:
 ```
-Agent(model: opus, description: "Product GM expert panel", run_in_background: true)
+Agent(model: opus, effort: high, description: "Product GM expert panel", run_in_background: true)
   → use prompts/expert-panel.md with persona="Product GM", focus="User pain, adoption, competitive edge"
 
-Agent(model: opus, description: "Staff Engineer expert panel", run_in_background: true)
+Agent(model: opus, effort: high, description: "Staff Engineer expert panel", run_in_background: true)
   → use prompts/expert-panel.md with persona="Staff Engineer", focus="Architecture, scalability, maintenance"
 
-Agent(model: opus, description: "UX/Workflow Expert expert panel", run_in_background: true)
+Agent(model: opus, effort: high, description: "UX/Workflow Expert expert panel", run_in_background: true)
   → use prompts/expert-panel.md with persona="UX/Workflow Expert", focus="Interaction flow, remote UX, cognitive load"
 ```
 
@@ -197,7 +197,7 @@ $TIMEOUT_CMD 600 $SECONDARY_PROVIDER "[paste expert-panel.md with persona=Domain
 
 Otherwise dispatch as a fourth Agent:
 ```
-Agent(model: opus, description: "Domain Expert expert panel", run_in_background: true)
+Agent(model: opus, effort: high, description: "Domain Expert expert panel", run_in_background: true)
   → use prompts/expert-panel.md with persona="Domain Expert", focus="Best practices, standards, prior art"
 ```
 
