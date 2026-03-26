@@ -93,10 +93,11 @@ def launch(queue_path, plan_path, repo_root, timeout=1800):
     abs_queue = os.path.abspath(queue_path)
     abs_plan = os.path.abspath(plan_path) if plan_path else None
 
-    # Build command
+    # Build command — resolve binary from skill dir (not repo_root)
+    _skill_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     cmd = [
         sys.executable,
-        os.path.join(repo_root, "bin", "superflow-supervisor"),
+        os.path.join(_skill_root, "bin", "superflow-supervisor"),
         "run",
         "--queue", abs_queue,
         "--timeout", str(timeout),
