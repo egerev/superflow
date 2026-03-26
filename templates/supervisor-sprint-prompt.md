@@ -14,6 +14,9 @@ You are executing Sprint {sprint_id}: {sprint_title} of the Superflow workflow a
 ### Autonomy Charter
 {charter}
 
+### Product Brief
+{product_brief}
+
 ## Reasoning Tier
 
 - **Complexity:** {complexity}

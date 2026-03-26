@@ -37,6 +37,9 @@ Evaluate the implementation from a product and user perspective:
 5. **Autonomy Charter compliance** — If an Autonomy Charter is provided, validate against its goal, non-negotiables, and success criteria. Deviations from charter constraints are blockers.
    _Why: The charter defines the boundaries of autonomous execution — violating it undermines user trust._
 
+6. **Product Brief validation** — If a Product Brief is provided, validate implementation against user stories and success criteria.
+   _Why: The brief captures what users actually need; missing stories mean the product fails its intended audience._
+
 Skip the following — they are handled by the code quality reviewer:
 - **Code style and architecture** — already reviewed for technical quality.
 - **Test coverage** — already verified by the code reviewer.

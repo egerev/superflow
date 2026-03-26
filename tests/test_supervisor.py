@@ -285,6 +285,75 @@ class TestBuildPromptCharter(unittest.TestCase):
         self.assertIn("No Autonomy Charter provided", result)
 
 
+class TestBuildPromptBrief(unittest.TestCase):
+    """Sprint 3: product brief injection in build_prompt."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(
+                "Sprint {sprint_id}: {sprint_title}\n"
+                "Plan: {sprint_plan}\n"
+                "Claude: {claude_md}\n"
+                "LLMs: {llms_txt}\n"
+                "Charter: {charter}\n"
+                "### Product Brief\n{product_brief}\n"
+                "Branch: {branch}\n"
+                "Complexity: {complexity}\n"
+                "Tier: {implementation_tier}\n"
+                "Model: {impl_model}\n"
+                "Effort: {impl_effort}\n"
+            )
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+        with open(os.path.join(self.tmpdir, "CLAUDE.md"), "w") as f:
+            f.write("Rules")
+        with open(os.path.join(self.tmpdir, "llms.txt"), "w") as f:
+            f.write("Context")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_brief_injected_from_metadata_brief_file(self):
+        """Brief file contents from queue metadata should be injected into prompt."""
+        os.makedirs(os.path.join(self.tmpdir, "docs"))
+        brief_path = os.path.join(self.tmpdir, "docs", "brief.md")
+        with open(brief_path, "w") as f:
+            f.write("## User Stories\n- As a user I want to log in\n## Success Criteria\n- Login works")
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        meta = {"brief_file": "docs/brief.md"}
+        result = build_prompt(sprint, self.tmpdir, queue_metadata=meta)
+        self.assertIn("User Stories", result)
+        self.assertIn("Login works", result)
+
+    def test_brief_missing_file_fallback(self):
+        """Missing brief file should inject 'No brief available.' placeholder."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        meta = {"brief_file": "docs/nonexistent-brief.md"}
+        result = build_prompt(sprint, self.tmpdir, queue_metadata=meta)
+        self.assertIn("No brief available.", result)
+
+    def test_brief_no_metadata(self):
+        """No metadata should inject 'No brief available.' placeholder."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("No brief available.", result)
+
+    def test_brief_empty_metadata(self):
+        """Empty metadata dict should inject 'No brief available.' placeholder."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir, queue_metadata={})
+        self.assertIn("No brief available.", result)
+
+    def test_brief_placeholder_replaced(self):
+        """The {product_brief} placeholder is always replaced (never left as-is)."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertNotIn("{product_brief}", result)
+
+
 class TestExecuteSprint(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
