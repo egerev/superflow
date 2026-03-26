@@ -2119,13 +2119,18 @@ class TestHolisticGateInRun(unittest.TestCase):
     @patch("lib.supervisor.preflight")
     @patch("lib.supervisor.execute_sprint")
     def test_run_blocks_report_on_holistic_failure(self, mock_execute, mock_preflight, mock_holistic):
-        """Integration: failed holistic review -> BLOCKED, no report."""
+        """Integration: failed holistic review -> BLOCKED, no report (4+ sprints triggers holistic)."""
+        # Use 4 sprints to trigger holistic in standard mode per _should_run_holistic()
         sprints = [
             _sprint(sid=1, title="Setup", status="completed"),
             _sprint(sid=2, title="Build", status="completed"),
+            _sprint(sid=3, title="Test", status="completed"),
+            _sprint(sid=4, title="Deploy", status="completed"),
         ]
         sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
         sprints[1]["pr"] = "https://github.com/test/repo/pull/2"
+        sprints[2]["pr"] = "https://github.com/test/repo/pull/3"
+        sprints[3]["pr"] = "https://github.com/test/repo/pull/4"
         q = self._make_queue(sprints)
         mock_preflight.return_value = (True, [])
 
@@ -2153,24 +2158,41 @@ class TestHolisticGateInRun(unittest.TestCase):
     @patch("lib.supervisor.preflight")
     @patch("lib.supervisor.execute_sprint")
     def test_run_generates_report_with_holistic_evidence(self, mock_execute, mock_preflight):
-        """Integration: completed sprints + evidence -> report generated, checkpoint updated."""
+        """Integration: 4 completed sprints + evidence -> report generated, checkpoint updated."""
+        # Use 4 sprints to trigger holistic in standard mode per _should_run_holistic()
         sprints = [
             _sprint(sid=1, title="Setup", status="completed"),
+            _sprint(sid=2, title="Build", status="completed"),
+            _sprint(sid=3, title="Test", status="completed"),
+            _sprint(sid=4, title="Deploy", status="completed"),
         ]
-        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        prs = [
+            "https://github.com/test/repo/pull/1",
+            "https://github.com/test/repo/pull/2",
+            "https://github.com/test/repo/pull/3",
+            "https://github.com/test/repo/pull/4",
+        ]
+        for i, sprint in enumerate(sprints):
+            sprint["pr"] = prs[i]
         q = self._make_queue(sprints)
         mock_preflight.return_value = (True, [])
 
         # Create holistic evidence
         evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
         with open(evidence_path, "w") as f:
-            json.dump({"verdict": "APPROVE", "timestamp": "2026-01-01T00:00:00Z", "sprint_prs": ["https://github.com/test/repo/pull/1"], "claude_product": "APPROVE", "technical_review": "APPROVE", "provider": "split-focus"}, f)
+            json.dump({
+                "verdict": "APPROVE", "timestamp": "2026-01-01T00:00:00Z",
+                "sprint_prs": sorted(prs),
+                "claude_product": "APPROVE", "technical_review": "APPROVE",
+                "provider": "split-focus",
+            }, f)
 
-        # Create checkpoint for the sprint (so report can read it)
+        # Create checkpoints for all sprints
         cp_dir = os.path.join(self.tmpdir, "checkpoints")
-        save_checkpoint(cp_dir, 1, {
-            "sprint_id": 1, "status": "completed", "summary": {},
-        })
+        for i in range(1, 5):
+            save_checkpoint(cp_dir, i, {
+                "sprint_id": i, "status": "completed", "summary": {},
+            })
 
         import io
         from unittest.mock import patch as _patch
@@ -2192,21 +2214,39 @@ class TestHolisticGateInRun(unittest.TestCase):
     @patch("lib.supervisor.preflight")
     @patch("lib.supervisor.execute_sprint")
     def test_run_holistic_notifies_start_and_complete(self, mock_execute, mock_preflight):
-        """run() notifies holistic_review_start and holistic_review_complete."""
-        sprints = [_sprint(sid=1, title="Setup", status="completed")]
-        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        """run() notifies holistic_review_start and holistic_review_complete (4+ sprints)."""
+        # 4 sprints trigger holistic review in standard mode
+        sprints = [
+            _sprint(sid=1, title="Setup", status="completed"),
+            _sprint(sid=2, title="Build", status="completed"),
+            _sprint(sid=3, title="Test", status="completed"),
+            _sprint(sid=4, title="Deploy", status="completed"),
+        ]
+        prs = [
+            "https://github.com/test/repo/pull/1",
+            "https://github.com/test/repo/pull/2",
+            "https://github.com/test/repo/pull/3",
+            "https://github.com/test/repo/pull/4",
+        ]
+        for i, sprint in enumerate(sprints):
+            sprint["pr"] = prs[i]
         q = self._make_queue(sprints)
         mock_preflight.return_value = (True, [])
 
         # Create evidence so it passes (must have valid reviewer verdicts)
         evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
         with open(evidence_path, "w") as f:
-            json.dump({"verdict": "APPROVE", "sprint_prs": ["https://github.com/test/repo/pull/1"], "claude_product": "APPROVE", "technical_review": "APPROVE", "provider": "split-focus"}, f)
+            json.dump({
+                "verdict": "APPROVE", "sprint_prs": sorted(prs),
+                "claude_product": "APPROVE", "technical_review": "APPROVE",
+                "provider": "split-focus",
+            }, f)
 
         cp_dir = os.path.join(self.tmpdir, "checkpoints")
-        save_checkpoint(cp_dir, 1, {
-            "sprint_id": 1, "status": "completed", "summary": {},
-        })
+        for i in range(1, 5):
+            save_checkpoint(cp_dir, i, {
+                "sprint_id": i, "status": "completed", "summary": {},
+            })
 
         notifier = MagicMock()
 
@@ -2580,13 +2620,22 @@ class TestHolisticReviewDispatch(unittest.TestCase):
     @patch("lib.supervisor.preflight")
     @patch("lib.supervisor.execute_sprint")
     def test_run_full_flow_with_all_gates(self, mock_execute, mock_preflight, mock_holistic):
-        """Integration: run() dispatches holistic review and generates report on success."""
+        """Integration: run() dispatches holistic review and generates report on success (4 sprints)."""
+        # Use 4 sprints to trigger holistic in standard mode per _should_run_holistic()
         sprints = [
             _sprint(sid=1, title="Setup", status="completed"),
             _sprint(sid=2, title="Build", status="completed"),
+            _sprint(sid=3, title="Test", status="completed"),
+            _sprint(sid=4, title="Deploy", status="completed"),
         ]
-        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
-        sprints[1]["pr"] = "https://github.com/test/repo/pull/2"
+        prs = [
+            "https://github.com/test/repo/pull/1",
+            "https://github.com/test/repo/pull/2",
+            "https://github.com/test/repo/pull/3",
+            "https://github.com/test/repo/pull/4",
+        ]
+        for i, sprint in enumerate(sprints):
+            sprint["pr"] = prs[i]
         q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
         q.save(self.queue_path)
 
@@ -2615,14 +2664,12 @@ class TestHolisticReviewDispatch(unittest.TestCase):
 
         mock_holistic.side_effect = holistic_side_effect
 
-        # Create checkpoints for sprints so report can read them
+        # Create checkpoints for all sprints so report can read them
         cp_dir = os.path.join(self.tmpdir, "checkpoints")
-        save_checkpoint(cp_dir, 1, {
-            "sprint_id": 1, "status": "completed", "summary": {},
-        })
-        save_checkpoint(cp_dir, 2, {
-            "sprint_id": 2, "status": "completed", "summary": {},
-        })
+        for i in range(1, 5):
+            save_checkpoint(cp_dir, i, {
+                "sprint_id": i, "status": "completed", "summary": {},
+            })
 
         import io
         from unittest.mock import patch as _patch
@@ -2698,7 +2745,8 @@ class TestFix1StaleHolisticEvidence(unittest.TestCase):
         import io
         from unittest.mock import patch as _patch
         with _patch("sys.stdout", new_callable=io.StringIO):
-            run(self.queue_path, repo_root=self.tmpdir)
+            # Use critical mode to ensure holistic review is triggered for 1 sprint
+            run(self.queue_path, repo_root=self.tmpdir, governance_mode="critical")
 
         # Fresh holistic review should have been dispatched
         mock_holistic.assert_called_once()
@@ -2709,7 +2757,7 @@ class TestFix1StaleHolisticEvidence(unittest.TestCase):
     def test_valid_evidence_with_matching_sprint_prs_skips_review(
         self, mock_execute, mock_preflight, mock_holistic
     ):
-        """Cached evidence matching current sprint_prs is accepted — no fresh review."""
+        """Cached evidence matching current sprint_prs is accepted — no fresh review dispatched."""
         sprints = [_sprint(sid=1, title="Setup", status="completed")]
         sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
         q = self._make_queue(sprints)
@@ -2733,7 +2781,8 @@ class TestFix1StaleHolisticEvidence(unittest.TestCase):
         import io
         from unittest.mock import patch as _patch
         with _patch("sys.stdout", new_callable=io.StringIO):
-            run(self.queue_path, repo_root=self.tmpdir)
+            # Use critical mode to ensure holistic check runs (matching evidence -> no dispatch)
+            run(self.queue_path, repo_root=self.tmpdir, governance_mode="critical")
 
         # Should NOT dispatch a fresh review (evidence was valid and matched)
         mock_holistic.assert_not_called()
@@ -3536,6 +3585,261 @@ class TestHeartbeat(unittest.TestCase):
             ts = float(f.read().strip())
         # Heartbeat should be recent (within 10 seconds)
         self.assertLess(time.time() - ts, 10)
+
+
+class TestGenerateCompletionReportRequireHolistic(unittest.TestCase):
+    """Sprint 6: generate_completion_report() require_holistic=False bypasses evidence gate."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints):
+        return SprintQueue("test-feature", "2026-01-01T00:00:00Z", sprints)
+
+    def test_require_holistic_false_generates_report_without_evidence(self):
+        """When require_holistic=False, report generates even if no evidence file."""
+        sprints = [_sprint(sid=1, title="Sprint 1", status="completed")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = self._make_queue(sprints)
+
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+
+        # No holistic evidence file, but require_holistic=False
+        report = generate_completion_report(q, self.cp_dir, require_holistic=False)
+        self.assertIn("# Completion Report", report)
+        self.assertIn("Sprint 1", report)
+
+    def test_require_holistic_true_blocks_without_evidence(self):
+        """When require_holistic=True (default), RuntimeError raised without evidence."""
+        sprints = [_sprint(sid=1, title="Sprint 1", status="completed")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = self._make_queue(sprints)
+
+        save_checkpoint(self.cp_dir, 1, {
+            "sprint_id": 1, "status": "completed", "summary": {},
+        })
+
+        with self.assertRaises(RuntimeError) as ctx:
+            generate_completion_report(q, self.cp_dir, require_holistic=True)
+        self.assertIn("holistic-review-evidence.json", str(ctx.exception))
+
+
+class TestHolisticSkipInRun(unittest.TestCase):
+    """Sprint 6: _should_run_holistic() check before holistic review in run()."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.queue_path = os.path.join(self.tmpdir, "queue.json")
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(
+                "Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n{claude_md}\n"
+                "{llms_txt}\n{branch}\n{complexity}\n{implementation_tier}\n"
+                "{impl_model}\n{impl_effort}\n{frontend_instructions}\n"
+            )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _make_queue(self, sprints):
+        q = SprintQueue("test", "2026-01-01T00:00:00Z", sprints)
+        q.save(self.queue_path)
+        return q
+
+    @patch("lib.supervisor.run_holistic_review")
+    @patch("lib.supervisor.preflight")
+    @patch("lib.supervisor.execute_sprint")
+    def test_run_skips_holistic_for_light_mode_few_sprints(
+            self, mock_execute, mock_preflight, mock_holistic):
+        """run() skips holistic review for light governance + 3 or fewer linear sprints."""
+        sprints = [
+            _sprint(sid=1, title="Sprint 1", status="completed"),
+            _sprint(sid=2, title="Sprint 2", status="completed"),
+        ]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        sprints[1]["pr"] = "https://github.com/test/repo/pull/2"
+        q = self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        # No holistic evidence file (would normally block), but with light mode + 2 sprints
+        # holistic should be skipped — so report still generates without the evidence gate
+        cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        save_checkpoint(cp_dir, 1, {"sprint_id": 1, "status": "completed", "summary": {}})
+        save_checkpoint(cp_dir, 2, {"sprint_id": 2, "status": "completed", "summary": {}})
+
+        import io
+        from unittest.mock import patch as _patch
+        with _patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            run(self.queue_path, repo_root=self.tmpdir, governance_mode="light")
+            output = mock_stdout.getvalue()
+
+        # Holistic review should NOT have been called
+        mock_holistic.assert_not_called()
+
+    @patch("lib.supervisor.generate_completion_report", return_value="# Report")
+    @patch("lib.supervisor.run_holistic_review", return_value=True)
+    @patch("lib.supervisor.preflight")
+    @patch("lib.supervisor.execute_sprint")
+    def test_run_triggers_holistic_for_critical_mode(
+            self, mock_execute, mock_preflight, mock_holistic, mock_report):
+        """run() triggers holistic review for critical governance mode even with 1 sprint."""
+        sprints = [_sprint(sid=1, title="Sprint 1", status="completed")]
+        sprints[0]["pr"] = "https://github.com/test/repo/pull/1"
+        q = self._make_queue(sprints)
+        mock_preflight.return_value = (True, [])
+
+        cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        save_checkpoint(cp_dir, 1, {"sprint_id": 1, "status": "completed", "summary": {}})
+
+        import io
+        from unittest.mock import patch as _patch
+        with _patch("sys.stdout", new_callable=io.StringIO):
+            run(self.queue_path, repo_root=self.tmpdir, governance_mode="critical")
+
+        # Holistic review MUST have been called for critical mode
+        mock_holistic.assert_called_once()
+        # generate_completion_report should have been called with require_holistic=True
+        mock_report.assert_called_once()
+        _, kwargs = mock_report.call_args
+        self.assertTrue(kwargs.get("require_holistic", True))
+
+
+class TestRequiredParKeys(unittest.TestCase):
+    """Sprint 6: _required_par_keys() governance × complexity combinations."""
+
+    def test_light_any_complexity_returns_technical_only(self):
+        """light mode with any complexity returns only technical_review."""
+        from lib.supervisor import _required_par_keys
+        for complexity in ("simple", "medium", "complex"):
+            with self.subTest(complexity=complexity):
+                keys = _required_par_keys("light", complexity)
+                self.assertEqual(keys, {"technical_review"})
+
+    def test_standard_simple_returns_technical_only(self):
+        """standard mode + simple complexity returns only technical_review."""
+        from lib.supervisor import _required_par_keys
+        keys = _required_par_keys("standard", "simple")
+        self.assertEqual(keys, {"technical_review"})
+
+    def test_standard_medium_returns_both_keys(self):
+        """standard mode + medium complexity returns both keys."""
+        from lib.supervisor import _required_par_keys
+        keys = _required_par_keys("standard", "medium")
+        self.assertEqual(keys, {"claude_product", "technical_review"})
+
+    def test_standard_complex_returns_both_keys(self):
+        """standard mode + complex complexity returns both keys."""
+        from lib.supervisor import _required_par_keys
+        keys = _required_par_keys("standard", "complex")
+        self.assertEqual(keys, {"claude_product", "technical_review"})
+
+    def test_critical_any_complexity_returns_both_keys(self):
+        """critical mode with any complexity returns both keys."""
+        from lib.supervisor import _required_par_keys
+        for complexity in ("simple", "medium", "complex"):
+            with self.subTest(complexity=complexity):
+                keys = _required_par_keys("critical", complexity)
+                self.assertEqual(keys, {"claude_product", "technical_review"})
+
+
+class TestValidateParEvidenceGovernance(unittest.TestCase):
+    """Sprint 6: _validate_par_evidence() with governance_mode and complexity params."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _write_par(self, data):
+        path = os.path.join(self.tmpdir, ".par-evidence.json")
+        with open(path, "w") as f:
+            json.dump(data, f)
+
+    def test_light_mode_single_reviewer_par_accepted(self):
+        """light mode with only technical_review key passes validation."""
+        self._write_par({"technical_review": "APPROVE", "provider": "codex", "ts": "2026-01-01T00:00:00Z"})
+        valid, data, errors = _validate_par_evidence(self.tmpdir, governance_mode="light", complexity="simple")
+        self.assertTrue(valid)
+        self.assertEqual(errors, [])
+
+    def test_light_mode_missing_technical_review_fails(self):
+        """light mode with missing technical_review key fails validation."""
+        self._write_par({"claude_product": "ACCEPTED", "provider": "codex", "ts": "2026-01-01T00:00:00Z"})
+        valid, data, errors = _validate_par_evidence(self.tmpdir, governance_mode="light", complexity="medium")
+        self.assertFalse(valid)
+        self.assertTrue(any("technical_review" in e for e in errors))
+
+    def test_standard_medium_requires_both_keys(self):
+        """standard + medium requires both claude_product and technical_review."""
+        self._write_par({"technical_review": "APPROVE", "provider": "codex", "ts": "2026-01-01T00:00:00Z"})
+        valid, data, errors = _validate_par_evidence(self.tmpdir, governance_mode="standard", complexity="medium")
+        self.assertFalse(valid)
+        self.assertTrue(any("claude_product" in e for e in errors))
+
+    def test_no_governance_uses_default_required_par_keys(self):
+        """Without governance params, falls back to REQUIRED_PAR_KEYS (both keys)."""
+        self._write_par({"technical_review": "APPROVE", "provider": "codex", "ts": "2026-01-01T00:00:00Z"})
+        # Missing claude_product -> should fail with default REQUIRED_PAR_KEYS
+        valid, data, errors = _validate_par_evidence(self.tmpdir)
+        self.assertFalse(valid)
+
+    def test_governance_and_complexity_both_required_together(self):
+        """governance_mode without complexity falls back to REQUIRED_PAR_KEYS."""
+        self._write_par({"technical_review": "APPROVE", "provider": "codex", "ts": "2026-01-01T00:00:00Z"})
+        # Only governance_mode provided, no complexity -> defaults
+        valid, data, errors = _validate_par_evidence(self.tmpdir, governance_mode="light")
+        # Default REQUIRED_PAR_KEYS requires both -> fails
+        self.assertFalse(valid)
+
+
+class TestShouldRunHolistic(unittest.TestCase):
+    """Sprint 6: _should_run_holistic() truth table."""
+
+    def test_critical_mode_always_true(self):
+        """critical governance_mode always triggers holistic review."""
+        from lib.supervisor import _should_run_holistic
+        self.assertTrue(_should_run_holistic(1, False, "critical"))
+        self.assertTrue(_should_run_holistic(2, False, "critical"))
+        self.assertTrue(_should_run_holistic(3, False, "critical"))
+
+    def test_four_or_more_sprints_triggers_holistic(self):
+        """4+ sprints triggers holistic review regardless of mode."""
+        from lib.supervisor import _should_run_holistic
+        self.assertTrue(_should_run_holistic(4, False, "light"))
+        self.assertTrue(_should_run_holistic(5, False, "standard"))
+        self.assertTrue(_should_run_holistic(10, False, "light"))
+
+    def test_has_parallel_triggers_holistic(self):
+        """Parallel execution triggers holistic review."""
+        from lib.supervisor import _should_run_holistic
+        self.assertTrue(_should_run_holistic(1, True, "light"))
+        self.assertTrue(_should_run_holistic(3, True, "standard"))
+
+    def test_three_linear_light_skips_holistic(self):
+        """3 or fewer linear sprints in light/standard mode skips holistic."""
+        from lib.supervisor import _should_run_holistic
+        self.assertFalse(_should_run_holistic(1, False, "light"))
+        self.assertFalse(_should_run_holistic(2, False, "light"))
+        self.assertFalse(_should_run_holistic(3, False, "light"))
+        self.assertFalse(_should_run_holistic(1, False, "standard"))
+        self.assertFalse(_should_run_holistic(3, False, "standard"))
+
+    def test_exactly_four_triggers_holistic(self):
+        """Boundary: exactly 4 sprints triggers holistic."""
+        from lib.supervisor import _should_run_holistic
+        self.assertTrue(_should_run_holistic(4, False, "standard"))
+
+    def test_exactly_three_skips_holistic(self):
+        """Boundary: exactly 3 sprints does NOT trigger holistic (for light/standard)."""
+        from lib.supervisor import _should_run_holistic
+        self.assertFalse(_should_run_holistic(3, False, "standard"))
 
 
 if __name__ == "__main__":

@@ -184,8 +184,17 @@ Sprint complexity drives model selection. Tag each sprint in the plan:
 
 ## Review Optimization (Unified Review)
 
-All sprints receive the full 2-agent unified review. The agent count is always 2 (Product + Technical).
-What changes by sprint complexity is the SCOPE each reviewer examines:
+The review tier (number of reviewers and scope) is determined by governance mode and sprint complexity:
+
+| Governance | Complexity | Reviewers | Required PAR Keys |
+|------------|------------|-----------|-------------------|
+| light | any | 1 (Technical only) | `technical_review` |
+| standard | simple | 1 (Technical only) | `technical_review` |
+| standard | medium | 2 (Product + Technical) | `claude_product`, `technical_review` |
+| standard | complex | 2 (Product + Technical) | `claude_product`, `technical_review` |
+| critical | any | 2 (Product + Technical) | `claude_product`, `technical_review` |
+
+What changes by sprint complexity is also the SCOPE each reviewer examines:
 
 - Simple (1-2 files, <50 lines): reviewers check only changed files + their tests
 - Medium (2-5 files): reviewers check changed files + integration points with unchanged code
@@ -234,7 +243,14 @@ Codex and other external reviewers see only committed code (they extract HEAD in
 
 ## Final Holistic Review (after all sprints)
 
-After all sprint PRs created, before Completion Report. Reasoning: Deep tier.
+**Conditional — run only when any of the following apply:**
+- Total sprints ≥ 4
+- Parallel execution was used (max_parallel > 1)
+- Governance mode is "critical"
+
+For ≤3 linear sequential sprints in light/standard mode, holistic review is skipped and the Completion Report proceeds without holistic evidence.
+
+When holistic IS required: After all sprint PRs created, before Completion Report. Reasoning: Deep tier.
 Both agents review ALL code across ALL sprints as a unified system. Same principle: Claude = Product, secondary = Technical.
 
 Check Codex availability first. If available:

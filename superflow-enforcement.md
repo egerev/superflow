@@ -18,7 +18,7 @@ Survives context compaction. SKILL.md does not.
 6. **Dual-model reviews: specialize, don't duplicate.** Claude = Product lens (spec fit, user scenarios, data integrity). Secondary provider = Technical lens (correctness, security, architecture). Each model reviews what it's best at — no overlapping roles.
 7. **No secondary provider = two Claude agents.** Product (product-reviewer) + Technical (code-quality-reviewer). Same split, same coverage, just both Claude.
 8. **One PR per sprint.** Execute silently after plan approval.
-9. **Final Holistic Review after all sprints.** Two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint review misses cross-module issues.
+9. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution was used, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode. When required: two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint review misses cross-module issues.
 
 ## Secondary Provider Invocation
 
@@ -57,11 +57,11 @@ Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` du
 If you think any of these, STOP and do the thing:
 - "I'll write the code directly" → dispatch subagent
 - "Too simple for a worktree" → create worktree
-- "One reviewer is enough" → dispatch both reviewers (Product + Technical)
+- "One reviewer is enough" → check governance+complexity table (light/simple = 1 reviewer, others = 2)
 - "I'll ask the user during Phase 2" → Phase 2 is autonomous
 - "One big PR is easier" → one PR per sprint
 - "This sprint is too small for PAR" → run PAR
-- "Per-sprint PAR is enough" → run Final Holistic Review
+- "Per-sprint PAR is enough" → check if holistic is required (Rule 9 conditions)
 
 ## Product Approval Gate
 
