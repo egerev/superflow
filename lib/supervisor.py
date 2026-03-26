@@ -27,6 +27,42 @@ REQUIRED_HOLISTIC_KEYS = {"claude_product", "technical_review"}
 REQUIRED_SUMMARY_KEYS = {"status", "pr_url", "tests", "par"}
 
 
+_COMPLEXITY_TIMEOUTS = {
+    "simple": 100 * 60,   # 6000s
+    "medium": 200 * 60,   # 12000s
+    "complex": 300 * 60,  # 18000s
+}
+
+
+def complexity_timeout(sprint: dict) -> int:
+    """Return execution timeout in seconds based on sprint complexity.
+
+    simple  → 100 min (6000s)
+    medium  → 200 min (12000s)
+    complex → 300 min (18000s)
+    Unknown / missing → medium default (12000s)
+    """
+    complexity = sprint.get("complexity", "medium")
+    return _COMPLEXITY_TIMEOUTS.get(complexity, _COMPLEXITY_TIMEOUTS["medium"])
+
+
+def build_retry_prefix(attempt_counter: int) -> str:
+    """Return a RETRY NOTE prefix to prepend to the sprint prompt on retries.
+
+    For attempt_counter == 1 (first attempt) returns empty string.
+    For attempt_counter >= 2 returns a note instructing the agent to inspect
+    the worktree before continuing.
+    """
+    if attempt_counter <= 1:
+        return ""
+    return (
+        f"RETRY NOTE: This is retry attempt {attempt_counter}. "
+        "The worktree may contain changes from a previous attempt. "
+        "Run `git status` and `git diff` first to see what's already done. "
+        "Continue from where the previous attempt stopped — do NOT redo completed work.\n\n"
+    )
+
+
 def _required_par_keys(governance_mode, complexity):
     """Return the set of required PAR evidence keys based on governance mode and complexity.
 
@@ -314,15 +350,24 @@ def build_prompt(sprint: dict, repo_root: str, queue_metadata: dict | None = Non
     result = result.replace("{baseline_status}", baseline_status)
 
     # Frontend instructions injection
+    # Supports both legacy 'has_frontend' key and new 'frontend' key
     frontend_instructions = ""
-    if sprint.get("has_frontend", False):
-        frontend_instructions = (
-            "7. FRONTEND VERIFICATION (MANDATORY — this sprint has frontend changes):\n"
-            "   After unified review and post-review tests, use webapp-testing skill (Playwright)\n"
-            "   to walk user flows from the spec. Take screenshots, capture console errors.\n"
-            "   Write `frontend_verification` key in .par-evidence.json (PASS/FAIL).\n"
-            "   If FAIL → fix → re-verify. Include `frontend_evidence` dict with screenshots and error count.\n"
-        )
+    if sprint.get("frontend", False) or sprint.get("has_frontend", False):
+        if sprint.get("frontend", False):
+            frontend_instructions = (
+                "If this sprint modifies frontend code: after implementation, use Playwright MCP "
+                "(mcp__plugin_playwright_playwright__browser_navigate, browser_take_screenshot) "
+                "to open the affected pages, verify visually, and include screenshots in the PR. "
+                "If visual regression found, fix before review."
+            )
+        else:
+            frontend_instructions = (
+                "7. FRONTEND VERIFICATION (MANDATORY — this sprint has frontend changes):\n"
+                "   After unified review and post-review tests, use webapp-testing skill (Playwright)\n"
+                "   to walk user flows from the spec. Take screenshots, capture console errors.\n"
+                "   Write `frontend_verification` key in .par-evidence.json (PASS/FAIL).\n"
+                "   If FAIL → fix → re-verify. Include `frontend_evidence` dict with screenshots and error count.\n"
+            )
         if "{frontend_instructions}" not in result:
             logger.warning(
                 "has_frontend=True but template lacks {frontend_instructions} placeholder"
@@ -1101,7 +1146,9 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         attempt_counter += 1
 
         # Rebuild prompt fresh each iteration to avoid unbounded growth
-        prompt = build_prompt(sprint, repo_root, queue_metadata=queue.metadata)
+        prompt = build_retry_prefix(attempt_counter) + build_prompt(
+            sprint, repo_root, queue_metadata=queue.metadata
+        )
 
         # Append retry-specific instructions based on PREVIOUS iteration errors
         if last_par_errors:

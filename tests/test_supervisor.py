@@ -4250,5 +4250,205 @@ class TestReadSprintProgress(unittest.TestCase):
                          ["baseline_tests", "implementation", "internal_review"])
 
 
+class TestComplexityBasedTimeout(unittest.TestCase):
+    """v4.0.1: complexity_timeout() maps sprint complexity to timeout seconds."""
+
+    def test_simple_complexity_returns_6000(self):
+        """Simple sprint: 100 min = 6000s."""
+        from lib.supervisor import complexity_timeout
+        sprint = _sprint()
+        sprint["complexity"] = "simple"
+        self.assertEqual(complexity_timeout(sprint), 6000)
+
+    def test_medium_complexity_returns_12000(self):
+        """Medium sprint: 200 min = 12000s."""
+        from lib.supervisor import complexity_timeout
+        sprint = _sprint()
+        sprint["complexity"] = "medium"
+        self.assertEqual(complexity_timeout(sprint), 12000)
+
+    def test_complex_complexity_returns_18000(self):
+        """Complex sprint: 300 min = 18000s."""
+        from lib.supervisor import complexity_timeout
+        sprint = _sprint()
+        sprint["complexity"] = "complex"
+        self.assertEqual(complexity_timeout(sprint), 18000)
+
+    def test_missing_complexity_defaults_to_medium(self):
+        """Sprint with no complexity key defaults to medium (12000s)."""
+        from lib.supervisor import complexity_timeout
+        sprint = _sprint()
+        # No 'complexity' key set
+        self.assertEqual(complexity_timeout(sprint), 12000)
+
+    def test_unknown_complexity_defaults_to_medium(self):
+        """Unknown complexity value defaults to medium (12000s)."""
+        from lib.supervisor import complexity_timeout
+        sprint = _sprint()
+        sprint["complexity"] = "extreme"
+        self.assertEqual(complexity_timeout(sprint), 12000)
+
+
+class TestRetryContext(unittest.TestCase):
+    """v4.0.1: retry prompt prepends RETRY NOTE on attempts > 1."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(
+                "Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n"
+                "{claude_md}\n{llms_txt}\n{charter}\n{product_brief}\n"
+                "{branch}\n{complexity}\n{implementation_tier}\n"
+                "{impl_model}\n{impl_effort}\n{governance_mode}\n"
+                "{governance_instructions}\n{baseline_status}\n"
+                "{frontend_instructions}\n"
+            )
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_first_attempt_no_retry_note(self):
+        """attempt_counter=1 → no RETRY NOTE in prompt."""
+        from lib.supervisor import build_retry_prefix
+        prefix = build_retry_prefix(attempt_counter=1)
+        self.assertEqual(prefix, "")
+
+    def test_second_attempt_has_retry_note(self):
+        """attempt_counter=2 → RETRY NOTE prepended."""
+        from lib.supervisor import build_retry_prefix
+        prefix = build_retry_prefix(attempt_counter=2)
+        self.assertIn("RETRY NOTE", prefix)
+        self.assertIn("attempt 2", prefix)
+        self.assertIn("git status", prefix)
+        self.assertIn("git diff", prefix)
+
+    def test_third_attempt_mentions_attempt_number(self):
+        """attempt_counter=3 → RETRY NOTE mentions attempt 3."""
+        from lib.supervisor import build_retry_prefix
+        prefix = build_retry_prefix(attempt_counter=3)
+        self.assertIn("attempt 3", prefix)
+
+
+class TestPathValidationQueue(unittest.TestCase):
+    """v4.0.1: SprintQueue.load() validates metadata file paths."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmpdir, "queue.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def _write_queue(self, metadata):
+        data = {
+            "feature": "test",
+            "created": "2026-01-01T00:00:00Z",
+            "sprints": [
+                {"id": 1, "title": "S1", "status": "pending",
+                 "plan_file": "plans/plan.md#sprint-1",
+                 "branch": "feat/s1", "depends_on": [],
+                 "pr": None, "retries": 0, "max_retries": 2, "error_log": None}
+            ],
+            "metadata": metadata,
+        }
+        with open(self.path, "w") as f:
+            json.dump(data, f)
+
+    def test_relative_paths_accepted(self):
+        """Relative metadata paths are accepted."""
+        self._write_queue({
+            "brief_file": "docs/brief.md",
+            "charter_file": "docs/charter.md",
+            "spec_file": "docs/spec.md",
+            "completion_data_file": "docs/completion.json",
+        })
+        q = SprintQueue.load(self.path)
+        self.assertIsNotNone(q)
+
+    def test_absolute_brief_file_rejected(self):
+        """Absolute path in brief_file raises ValueError."""
+        self._write_queue({"brief_file": "/etc/passwd"})
+        with self.assertRaises(ValueError) as ctx:
+            SprintQueue.load(self.path)
+        self.assertIn("brief_file", str(ctx.exception))
+
+    def test_traversal_charter_file_rejected(self):
+        """.. traversal in charter_file raises ValueError."""
+        self._write_queue({"charter_file": "../../etc/shadow"})
+        with self.assertRaises(ValueError) as ctx:
+            SprintQueue.load(self.path)
+        self.assertIn("charter_file", str(ctx.exception))
+
+    def test_traversal_spec_file_rejected(self):
+        """.. traversal in spec_file raises ValueError."""
+        self._write_queue({"spec_file": "../outside/spec.md"})
+        with self.assertRaises(ValueError) as ctx:
+            SprintQueue.load(self.path)
+        self.assertIn("spec_file", str(ctx.exception))
+
+    def test_traversal_completion_data_file_rejected(self):
+        """.. traversal in completion_data_file raises ValueError."""
+        self._write_queue({"completion_data_file": "docs/../../../etc/cron"})
+        with self.assertRaises(ValueError) as ctx:
+            SprintQueue.load(self.path)
+        self.assertIn("completion_data_file", str(ctx.exception))
+
+    def test_missing_metadata_fields_skipped(self):
+        """Metadata without optional path fields loads without error."""
+        self._write_queue({"governance_mode": "standard"})
+        q = SprintQueue.load(self.path)
+        self.assertIsNotNone(q)
+
+
+class TestFrontendTrueKey(unittest.TestCase):
+    """v4.0.1: build_prompt() supports sprint['frontend'] = True (new key)."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(
+                "Sprint {sprint_id}: {sprint_title}\n{sprint_plan}\n"
+                "{claude_md}\n{llms_txt}\n{charter}\n{product_brief}\n"
+                "{branch}\n{complexity}\n{implementation_tier}\n"
+                "{impl_model}\n{impl_effort}\n{governance_mode}\n"
+                "{governance_instructions}\n{baseline_status}\n"
+                "{frontend_instructions}\n"
+            )
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_frontend_true_injects_playwright_instruction(self):
+        """sprint['frontend']=True injects Playwright MCP instruction."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint["frontend"] = True
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertNotIn("{frontend_instructions}", result)
+        self.assertIn("Playwright MCP", result)
+        self.assertIn("browser_take_screenshot", result)
+
+    def test_frontend_false_no_playwright_instruction(self):
+        """sprint['frontend']=False → empty frontend_instructions."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        sprint["frontend"] = False
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertNotIn("Playwright MCP", result)
+        self.assertNotIn("{frontend_instructions}", result)
+
+    def test_frontend_key_absent_no_playwright_instruction(self):
+        """No 'frontend' key → empty frontend_instructions."""
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertNotIn("Playwright MCP", result)
+
+
 if __name__ == "__main__":
     unittest.main()

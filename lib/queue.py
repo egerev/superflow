@@ -19,6 +19,18 @@ class SprintQueue:
         self.generated_from = generated_from
         self.metadata = metadata or {}
 
+    @staticmethod
+    def _validate_path(path: str, field_name: str) -> None:
+        """Validate that a metadata file path is relative and contains no traversal.
+
+        Raises ValueError if the path is absolute or contains '..' components.
+        """
+        if os.path.isabs(path):
+            raise ValueError(f"Absolute path not allowed in {field_name}: {path}")
+        parts = path.replace("\\", "/").split("/")
+        if ".." in parts:
+            raise ValueError(f"Path traversal (..) not allowed in {field_name}: {path}")
+
     @classmethod
     def load(cls, path: str) -> "SprintQueue":
         """Load a sprint queue from a JSON file."""
@@ -31,6 +43,12 @@ class SprintQueue:
                 raise ValueError(f"Absolute path not allowed in plan_file: {pf}")
             if ".." in file_part.split(os.sep):
                 raise ValueError(f"Path traversal (..) not allowed in plan_file: {pf}")
+        # Validate metadata file paths
+        metadata = data.get("metadata", {})
+        for field in ("brief_file", "charter_file", "spec_file", "completion_data_file"):
+            value = metadata.get(field)
+            if value:
+                cls._validate_path(value, field)
         return cls(
             feature=data["feature"],
             created=data["created"],

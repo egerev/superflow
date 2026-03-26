@@ -218,6 +218,20 @@ Record: `{"provider":"split-focus","claude_product":"ACCEPTED","technical_review
 4. If a test passes individually but fails in the full suite, suspect leaked global state (threading events, shared mocks, file artifacts)
 5. **Never use `run_in_background` for test commands.** Tests must run in the foreground with an explicit timeout.
 
+## Frontend Testing (when applicable)
+
+When a sprint modifies frontend code (HTML, CSS, JS, React components, templates):
+
+1. After implementation and before review, run visual verification using `/webapp-testing` or Playwright MCP
+2. Open the affected page(s) in browser
+3. Take screenshot as evidence
+4. If visual regression detected, fix before proceeding to review
+5. Include screenshot URL in PR description
+
+**Detection:** Sprint plan should tag frontend sprints with `frontend: true`. The sprint prompt includes `{frontend_instructions}` — when frontend=true, it instructs the agent to verify UI visually.
+
+**Skill required:** `/webapp-testing` (Playwright-based). Installed during Phase 0 onboarding for projects with frontend stack.
+
 ## Commit Before Review
 
 Codex and other external reviewers see only committed code (they extract HEAD into a temp dir). Uncommitted working tree changes are invisible to them.

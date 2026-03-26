@@ -50,7 +50,7 @@ def read_pid(pid_path):
         return None
 
 
-def launch(queue_path, plan_path, repo_root, timeout=1800):
+def launch(queue_path, plan_path, repo_root, timeout=12000):
     """Launch supervisor as a detached background process.
 
     Returns LaunchResult on success. Raises RuntimeError on failure.

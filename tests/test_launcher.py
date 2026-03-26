@@ -516,5 +516,16 @@ class TestClearHoldRequest(unittest.TestCase):
         clear_hold_request(self.repo_root)
 
 
+class TestLaunchDefaultTimeout(unittest.TestCase):
+    """v4.0.1: launch() default timeout is 12000s (medium complexity, 200 min)."""
+
+    def test_launch_default_timeout_is_12000(self):
+        """launch() signature default is 12000 (not 1800)."""
+        import inspect
+        sig = inspect.signature(launch)
+        default = sig.parameters["timeout"].default
+        self.assertEqual(default, 12000)
+
+
 if __name__ == "__main__":
     unittest.main()
