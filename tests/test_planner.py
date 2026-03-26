@@ -1,16 +1,11 @@
-"""Tests for lib/planner.py — shared sprint heading parser.
-
-Also covers integration: _extract_plan_section in supervisor uses _parse_sprint_headings
-for sprint-type fragments.
-"""
+"""Tests for lib/planner.py — sprint heading parser, plan extraction, queue generation."""
 import hashlib
 import json
 import os
 import tempfile
 import unittest
 
-from lib.planner import _parse_sprint_headings, plan_to_queue, charter_to_queue, save_queue, validate_queue_freshness
-from lib.supervisor import _extract_plan_section
+from lib.planner import _parse_sprint_headings, _extract_plan_section, plan_to_queue, charter_to_queue, save_queue, validate_queue_freshness
 
 
 class TestParseSprintHeadings(unittest.TestCase):

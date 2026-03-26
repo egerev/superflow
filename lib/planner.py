@@ -1,4 +1,4 @@
-"""Plan parsing utilities — shared heading parser for planner and supervisor."""
+"""Plan parsing utilities — sprint heading parser, plan-to-queue, charter-to-queue."""
 import hashlib
 import json
 import os
@@ -46,6 +46,55 @@ def _parse_sprint_headings(content: str) -> list:
 def _extract_sprint_section(lines: list, start_line: int, end_line: int) -> str:
     """Return the text slice for a sprint section."""
     return "\n".join(lines[start_line:end_line])
+
+
+def _extract_plan_section(content: str, fragment: str) -> str:
+    """Extract a section from markdown content matching the fragment.
+
+    Uses shared sprint heading parser for sprint-type fragments (e.g., 'sprint-1').
+    Falls back to generic heading matching for other fragment types.
+    """
+    # Check if this is a sprint-type fragment
+    sprint_match = re.match(r'^sprint[- ](\d+)$', fragment.lower())
+    if sprint_match:
+        sprint_id = int(sprint_match.group(1))
+        headings = _parse_sprint_headings(content)
+        for h in headings:
+            if h["id"] == sprint_id:
+                lines = content.split("\n")
+                return "\n".join(lines[h["start_line"]:h["end_line"]]).strip()
+        # Sprint not found — return full content
+        return content
+
+    # Generic heading matching (non-sprint fragments)
+    normalized = fragment.replace("-", " ").lower()
+    lines = content.split("\n")
+    start_idx = None
+    heading_level = None
+
+    for i, line in enumerate(lines):
+        match = re.match(r"^(#+)\s+(.*)", line)
+        if match:
+            level = len(match.group(1))
+            title = match.group(2).strip().lower()
+            title_normalized = re.sub(r"[:\-—_]", " ", title).strip()
+            if normalized == title_normalized or normalized == title_normalized.rstrip(':'):
+                start_idx = i
+                heading_level = level
+                break
+
+    if start_idx is None:
+        return content  # Fragment not found, return full content
+
+    # Find next heading at same or higher level
+    end_idx = len(lines)
+    for i in range(start_idx + 1, len(lines)):
+        match = re.match(r"^(#+)\s+", lines[i])
+        if match and len(match.group(1)) <= heading_level:
+            end_idx = i
+            break
+
+    return "\n".join(lines[start_idx:end_idx]).strip()
 
 
 def plan_to_queue(plan_path: str, feature: str, base_branch: str = "feat", state_path: str | None = None) -> dict:
