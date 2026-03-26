@@ -336,6 +336,31 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _read_sprint_progress(repo_root: str) -> dict | None:
+    """Read .superflow/sprint-progress.json and return parsed dict, or None.
+
+    Returns None if the file does not exist or contains invalid JSON.
+    Used by the Popen polling loop to detect intra-sprint step changes.
+    """
+    progress_path = os.path.join(repo_root, ".superflow", "sprint-progress.json")
+    try:
+        with open(progress_path) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _write_heartbeat(repo_root: str) -> None:
+    """Write current timestamp to .superflow/heartbeat for launcher health checks."""
+    heartbeat_path = os.path.join(repo_root, ".superflow", "heartbeat")
+    try:
+        os.makedirs(os.path.dirname(heartbeat_path), exist_ok=True)
+        with open(heartbeat_path, "w") as f:
+            f.write(str(time.time()))
+    except OSError:
+        pass
+
+
 _PHASE_LABELS = {0: "Onboarding", 1: "Product Discovery", 2: "Autonomous Execution", 3: "Merge"}
 _STAGE_INDICES = {"setup": 0, "implementation": 1, "review": 2, "par": 3, "ship": 4, "failed": -1}
 
@@ -1102,16 +1127,66 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         if not queue_lock:
             _write_state(repo_root, phase=2, sprint=sid, stage="implementation", queue=queue)
 
-        # Launch claude subprocess
+        # Launch claude subprocess with Popen for live heartbeat + progress polling
         try:
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 ["claude", "-p", "--verbose"],
-                input=prompt, cwd=wt_path, timeout=timeout,
-                capture_output=True, text=True, env=env,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=wt_path,
+                env=env,
+                text=True,
             )
-        except subprocess.TimeoutExpired:
+            # Send prompt via stdin without blocking
+            proc.stdin.write(prompt)
+            proc.stdin.close()
+
+            # Polling loop: update heartbeat and check intra-sprint progress
+            last_step = None
+            elapsed = 0
+            poll_interval = 15
+            while proc.poll() is None:
+                _write_heartbeat(repo_root)
+                # Check hold request — pause subprocess if hold is active
+                if _check_hold_request(repo_root):
+                    logger.info("Hold requested during sprint, pausing polling...")
+                    while _check_hold_request(repo_root):
+                        if _shutdown_event.is_set():
+                            break
+                        time.sleep(10)
+                    logger.info("Hold released, resuming sprint polling.")
+                progress = _read_sprint_progress(repo_root)
+                if progress and progress.get("step") != last_step:
+                    last_step = progress["step"]
+                    if notifier:
+                        try:
+                            notifier.notify_sprint_progress(
+                                sid,
+                                sprint.get("title", f"Sprint {sid}"),
+                                last_step,
+                            )
+                        except Exception as e:
+                            logger.warning("Notifier error (progress): %s", e)
+                elapsed += poll_interval
+                if elapsed >= timeout:
+                    proc.kill()
+                    proc.communicate()
+                    result = type("Result", (), {
+                        "returncode": 1, "stdout": "Timeout expired", "stderr": ""
+                    })()
+                    break
+                time.sleep(poll_interval)
+            else:
+                stdout, stderr = proc.communicate()
+                result = type("Result", (), {
+                    "returncode": proc.returncode,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                })()
+        except Exception as exc:
             result = type("Result", (), {
-                "returncode": 1, "stdout": "Timeout expired", "stderr": ""
+                "returncode": 1, "stdout": "", "stderr": str(exc)
             })()
 
         # Save output log (per attempt, not overwritten on retry)
@@ -1286,6 +1361,34 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         logger.info("Retrying sprint %d (attempt %d)", sid, sprint["retries"] + 1)
 
 
+def _send_digest(notifier, queue, run_start_time):
+    """Send a progress digest notification via the notifier.
+
+    Computes completed/remaining counts, elapsed time, PR URLs, and next sprint info.
+    """
+    try:
+        summary_data = queue.summary()
+        completed = summary_data.get("completed", 0)
+        remaining = summary_data.get("pending", 0) + summary_data.get("in_progress", 0)
+        elapsed_minutes = int((time.time() - run_start_time) / 60)
+        pr_urls = [s.get("pr", "") for s in queue.sprints
+                   if s["status"] == "completed" and s.get("pr")]
+        # Find next pending sprint
+        next_sprint = next((s for s in queue.sprints if s["status"] == "pending"), None)
+        next_id = next_sprint["id"] if next_sprint else None
+        next_title = next_sprint.get("title") if next_sprint else None
+        notifier.notify_progress_digest(
+            completed=completed,
+            remaining=remaining,
+            elapsed_minutes=elapsed_minutes,
+            pr_urls=pr_urls,
+            next_id=next_id,
+            next_title=next_title,
+        )
+    except Exception as e:
+        logger.warning("Notifier error (digest): %s", e)
+
+
 def _notify_sprint_result(notifier, sprint):
     """Call the notifier with the sprint result."""
     try:
@@ -1294,10 +1397,21 @@ def _notify_sprint_result(notifier, sprint):
         if sprint["status"] == "completed":
             notifier.notify_sprint_complete(sid, title, sprint.get("pr", ""))
         elif sprint["status"] == "failed":
-            notifier.notify_sprint_failed(
-                sid, title, sprint.get("error_log", "unknown"),
-                sprint.get("retries", 0), sprint.get("max_retries", 2),
-            )
+            retries = sprint.get("retries", 0)
+            max_retries = sprint.get("max_retries", 2)
+            if retries >= max_retries:
+                # 2nd retry exhausted — escalate as blocker
+                notifier.notify_blocker_escalation(
+                    sid,
+                    blocker_type="MAX_RETRIES_EXCEEDED",
+                    description=sprint.get("error_log", "unknown"),
+                    recommended_action="Review error log and adjust sprint plan before retrying.",
+                )
+            else:
+                notifier.notify_sprint_failed(
+                    sid, title, sprint.get("error_log", "unknown"),
+                    retries, max_retries,
+                )
         elif sprint["status"] == "skipped":
             notifier.notify_sprint_skipped(sid, title, sprint.get("error_log", "dependency failed"))
     except Exception as e:
@@ -1474,7 +1588,8 @@ def _check_skip_requests(repo_root, queue, queue_path=None):
 
 
 def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
-        no_replan=False, notifier=None, repo_root=None, governance_mode="standard"):
+        no_replan=False, notifier=None, repo_root=None, governance_mode="standard",
+        digest_interval=3):
     """Main supervisor run loop.
 
     Loads the queue, runs preflight, then executes sprints.
@@ -1486,6 +1601,7 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
     Args:
         governance_mode: 'light', 'standard', or 'critical'. Controls whether
             holistic review is required (via _should_run_holistic()).
+        digest_interval: send a progress digest every N completed sprints (default 3).
     """
     from lib.queue import SprintQueue
     from lib.parallel import execute_parallel
@@ -1515,6 +1631,10 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
         print("Preflight failed. Aborting.")
         return
 
+    # Digest tracking
+    run_start_time = time.time()
+    last_digest_completed = 0
+
     # Main loop
     while not queue.is_done():
         if _shutdown_event.is_set():
@@ -1523,13 +1643,7 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
             break
 
         # Write heartbeat
-        heartbeat_path = os.path.join(repo_root, ".superflow", "heartbeat")
-        try:
-            os.makedirs(os.path.dirname(heartbeat_path), exist_ok=True)
-            with open(heartbeat_path, 'w') as f:
-                f.write(str(time.time()))
-        except OSError:
-            pass
+        _write_heartbeat(repo_root)
 
         # Check skip requests from sidecar
         _check_skip_requests(repo_root, queue, queue_path)
@@ -1566,6 +1680,14 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
             if not no_replan and plan_path:
                 _run_replan(queue, queue_path, plan_path, repo_root,
                             checkpoints_dir, notifier)
+
+            # Digest after parallel batch
+            if notifier and digest_interval > 0:
+                summary_data = queue.summary()
+                completed_now = summary_data.get("completed", 0)
+                if completed_now - last_digest_completed >= digest_interval:
+                    last_digest_completed = completed_now
+                    _send_digest(notifier, queue, run_start_time)
         else:
             # Sequential execution
             for sprint in runnable:
@@ -1582,6 +1704,14 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
                 if not no_replan and plan_path:
                     _run_replan(queue, queue_path, plan_path, repo_root,
                                 checkpoints_dir, notifier)
+
+                # Digest after each sprint if interval reached
+                if notifier and digest_interval > 0:
+                    summary_data = queue.summary()
+                    completed_now = summary_data.get("completed", 0)
+                    if completed_now - last_digest_completed >= digest_interval:
+                        last_digest_completed = completed_now
+                        _send_digest(notifier, queue, run_start_time)
 
                 if _shutdown_event.is_set():
                     print("Shutdown requested after sprint. Saving state and exiting.")
@@ -1702,6 +1832,13 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
 
     # Write completion data JSON (for dashboard / external consumers)
     _write_completion_data(queue, checkpoints_dir, repo_root)
+
+    # Merge reminder — prompts user to initiate Phase 3
+    if notifier:
+        try:
+            notifier.notify_merge_reminder()
+        except Exception as e:
+            logger.warning("Notifier error: %s", e)
 
     # Generate completion report (only if there were completed sprints)
     if completed_count > 0:

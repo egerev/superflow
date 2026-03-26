@@ -158,3 +158,39 @@ class Notifier:
         """Supervisor recovered state from checkpoints."""
         self.notify("resume_recovery",
                     f"Recovered {recovered} sprints, reset {reset} to pending ({total} total)")
+
+    def notify_sprint_progress(self, sprint_id, title, step):
+        """Intra-sprint step progress update."""
+        self.notify(
+            "progress",
+            f"Sprint {sprint_id}/{self.total_sprints}: {step} started",
+            sprint_id=None,
+        )
+
+    def notify_progress_digest(self, completed, remaining, elapsed_minutes, pr_urls,
+                               next_id=None, next_title=None):
+        """Periodic digest of overall progress."""
+        total = completed + remaining
+        urls_text = "\n".join(pr_urls) if pr_urls else "(none)"
+        msg = (
+            f"Progress: {completed}/{total} sprints done ({elapsed_minutes} min elapsed)\n"
+            f"PRs: {urls_text}"
+        )
+        if next_id is not None and next_title is not None:
+            msg += f"\nNext: Sprint {next_id} — {next_title}"
+        self.notify("digest", msg)
+
+    def notify_blocker_escalation(self, sprint_id, blocker_type, description,
+                                  recommended_action):
+        """Escalate a blocker that requires user attention."""
+        msg = (
+            f"Sprint {sprint_id}: {blocker_type}\n"
+            f"{description}\n"
+            f"Recommended: {recommended_action}"
+        )
+        self.notify("BLOCKER", msg)
+
+    def notify_merge_reminder(self):
+        """Remind user to merge after all sprints complete."""
+        self.notify("merge_reminder",
+                    "All sprints complete. Reply /merge when ready, or /status for details.")

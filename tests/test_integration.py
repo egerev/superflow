@@ -42,6 +42,18 @@ def _claude_fail_output():
     return "Error: something went wrong\nCould not complete sprint."
 
 
+def _make_popen_mock(returncode=0, stdout="", stderr=""):
+    """Build a subprocess.Popen mock for the claude polling loop."""
+    mock_proc = MagicMock()
+    mock_proc.poll.side_effect = [None, returncode]
+    mock_proc.communicate.return_value = (stdout, stderr)
+    mock_proc.returncode = returncode
+    mock_proc.stdin = MagicMock()
+    mock_proc.stdin.write = MagicMock()
+    mock_proc.stdin.close = MagicMock()
+    return mock_proc
+
+
 class IntegrationBase(unittest.TestCase):
     """Base class with common setup for integration tests."""
 
@@ -110,10 +122,11 @@ class TestHappyPath(IntegrationBase):
     @patch("lib.supervisor._validate_par_evidence")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_e2e_three_sprints_with_dependencies(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt,
+        self, mock_disk, mock_subproc, mock_popen, mock_create_wt, mock_cleanup_wt,
         mock_par, mock_sleep
     ):
         """Full run: sprints 1+2 independent, sprint 3 depends on 1.
@@ -144,19 +157,19 @@ class TestHappyPath(IntegrationBase):
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
 
+        # Claude calls go through Popen; each sprint gets its own mock
+        popen_counter = [0]
+        def popen_side_effect(cmd, **kwargs):
+            popen_counter[0] += 1
+            return _make_popen_mock(returncode=0,
+                                    stdout=_claude_success_output(popen_counter[0]),
+                                    stderr="")
+        mock_popen.side_effect = popen_side_effect
+
         def subproc_side_effect(cmd, **kwargs):
             result = _preflight_subproc_effect(cmd, **kwargs)
             if result is not None:
                 return result
-            if "claude" in cmd and "-p" in cmd:
-                inp = kwargs.get("input", "")
-                if "Sprint 1" in inp:
-                    return MagicMock(returncode=0, stdout=_claude_success_output(1), stderr="")
-                elif "Sprint 2" in inp:
-                    return MagicMock(returncode=0, stdout=_claude_success_output(2), stderr="")
-                elif "Sprint 3" in inp:
-                    return MagicMock(returncode=0, stdout=_claude_success_output(3), stderr="")
-                return MagicMock(returncode=0, stdout=_claude_success_output(99), stderr="")
             if "gh" in cmd and "pr" in cmd and "view" in cmd:
                 return MagicMock(returncode=0, stdout="OPEN", stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
@@ -217,10 +230,11 @@ class TestHappyPath(IntegrationBase):
     @patch("lib.supervisor._validate_par_evidence")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_e2e_sequential_all_complete(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt,
+        self, mock_disk, mock_subproc, mock_popen, mock_create_wt, mock_cleanup_wt,
         mock_par, mock_sleep
     ):
         """Sequential execution (max_parallel=1): all 3 sprints complete in order."""
@@ -243,20 +257,20 @@ class TestHappyPath(IntegrationBase):
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
 
+        # Claude calls go via Popen; each invocation returns a fresh mock
         pr_counter = [0]
+        def popen_side_effect(cmd, **kwargs):
+            pr_counter[0] += 1
+            return _make_popen_mock(returncode=0,
+                                    stdout=_claude_success_output(pr_counter[0]),
+                                    stderr="")
+        mock_popen.side_effect = popen_side_effect
 
         def subproc_side_effect(cmd, **kwargs):
             result = _preflight_subproc_effect(cmd, **kwargs)
             if result is not None:
                 return result
             cmd_list = cmd if isinstance(cmd, list) else [cmd]
-            if "claude" in cmd_list and "-p" in cmd_list:
-                pr_counter[0] += 1
-                return MagicMock(
-                    returncode=0,
-                    stdout=_claude_success_output(pr_counter[0]),
-                    stderr=""
-                )
             if "gh" in cmd_list and "pr" in cmd_list and "view" in cmd_list:
                 return MagicMock(returncode=0, stdout="OPEN", stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
@@ -370,10 +384,11 @@ class TestBlockedSprints(IntegrationBase):
     @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_dependency_failure_skips_dependent(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt, mock_baseline
+        self, mock_disk, mock_subproc, mock_popen, mock_create_wt, mock_cleanup_wt, mock_baseline
     ):
         """Sprint 1 fails after retries, sprint 2 (depends on 1) is auto-skipped."""
         sprints = [
@@ -390,14 +405,15 @@ class TestBlockedSprints(IntegrationBase):
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
 
+        # Sprint 1 always fails via Popen
+        mock_popen.side_effect = lambda cmd, **kw: _make_popen_mock(
+            returncode=1, stdout=_claude_fail_output(), stderr="crash"
+        )
+
         def subproc_side_effect(cmd, **kwargs):
             result = _preflight_subproc_effect(cmd, **kwargs)
             if result is not None:
                 return result
-            cmd_list = cmd if isinstance(cmd, list) else [cmd]
-            # Sprint 1 always fails
-            if "claude" in cmd_list and "-p" in cmd_list:
-                return MagicMock(returncode=1, stdout=_claude_fail_output(), stderr="crash")
             return MagicMock(returncode=0, stdout="", stderr="")
 
         mock_subproc.side_effect = subproc_side_effect
@@ -420,10 +436,11 @@ class TestBlockedSprints(IntegrationBase):
     @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_transitive_dependency_failure_skips_chain(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt, mock_baseline
+        self, mock_disk, mock_subproc, mock_popen, mock_create_wt, mock_cleanup_wt, mock_baseline
     ):
         """Sprint 1 fails, sprint 2 depends on 1, sprint 3 depends on 2 — both skipped."""
         sprints = [
@@ -442,13 +459,14 @@ class TestBlockedSprints(IntegrationBase):
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
 
+        mock_popen.side_effect = lambda cmd, **kw: _make_popen_mock(
+            returncode=1, stdout="Error", stderr="crash"
+        )
+
         def subproc_side_effect(cmd, **kwargs):
             result = _preflight_subproc_effect(cmd, **kwargs)
             if result is not None:
                 return result
-            cmd_list = cmd if isinstance(cmd, list) else [cmd]
-            if "claude" in cmd_list and "-p" in cmd_list:
-                return MagicMock(returncode=1, stdout="Error", stderr="crash")
             return MagicMock(returncode=0, stdout="", stderr="")
 
         mock_subproc.side_effect = subproc_side_effect
@@ -474,10 +492,11 @@ class TestRetryScenario(IntegrationBase):
     @patch("lib.supervisor._validate_par_evidence")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_retry_succeeds_on_second_attempt(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt,
+        self, mock_disk, mock_subproc, mock_popen, mock_create_wt, mock_cleanup_wt,
         mock_par, mock_sleep
     ):
         """Sprint fails on first attempt, succeeds on retry.
@@ -498,25 +517,17 @@ class TestRetryScenario(IntegrationBase):
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
 
-        attempt = [0]
+        # First attempt fails, second succeeds
+        mock_popen.side_effect = [
+            _make_popen_mock(returncode=1, stdout="Error on first try", stderr=""),
+            _make_popen_mock(returncode=0, stdout=_claude_success_output(1), stderr=""),
+        ]
 
         def subproc_side_effect(cmd, **kwargs):
             result = _preflight_subproc_effect(cmd, **kwargs)
             if result is not None:
                 return result
             cmd_list = cmd if isinstance(cmd, list) else [cmd]
-            if "claude" in cmd_list and "-p" in cmd_list:
-                attempt[0] += 1
-                if attempt[0] == 1:
-                    # First attempt fails
-                    return MagicMock(returncode=1, stdout="Error on first try", stderr="")
-                else:
-                    # Second attempt succeeds
-                    return MagicMock(
-                        returncode=0,
-                        stdout=_claude_success_output(1),
-                        stderr=""
-                    )
             if "gh" in cmd_list and "pr" in cmd_list and "view" in cmd_list:
                 return MagicMock(returncode=0, stdout="OPEN", stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
@@ -545,10 +556,11 @@ class TestRetryScenario(IntegrationBase):
     @patch("lib.supervisor.run_baseline_tests")
     @patch("lib.supervisor.cleanup_worktree")
     @patch("lib.supervisor.create_worktree")
+    @patch("lib.supervisor.subprocess.Popen")
     @patch("lib.supervisor.subprocess.run")
     @patch("lib.supervisor.shutil.disk_usage")
     def test_retry_exhausted_marks_failed(
-        self, mock_disk, mock_subproc, mock_create_wt, mock_cleanup_wt, mock_baseline
+        self, mock_disk, mock_subproc, mock_popen, mock_create_wt, mock_cleanup_wt, mock_baseline
     ):
         """Sprint fails all attempts, verify it ends as failed with correct retry count."""
         sprints = [
@@ -563,13 +575,14 @@ class TestRetryScenario(IntegrationBase):
             root, ".worktrees", f"sprint-{sprint['id']}"
         )
 
+        mock_popen.side_effect = lambda cmd, **kw: _make_popen_mock(
+            returncode=1, stdout="Always fails", stderr="crash"
+        )
+
         def subproc_side_effect(cmd, **kwargs):
             result = _preflight_subproc_effect(cmd, **kwargs)
             if result is not None:
                 return result
-            cmd_list = cmd if isinstance(cmd, list) else [cmd]
-            if "claude" in cmd_list and "-p" in cmd_list:
-                return MagicMock(returncode=1, stdout="Always fails", stderr="crash")
             return MagicMock(returncode=0, stdout="", stderr="")
 
         mock_subproc.side_effect = subproc_side_effect
