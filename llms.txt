@@ -11,12 +11,12 @@ Superflow is a 4-phase development workflow skill for Claude Code:
 - **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — git worktrees, TDD, wave-based parallel dispatch, governance-aware review tiering, charter compliance checks, one PR per sprint
 - **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification, structured completion data (`completion-data.json`), and documentation update
 
-Version: v4.1.0 (2026-03-26). MIT License.
+Version: v4.1.1 (2026-03-27). MIT License.
 
 ## File Structure
 
-- [SKILL.md](SKILL.md): Entry point — startup checklist, provider detection, phase routing (~110 lines)
-- [superflow-enforcement.md](superflow-enforcement.md): 10 hard rules that survive context compaction — deployed to ~/.claude/rules/ (82 lines)
+- [SKILL.md](SKILL.md): Entry point — startup checklist (6 steps), provider detection, phase routing (~120 lines)
+- [superflow-enforcement.md](superflow-enforcement.md): 10 hard rules that survive context compaction — deployed to ~/.claude/rules/ (77 lines)
 - [CLAUDE.md](CLAUDE.md): Project instructions for Claude — architecture, key files table, conventions (~90 lines)
 - [README.md](README.md): Installation, usage, v4.1 features, permissions setup
 
@@ -67,4 +67,4 @@ Version: v4.1.0 (2026-03-26). MIT License.
 - **Markers:** `<!-- updated-by-superflow:YYYY-MM-DD -->` in generated files — used to detect whether Phase 0 has run
 - **Sprint plan:** Implementation plan defines sprints with dependencies and complexity tags, used for autonomous execution
 
-<!-- updated-by-superflow:2026-03-26 -->
+<!-- updated-by-superflow:2026-03-27 -->

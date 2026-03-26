@@ -2,6 +2,17 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.1.1] - 2026-03-27
+
+### Changed — Startup Optimization
+- **SKILL.md startup checklist**: 10 steps → 6 steps. Batched 5 detection commands into 1, inlined Phase 0 gate, added stale state detection with `charter_file` check, removed redundant CLAUDE.md re-read
+- **superflow-enforcement.md**: compressed Secondary Provider Invocation (13→5 lines), generalized Python-specific test references to `<test-command>`, tightened wording throughout (82→77 lines). All 10 hard rules preserved
+
+### Fixed
+- `test -e .git` instead of `test -d .git` for worktree compatibility (`.git` is a file in worktrees)
+- Phase 3 resume on main correctly preserved (not treated as stale)
+- Phase 1→2 handoff preserved via `charter_file` existence check
+
 ## [4.1.0] - 2026-03-26
 
 ### Removed — Python Supervisor
