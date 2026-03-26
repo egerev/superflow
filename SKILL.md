@@ -14,28 +14,16 @@ Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase m
 
 Durable rules live in `.claude/rules/superflow-enforcement.md` (survives compaction).
 
-This is a hybrid project: markdown prompts + Python companion CLI (supervisor).
-
 ## Architecture
 
 ```
 superflow/
   SKILL.md              — Skill entry point, startup checklist
   superflow-enforcement.md — Durable rules for ~/.claude/rules/
-  bin/
-    superflow-supervisor — Python CLI for autonomous sprint orchestration
   lib/
-    supervisor.py        — Core: worktree lifecycle, execution, run loop, completion report
     queue.py             — Sprint queue with DAG dependency resolution
     planner.py           — Plan-to-queue generator, shared heading parser
-    launcher.py          — Launch/stop/status/restart supervisor
-    checkpoint.py        — Checkpoint save/load for crash recovery
-    parallel.py          — Parallel execution via ThreadPoolExecutor
-    replanner.py         — Adaptive replanner (adjusts remaining sprints)
-    notifications.py     — Telegram/stdout notifications
   templates/
-    supervisor-sprint-prompt.md — Sprint execution prompt template
-    replan-prompt.md     — Replanner prompt template
     superflow-state-schema.json — JSON Schema for .superflow-state.json
     greenfield/              — Stack-specific scaffolding templates
       nextjs.md              — Next.js project template
@@ -57,7 +45,8 @@ superflow/
       stage4-setup.md    — 3 concurrent branches, strict file ownership
       stage5-completion.md — Markers, tech debt, restart
       greenfield.md      — Empty project path, G1-G6
-  tests/                 — Unit and integration tests (362+ tests)
+  examples/              — Sprint queue template
+  tests/                 — Unit tests for queue and planner
 ```
 
 ## Startup Checklist
@@ -71,13 +60,11 @@ superflow/
 3. Detect secondary provider (see below)
 4. Detect timeout: `gtimeout` > `timeout` > perl fallback
 5. Detect Telegram MCP: `mcp__plugin_telegram_telegram__reply`. **Only mention Telegram updates to the user if detected.** Do NOT promise Telegram in sessions without the plugin.
-6. Detect supervisor: `python3 -c "import sys; print(sys.version)" 2>/dev/null`
-7. Detect mode: existing code = Enhancement, empty repo = Greenfield
-8. **Deploy agent definitions** (if missing): `test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null`
-9. **Run Phase 0** if first run (see detection in `references/phase0-onboarding.md`)
-10. Check `.superflow-state.json` for resume context (crash recovery, session restore)
-11. **Detect running supervisor**: check `launcher.get_status()`. If alive=True, enter dashboard mode. If crashed=True, offer restart.
-12. Read CLAUDE.md and project docs
+6. Detect mode: existing code = Enhancement, empty repo = Greenfield
+7. **Deploy agent definitions** (if missing): `test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null`
+8. **Run Phase 0** if first run (see detection in `references/phase0-onboarding.md`)
+9. Check `.superflow-state.json` for resume context (crash recovery, session restore)
+10. Read CLAUDE.md and project docs
 
 ## Secondary Provider Detection
 
@@ -93,29 +80,13 @@ Use detected provider silently. No warnings about missing providers.
 ## State Management
 
 `.superflow-state.json` in the project root tracks current phase, sprint, and stage. It is:
-- **Read-only projection** during Phase 2 with supervisor (generated from queue/checkpoint data)
-- **Directly written** during Phases 0, 1, 3 (interactive, single session)
+- **Directly written** by Claude during all phases
 - **Gitignored** (added during Phase 0 Stage 4 Branch C)
 - **Schema**: `templates/superflow-state-schema.json`
 
 Hooks read state for context restoration:
 - **PostCompact hook** (`~/.claude/settings.json`): after context compaction, injects current phase/stage so the LLM can re-read the right phase doc
 - **SessionStart hook** (`~/.claude/settings.json`): on `claude --resume`, restores Superflow context from state file
-
-## Dashboard Commands
-
-When supervisor is running in background (auto-launched from Phase 1 or manually), these commands are available:
-
-| Command | Action |
-|---------|--------|
-| `status` | Show supervisor status (PID, sprint, heartbeat) |
-| `log` | Show last 50 lines of supervisor log |
-| `stop` | Stop supervisor (SIGTERM to process group) |
-| `restart` | Stop + resume crashed sprints + relaunch |
-| `skip N` | Skip sprint N (writes sidecar request) |
-| `hold` | Pause supervisor after current sprint (writes hold-request sidecar) |
-| `resume` | Release hold, supervisor continues (removes hold-request sidecar) |
-| `merge` | Transition to Phase 3 (all sprints must be complete) |
 
 ## Timeout Helper
 
@@ -137,8 +108,6 @@ fi
 - Testing: `prompts/testing-guidelines.md`
 - Agent definitions: `agents/deep-implementer.md`, `agents/standard-implementer.md`, `agents/fast-implementer.md`, `agents/deep-code-reviewer.md`, `agents/standard-code-reviewer.md`, `agents/deep-product-reviewer.md`, `agents/standard-product-reviewer.md`, `agents/deep-spec-reviewer.md`, `agents/standard-spec-reviewer.md`, `agents/deep-doc-writer.md`, `agents/standard-doc-writer.md`, `agents/deep-analyst.md`
 - Codex prompts: `prompts/codex/code-reviewer.md`, `prompts/codex/product-reviewer.md`, `prompts/codex/audit.md`
-- Supervisor: `bin/superflow-supervisor`, `lib/supervisor.py`, `lib/queue.py`, `lib/planner.py`, `lib/launcher.py`, `lib/checkpoint.py`, `lib/parallel.py`, `lib/replanner.py`, `lib/notifications.py`
-- Templates: `templates/supervisor-sprint-prompt.md`, `templates/replan-prompt.md`
 - State: `templates/superflow-state-schema.json` (schema), `.superflow-state.json` (runtime, gitignored)
 
 Re-read phase docs at every phase/sprint boundary (compaction erases skill content).

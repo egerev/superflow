@@ -42,7 +42,7 @@ Stage 5: "Ship"
 
 ### State Management
 
-During Phase 2 with supervisor, the supervisor writes `.superflow-state.json` — the Claude session does NOT write it directly. During Phase 2 without supervisor (single-session), initialize state at the start of Phase 2:
+Initialize state at the start of Phase 2:
 
 ```bash
 cat > .superflow-state.json << STATEEOF
@@ -274,99 +274,6 @@ b. Codex Technical: `$TIMEOUT_CMD 900 codex exec review -c model_reasoning_effor
 If no Codex: 2 split-focus Claude agents (Product: deep-product-reviewer, Technical: deep-code-reviewer), both using deep-tier agent definitions.
 
 Fix CRITICAL/HIGH issues before Completion Report.
-
-## Supervisor Mode (Long-Running)
-
-For tasks with 3+ sprints that should run unattended (overnight, multi-hour):
-
-1. Phase 1 creates the sprint queue: `docs/superflow/sprint-queue.json`
-2. User launches supervisor in a separate terminal: `./bin/superflow-supervisor run --queue docs/superflow/sprint-queue.json --plan docs/superflow/plans/<plan-file>.md`
-3. Supervisor executes each sprint as a fresh Claude Code session (no context degradation)
-4. Each sprint follows the same Per-Sprint Flow above (the 10-step flow), but orchestrated by the supervisor
-5. Supervisor handles: retries, parallel execution, adaptive replanning, checkpoint/resume
-
-**When to use supervisor vs single-session:**
-- 1-2 sprints → single-session (this file's normal flow)
-- 3+ sprints → supervisor recommended
-- Overnight/unattended → supervisor required
-- Auto-launch from Phase 1 → dashboard mode recommended for all multi-sprint features
-
-**Key difference:** In supervisor mode, the supervisor creates the worktree and sets the working directory. The Claude session inside does NOT create its own worktree.
-
-## Telegram Commands
-
-When the supervisor is running and Telegram MCP is connected, the user can send commands from Telegram that the dashboard parses and dispatches via sidecar files.
-
-| Command | Action | Sidecar mechanism |
-|---------|--------|-------------------|
-| `/status` | Show current supervisor status (sprint, stage, heartbeat) | Read `.superflow-state.json` + `get_status()` |
-| `/skip N` | Skip sprint N | `write_skip_request(repo_root, N)` → `.superflow/skip-requests/skip-N-<ts>.json` |
-| `/hold` | Pause supervisor after current sprint completes | `write_hold_request(repo_root)` → `.superflow/hold-request.json` |
-| `/resume` | Release hold, supervisor continues | `clear_hold_request(repo_root)` → removes `.superflow/hold-request.json` |
-| `/merge` | Transition to Phase 3 (only if all sprints complete) | Read phase2-execution.md → Phase 3 |
-| `/log` | Show last 50 lines of supervisor log | `tail -50 .superflow/supervisor.log` |
-
-**Command flow:** Telegram message arrives via MCP → dashboard session parses command → writes sidecar file → supervisor picks up on next loop iteration → acknowledgment reply sent via `mcp__plugin_telegram_telegram__reply`.
-
-For `/status` and `/log`, no sidecar is needed — the dashboard reads state directly and sends the result via `mcp__plugin_telegram_telegram__reply`.
-
-## Dashboard Mode (Auto-Launch)
-
-When the supervisor is launched automatically from Phase 1 Step 11, the Claude session enters dashboard mode. The session monitors the background supervisor and provides interactive commands.
-
-### Sprint Transition Monitoring
-
-Poll both `.superflow-state.json` and launcher status every 30 seconds via background command:
-```bash
-while true; do
-  cat .superflow-state.json 2>/dev/null
-  python3 -c "from lib.launcher import get_status; s=get_status('.'); print(f'alive={s.alive} crashed={s.crashed} heartbeat={s.heartbeat_age_seconds}')" 2>/dev/null
-  sleep 30
-done
-```
-
-On state change (sprint number or stage changed), display update:
-```
-Sprint 2/4 completed: "API endpoints" — PR #46 created
-Sprint 3/4 in progress: "Frontend components"
-```
-
-On supervisor death (`alive=False`):
-- If `crashed=True`: display crash notice, offer `restart`
-- If all sprints complete: display summary, offer `merge`
-- Otherwise: display unexpected stop, offer `restart` or `log`
-
-### Interactive Commands
-
-| Command | Implementation |
-|---------|----------------|
-| `status` | `python3 -c "from lib.launcher import get_status; ..."` → formatted status |
-| `log` | `tail -50 .superflow/supervisor.log` |
-| `stop` | `python3 -c "from lib.launcher import stop; ..."` → confirm, then SIGTERM |
-| `restart` | `python3 -c "from lib.launcher import restart; ..."` → resume + relaunch |
-| `skip N` | `python3 -c "from lib.launcher import write_skip_request; ..."` → write sidecar file |
-| `hold` | `python3 -c "from lib.launcher import write_hold_request; write_hold_request('.')"` → pause after current sprint |
-| `resume` | `python3 -c "from lib.launcher import clear_hold_request; clear_hold_request('.')"` → release hold |
-| `merge` | Only if all sprints complete. Transition to Phase 3 (read `references/phase3-merge.md`). |
-
-### Reconnection Scenarios
-
-**New session while supervisor running:**
-1. Read `.superflow-state.json` — phase=2
-2. Check `launcher.get_status()` — alive=True
-3. Enter dashboard mode automatically
-4. Display current progress
-
-**Supervisor has finished:**
-1. Read state — phase=2, stage="ship"
-2. Check `get_status()` — alive=False, crashed=False
-3. Display completion summary
-4. Offer merge
-
-**Supervisor has crashed:**
-1. Read state — phase=2, mid-sprint
-2. Check `get_status()` — alive=False, crashed=True
-3. Offer restart (resume + relaunch)
 
 ## Completion Report (Product Release Format)
 

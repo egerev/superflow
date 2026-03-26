@@ -2,6 +2,34 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.1.0] - 2026-03-26
+
+### Removed — Python Supervisor
+- **Deleted `bin/superflow-supervisor`** (213 lines) — CLI entry point
+- **Deleted `lib/supervisor.py`** (~1970 lines) — core Popen execution, charter injection, digest, blocker escalation
+- **Deleted `lib/launcher.py`** (334 lines) — launch/stop/status/restart
+- **Deleted `lib/checkpoint.py`** (52 lines) — checkpoint save/load
+- **Deleted `lib/parallel.py`** (61 lines) — ThreadPoolExecutor concurrency
+- **Deleted `lib/replanner.py`** (225 lines) — adaptive replanner
+- **Deleted `lib/notifications.py`** (196 lines) — Telegram/stdout notifications
+- **Deleted `templates/supervisor-sprint-prompt.md`** (69 lines) — sprint prompt template
+- **Deleted `templates/replan-prompt.md`** (29 lines) — replanner prompt template
+- **Deleted all supervisor tests** — test_supervisor.py, test_launcher.py, test_checkpoint.py, test_parallel.py, test_replanner.py, test_notifications.py, test_integration.py, test_cli.py, mock_claude.sh (~7000 lines of tests)
+- **Total: ~10,000 lines removed**
+
+### Why
+Subagent-based Phase 2 (Claude orchestrates directly via Agent() calls) works perfectly — proven on 9+ sprints across v4.0 sessions. The Python supervisor was fragile, required Python 3.10+, and added complexity without proportional value.
+
+### Changed
+- `SKILL.md`: removed supervisor detection (step 6), dashboard commands, dashboard mode
+- `references/phase2-execution.md`: removed Supervisor Mode, Telegram Commands, Dashboard Mode sections
+- `references/phase1-discovery.md`: removed auto-launch flow, replaced with clean `/clear` + `/superflow` handoff
+- `superflow-enforcement.md`: no changes needed (rules were already subagent-focused)
+- `templates/superflow-state-schema.json`: removed `supervisor_available` field
+- `README.md`: removed Python 3.10+ requirement, Supervisor CLI section, Overnight Run section
+- `CLAUDE.md`, `llms.txt`: updated to reflect new architecture without supervisor
+- **Retained**: `lib/queue.py`, `lib/planner.py`, `tests/test_queue.py`, `tests/test_planner.py`, `examples/sprint-queue-example.json`
+
 ## [4.0.0] - 2026-03-26
 
 ### Added — Expert Panel Brainstorming

@@ -131,19 +131,9 @@ Replace `MODE` with `light`, `standard`, or `critical`.
 - **Standard mode**: Full flow as documented (no changes)
 - **Critical mode**: Full flow + dispatch security research agent in Step 3 + add threat model section to spec in Step 8 + use deep-tier reviewers in Steps 9 and 11
 
-### Light Mode Launch Path
+### Light Mode Sprint Breakdown
 
-In light mode, the charter body contains the sprint breakdown directly. Instead of `plan_to_queue()` (which reads from a plan file), use `charter_to_queue()` from `lib/planner.py`:
-
-```python
-from lib.planner import charter_to_queue, save_queue
-with open(charter_path) as f:
-    charter_text = f.read()
-q = charter_to_queue(charter_text, 'FEATURE')
-save_queue(q, 'docs/superflow/sprint-queue.json')
-```
-
-Charter sprint headings use the format: `## Sprint N: Title [complexity: X]`
+In light mode, the charter body contains the sprint breakdown directly. Charter sprint headings use the format: `## Sprint N: Title [complexity: X]`. The sprint plan is derived from the charter — no separate plan file needed.
 
 ## Step 3: Best Practices & Product Research
 <!-- Stage 1: Research, Todos 3-4 -->
@@ -400,55 +390,13 @@ governance_mode: "light|standard|critical"  # from Step 2 selection
 
 **Body:** Free-form notes on scope boundaries, forbidden approaches, or risk areas.
 
-Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`. Update `.superflow-state.json` context with `charter_file` path. Also set `charter_file` in the sprint queue's `metadata` dict so the supervisor can inject it into sprint prompts.
+Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`. Update `.superflow-state.json` context with `charter_file` path.
 
-The charter is injected into every sprint prompt, reviewer context, and replanner prompt — serving as the single source of truth for what the autonomous executor is and isn’t allowed to do.
-
-**Auto-launch flow (primary path):**
-
-**1. Pre-launch check** — verify supervisor is not already running or crashed:
-```bash
-python3 -c "from lib.launcher import get_status; s=get_status('.'); print(f'alive={s.alive} crashed={s.crashed} sprint={s.sprint}')"
-```
-- If alive: show current status and enter dashboard mode. Do not re-launch.
-- If crashed: offer restart (`restart()` calls `resume()` to recover in-progress sprints, then relaunches). Do NOT regenerate the queue — it would overwrite completed sprint state.
-
-**2. Generate sprint queue** from the approved plan:
-```bash
-python3 -c "
-from lib.planner import plan_to_queue, save_queue
-q = plan_to_queue('PLAN_PATH', 'FEATURE')
-save_queue(q, 'docs/superflow/sprint-queue.json')
-print(f'{len(q[\"sprints\"])} sprints queued')
-"
-```
-Replace `PLAN_PATH` with the actual plan file path (e.g. `docs/superflow/plans/YYYY-MM-DD-feature.md`) and `FEATURE` with the feature name.
-
-**3. Confirm launch** — ask the user (plain text, remote-friendly):
-> "Ready to start. N sprints queued. Launch supervisor in background? (yes/no)"
-
-**4. On yes — launch supervisor:**
-```bash
-python3 -c "
-from lib.launcher import launch
-r = launch('docs/superflow/sprint-queue.json', 'PLAN_PATH', '.')
-print(f'PID {r.pid}, log: {r.log_path}')
-"
-```
-Show launch receipt: PID, log path, sprint count. Update `.superflow-state.json` to phase=2.
-
-**5. If launch fails** — show the error message and first 20 lines of the log file, then offer:
-> "Launch failed. Check the log above. Fix the issue and say 'retry', or say 'manual' to fall back to the manual path."
-
-**6. Enter dashboard mode** — transition to Phase 2 dashboard: poll supervisor status every 30 seconds, surface sprint transitions and errors as they happen.
-
----
-
-**Fallback path (if user says "no" to launch, or on repeated launch failure):**
+The charter is injected into every sprint prompt and reviewer context — serving as the single source of truth for what the autonomous executor is and isn’t allowed to do.
 
 After Phase 1 the context window is heavily loaded with brainstorming history, review findings, and intermediate drafts. Phase 2 is a different mode (autonomous manager) and benefits from a clean start.
 
-1. Verify `.superflow-state.json` has phase=2 and plan/spec file paths in context
+1. Update `.superflow-state.json` to phase=2, verify plan/spec/charter file paths in context
 2. Tell the user:
    > "Plan approved. Phase 2 needs a fresh context for best quality.
    > Run `/clear` then `/superflow` — it will pick up from Phase 2 automatically."
