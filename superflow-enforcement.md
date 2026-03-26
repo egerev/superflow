@@ -6,7 +6,7 @@ Survives context compaction. SKILL.md does not.
 
 1. **Subagents write all code.** Orchestrator reads, plans, reviews, dispatches.
 2. **Git worktrees per sprint.** `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`. Verify `.worktrees/` is in `.gitignore` before creating (`git check-ignore -q .worktrees`).
-3. **Unified Review before every PR** (2 agents, specialized: Claude=Product, Secondary=Technical):
+3. **Unified Review before every PR** (2 agents for standard/critical sprints; single Technical reviewer for light-mode sprints):
    1. Dispatch Claude product reviewer (subagent_type: standard-product-reviewer). `run_in_background: true`
    2. Dispatch secondary technical reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=high --ephemeral` (or Claude code-quality if no secondary)
    3. Wait for both. Fix confirmed issues (NEEDS_FIXES, REQUEST_CHANGES, or FAIL). Re-review only flagging agent.
@@ -19,6 +19,7 @@ Survives context compaction. SKILL.md does not.
 7. **No secondary provider = two Claude agents.** Product (product-reviewer) + Technical (code-quality-reviewer). Same split, same coverage, just both Claude.
 8. **One PR per sprint.** Execute silently after plan approval.
 9. **Final Holistic Review after all sprints.** Two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint review misses cross-module issues.
+10. **Governance mode fixed for the run.** Replanner adjusts sprint scope, not governance mode. Once selected in Phase 1 Step 2, the mode persists through all sprints in the run.
 
 ## Secondary Provider Invocation
 
@@ -57,7 +58,7 @@ Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` du
 If you think any of these, STOP and do the thing:
 - "I'll write the code directly" → dispatch subagent
 - "Too simple for a worktree" → create worktree
-- "One reviewer is enough" → dispatch both reviewers (Product + Technical)
+- "One reviewer is enough" → check governance mode first. If standard/critical, dispatch both reviewers (Product + Technical)
 - "I'll ask the user during Phase 2" → Phase 2 is autonomous
 - "One big PR is easier" → one PR per sprint
 - "This sprint is too small for PAR" → run PAR

@@ -285,6 +285,79 @@ class TestBuildPromptCharter(unittest.TestCase):
         self.assertIn("No Autonomy Charter provided", result)
 
 
+class TestBuildPromptGovernanceMode(unittest.TestCase):
+    """Tests for governance mode injection in build_prompt."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmpdir, "templates"))
+        with open(os.path.join(self.tmpdir, "templates", "supervisor-sprint-prompt.md"), "w") as f:
+            f.write(
+                "Sprint {sprint_id}: {sprint_title}\n"
+                "Plan: {sprint_plan}\n"
+                "Claude: {claude_md}\n"
+                "LLMs: {llms_txt}\n"
+                "Charter: {charter}\n"
+                "Branch: {branch}\n"
+                "Complexity: {complexity}\n"
+                "Tier: {implementation_tier}\n"
+                "Model: {impl_model}\n"
+                "Effort: {impl_effort}\n"
+                "Governance: {governance_mode}\n"
+                "Instructions: {governance_instructions}\n"
+                "Baseline: {baseline_status}\n"
+                "{frontend_instructions}"
+            )
+        os.makedirs(os.path.join(self.tmpdir, "plans"))
+        with open(os.path.join(self.tmpdir, "plans", "plan.md"), "w") as f:
+            f.write("## Sprint 1\nDo stuff.\n")
+        with open(os.path.join(self.tmpdir, "CLAUDE.md"), "w") as f:
+            f.write("Rules")
+        with open(os.path.join(self.tmpdir, "llms.txt"), "w") as f:
+            f.write("Context")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_default_governance_mode_is_standard(self):
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir)
+        self.assertIn("Governance: standard", result)
+
+    def test_light_governance_mode(self):
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        meta = {"governance_mode": "light"}
+        result = build_prompt(sprint, self.tmpdir, queue_metadata=meta)
+        self.assertIn("Governance: light", result)
+        self.assertIn("Single Technical reviewer", result)
+        self.assertIn("Skip product review", result)
+
+    def test_standard_governance_mode(self):
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        meta = {"governance_mode": "standard"}
+        result = build_prompt(sprint, self.tmpdir, queue_metadata=meta)
+        self.assertIn("Governance: standard", result)
+        self.assertIn("Full 2-agent review (Product + Technical)", result)
+
+    def test_critical_governance_mode(self):
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        meta = {"governance_mode": "critical"}
+        result = build_prompt(sprint, self.tmpdir, queue_metadata=meta)
+        self.assertIn("Governance: critical", result)
+        self.assertIn("spec-compliance check against charter", result)
+
+    def test_no_metadata_defaults_to_standard(self):
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir, queue_metadata=None)
+        self.assertIn("Governance: standard", result)
+        self.assertIn("Full 2-agent review", result)
+
+    def test_empty_metadata_defaults_to_standard(self):
+        sprint = _sprint(sid=1, plan_file="plans/plan.md#sprint-1")
+        result = build_prompt(sprint, self.tmpdir, queue_metadata={})
+        self.assertIn("Governance: standard", result)
+
+
 class TestExecuteSprint(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()

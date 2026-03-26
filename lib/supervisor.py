@@ -237,6 +237,21 @@ def build_prompt(sprint: dict, repo_root: str, queue_metadata: dict | None = Non
     result = result.replace("{impl_model}", impl_model)
     result = result.replace("{impl_effort}", impl_effort)
 
+    # Governance mode injection
+    governance_mode = meta.get("governance_mode", "standard")
+    _governance_instructions = {
+        "light": "Single Technical reviewer. Skip product review.",
+        "standard": "Full 2-agent review (Product + Technical).",
+        "critical": (
+            "Full 2-agent review + spec-compliance check against charter."
+        ),
+    }
+    governance_instructions = _governance_instructions.get(
+        governance_mode, _governance_instructions["standard"]
+    )
+    result = result.replace("{governance_mode}", governance_mode)
+    result = result.replace("{governance_instructions}", governance_instructions)
+
     # Baseline status injection
     baseline_skipped = sprint.get("baseline_skipped", False)
     if baseline_skipped:

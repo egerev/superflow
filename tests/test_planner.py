@@ -9,7 +9,7 @@ import os
 import tempfile
 import unittest
 
-from lib.planner import _parse_sprint_headings, plan_to_queue, save_queue, validate_queue_freshness
+from lib.planner import _parse_sprint_headings, plan_to_queue, charter_to_queue, save_queue, validate_queue_freshness
 from lib.supervisor import _extract_plan_section
 
 
@@ -441,3 +441,100 @@ class TestSprintQueueGeneratedFrom(unittest.TestCase):
         with open(self.path) as f:
             reloaded = json.load(f)
         self.assertNotIn("generated_from", reloaded)
+
+
+# --- Charter-to-queue tests ---
+
+_SAMPLE_CHARTER = """\
+---
+goal: "Add governance modes"
+non_negotiables:
+  - "No breaking changes"
+success_criteria:
+  - "All tests pass"
+governance_mode: "light"
+---
+
+# Sprint Breakdown
+
+## Sprint 1: Security Hardening [complexity: medium]
+
+Tasks for security hardening.
+
+## Sprint 2: Feature Build [complexity: complex]
+
+Building the feature.
+**Dependencies:** Sprint 1
+
+## Sprint 3: Polish [complexity: simple]
+
+Final polish.
+**Dependencies:** Sprint 1, Sprint 2
+"""
+
+
+class TestCharterToQueue(unittest.TestCase):
+    def test_parses_sprints_from_charter_body(self):
+        result = charter_to_queue(_SAMPLE_CHARTER, "my-feature")
+        self.assertEqual(len(result["sprints"]), 3)
+
+    def test_extracts_titles(self):
+        result = charter_to_queue(_SAMPLE_CHARTER, "my-feature")
+        titles = [s["title"] for s in result["sprints"]]
+        self.assertIn("Security Hardening", titles)
+        self.assertIn("Feature Build", titles)
+        self.assertIn("Polish", titles)
+
+    def test_extracts_complexity_from_bracket_tag(self):
+        result = charter_to_queue(_SAMPLE_CHARTER, "my-feature")
+        sprints = {s["id"]: s for s in result["sprints"]}
+        self.assertEqual(sprints[1]["complexity"], "medium")
+        self.assertEqual(sprints[2]["complexity"], "complex")
+        self.assertEqual(sprints[3]["complexity"], "simple")
+
+    def test_extracts_dependencies(self):
+        result = charter_to_queue(_SAMPLE_CHARTER, "my-feature")
+        sprints = {s["id"]: s for s in result["sprints"]}
+        self.assertEqual(sprints[1]["depends_on"], [])
+        self.assertEqual(sprints[2]["depends_on"], [1])
+        self.assertEqual(sprints[3]["depends_on"], [1, 2])
+
+    def test_returns_queue_dict_with_expected_keys(self):
+        result = charter_to_queue(_SAMPLE_CHARTER, "my-feature")
+        self.assertIn("feature", result)
+        self.assertIn("created", result)
+        self.assertIn("sprints", result)
+        self.assertEqual(result["feature"], "my-feature")
+
+    def test_branch_naming(self):
+        result = charter_to_queue(_SAMPLE_CHARTER, "my-feature", base_branch="feat")
+        sprints = {s["id"]: s for s in result["sprints"]}
+        self.assertEqual(sprints[1]["branch"], "feat/my-feature-sprint-1")
+
+    def test_default_complexity_when_no_bracket_tag(self):
+        charter = "---\ngoal: test\n---\n## Sprint 1: Simple Task\nContent here."
+        result = charter_to_queue(charter, "feat")
+        self.assertEqual(result["sprints"][0]["complexity"], "medium")
+
+    def test_empty_charter_body_raises(self):
+        charter = "---\ngoal: test\n---\nNo sprint headings here."
+        with self.assertRaises(ValueError):
+            charter_to_queue(charter, "feat")
+
+    def test_sprint_fields_complete(self):
+        result = charter_to_queue(_SAMPLE_CHARTER, "my-feature")
+        sprint = result["sprints"][0]
+        for key in ("id", "title", "status", "complexity", "branch",
+                    "depends_on", "pr", "retries", "max_retries", "error_log"):
+            self.assertIn(key, sprint)
+        self.assertEqual(sprint["status"], "pending")
+        self.assertIsNone(sprint["pr"])
+
+    def test_circular_dependency_raises(self):
+        charter = (
+            "---\ngoal: test\n---\n"
+            "## Sprint 1: A [complexity: simple]\n**Dependencies:** Sprint 2\n"
+            "## Sprint 2: B [complexity: simple]\n**Dependencies:** Sprint 1\n"
+        )
+        with self.assertRaises(ValueError):
+            charter_to_queue(charter, "feat")
