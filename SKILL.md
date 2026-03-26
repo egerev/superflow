@@ -70,7 +70,7 @@ superflow/
    d. If both pass, commit the stashed changes with appropriate message
 3. Detect secondary provider (see below)
 4. Detect timeout: `gtimeout` > `timeout` > perl fallback
-5. Detect Telegram MCP: `mcp__plugin_telegram_telegram__reply`
+5. Detect Telegram MCP: `mcp__plugin_telegram_telegram__reply`. **Only mention Telegram updates to the user if detected.** Do NOT promise Telegram in sessions without the plugin.
 6. Detect supervisor: `python3 -c "import sys; print(sys.version)" 2>/dev/null`
 7. Detect mode: existing code = Enhancement, empty repo = Greenfield
 8. **Deploy agent definitions** (if missing): `test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null`

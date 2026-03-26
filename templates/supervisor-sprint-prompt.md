@@ -1,8 +1,3 @@
-You are executing Sprint {sprint_id}: {sprint_title} of the Superflow workflow autonomously.
-
-## Your Task
-{sprint_plan}
-
 ## Project Context
 
 ### CLAUDE.md
@@ -17,20 +12,10 @@ You are executing Sprint {sprint_id}: {sprint_title} of the Superflow workflow a
 ### Product Brief
 {product_brief}
 
-## Reasoning Tier
-
-- **Complexity:** {complexity}
-- **Implementation tier:** {implementation_tier}
-- **Implementation model:** {impl_model}
-- **Implementation effort:** {impl_effort}
-
 ## Governance Mode
 {governance_mode}
 
 {governance_instructions}
-
-## Pre-verified
-- {baseline_status}
 
 ## Instructions
 1. Read the enforcement rules at ~/.claude/rules/superflow-enforcement.md
@@ -75,3 +60,18 @@ If this sprint has multiple tasks, analyze for independence:
 - TDD cycle mandatory
 - PAR with 2-agent specialized review before PR (Claude=Product, secondary=Technical)
 - One PR for this sprint
+
+---
+
+## Sprint {sprint_id}: {sprint_title}
+
+{sprint_plan}
+
+### Reasoning Tier
+- **Complexity:** {complexity}
+- **Implementation tier:** {implementation_tier}
+- **Implementation model:** {impl_model}
+- **Implementation effort:** {impl_effort}
+
+### Pre-verified
+- {baseline_status}
