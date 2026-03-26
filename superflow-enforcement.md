@@ -59,6 +59,7 @@ If you think any of these, STOP and do the thing:
 - "One big PR is easier" → one PR per sprint
 - "This sprint is too small for PAR" → run PAR
 - "Per-sprint PAR is enough" → check if holistic is required (Rule 9 conditions)
+- "I'll just git merge locally" → use `gh pr merge --rebase --delete-branch`
 
 ## Product Approval Gate
 
@@ -71,6 +72,8 @@ On first run (no Superflow artifacts detected), Phase 0 is mandatory. Do not ski
 ## Phase 3 Gate
 
 After Phase 2 Completion Report, do not merge without user saying "merge" / "мёрдж". Merge follows strict order: sequential, rebase, CI green, docs updated. `references/phase3-merge.md`
+
+**Phase 3 merge method:** Always `gh pr merge <number> --rebase --delete-branch`. NEVER use local `git merge` — it leaves GitHub PRs open and creates merge commits instead of linear history. Re-read `references/phase3-merge.md` before each PR merge if context was compacted.
 
 ## Telegram Progress
 

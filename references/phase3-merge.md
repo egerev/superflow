@@ -221,3 +221,18 @@ Send the post-merge report via Telegram if MCP connected (detected by availabili
 mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "<post-merge report summary>")
 ```
 Include merged PR numbers, CI status, test results, and branch cleanup status in the summary.
+
+## Known Issues
+
+### Post-compaction merge method regression
+**Severity:** High — PRs left open on GitHub, branches not cleaned up
+**Trigger:** Context compaction during Phase 3 erases the phase3-merge.md instructions. The agent then falls back to local `git merge` instead of `gh pr merge --rebase --delete-branch`.
+**Symptoms:**
+- Merge commits in history instead of linear rebase
+- GitHub PRs remain OPEN despite code being in main
+- Remote branches not deleted
+**Root cause:** Phase 3 merge loop runs over multiple sprints. If compaction occurs mid-loop, the agent loses the `gh pr merge` instruction and improvises with `git merge`.
+**Mitigation (current):** superflow-enforcement.md rule 5 says "Re-read phase docs at each sprint boundary." But merge loop is within a single stage, not across sprint boundaries.
+**Fix needed:** Add a compaction guard — either:
+1. Re-read `phase3-merge.md` before EACH PR merge (not just at stage start), or
+2. Add merge method rule to `superflow-enforcement.md` (survives compaction): "Phase 3 merges use `gh pr merge --rebase --delete-branch`, NEVER local `git merge`"
