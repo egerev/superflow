@@ -57,12 +57,13 @@ superflow/
    # All detection in one command
    codex --version 2>/dev/null && echo "PROVIDER:codex" || { gemini --version 2>/dev/null && echo "PROVIDER:gemini" || { aider --version 2>/dev/null && echo "PROVIDER:aider" || echo "PROVIDER:none"; }; }
    command -v gtimeout &>/dev/null && echo "TIMEOUT:gtimeout" || { command -v timeout &>/dev/null && echo "TIMEOUT:timeout" || echo "TIMEOUT:perl_fallback"; }
-   test -d .git && echo "MODE:enhancement" || echo "MODE:greenfield"
+   test -e .git && echo "MODE:enhancement" || echo "MODE:greenfield"
    test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null
    ```
    Telegram: check deferred tools list for `mcp__plugin_telegram_telegram__reply`. **Only mention Telegram updates if detected.** Do NOT promise Telegram without the plugin.
 4. **Check `.superflow-state.json`** for resume context:
-   - If `phase >= 2` AND current branch is `main` AND no active worktrees for feat/* → state is stale. Reset: write fresh state with phase=1
+   - If `phase = 2` AND current branch is `main` AND no active worktrees for feat/* → state is stale from previous run. Reset: write fresh state with phase=1
+   - If `phase = 3` AND current branch is `main` → valid Phase 3 resume (merge in progress)
    - If `phase >= 2` AND on `feat/*` branch → valid resume, proceed with session recovery
    - If `phase = 1` → resume Phase 1 from saved stage
    - **Do NOT read old briefs, plans, or sprint queues from previous runs**
