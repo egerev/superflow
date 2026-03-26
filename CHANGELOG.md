@@ -28,7 +28,7 @@ Subagent-based Phase 2 (Claude orchestrates directly via Agent() calls) works pe
 - `templates/superflow-state-schema.json`: removed `supervisor_available` field
 - `README.md`: removed Python 3.10+ requirement, Supervisor CLI section, Overnight Run section
 - `CLAUDE.md`, `llms.txt`: updated to reflect new architecture without supervisor
-- **Retained**: `lib/queue.py`, `lib/planner.py`, `tests/test_queue.py`, `tests/test_planner.py`, `examples/sprint-queue-example.json`
+- Deleted remaining Python: `lib/queue.py`, `lib/planner.py`, `tests/`, `examples/` — superflow is now pure Markdown, zero Python dependencies
 
 ## [4.0.0] - 2026-03-26
 

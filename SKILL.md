@@ -20,9 +20,6 @@ Durable rules live in `.claude/rules/superflow-enforcement.md` (survives compact
 superflow/
   SKILL.md              — Skill entry point, startup checklist
   superflow-enforcement.md — Durable rules for ~/.claude/rules/
-  lib/
-    queue.py             — Sprint queue with DAG dependency resolution
-    planner.py           — Plan-to-queue generator, shared heading parser
   templates/
     superflow-state-schema.json — JSON Schema for .superflow-state.json
     greenfield/              — Stack-specific scaffolding templates
@@ -45,8 +42,6 @@ superflow/
       stage4-setup.md    — 3 concurrent branches, strict file ownership
       stage5-completion.md — Markers, tech debt, restart
       greenfield.md      — Empty project path, G1-G6
-  examples/              — Sprint queue template
-  tests/                 — Unit tests for queue and planner
 ```
 
 ## Startup Checklist

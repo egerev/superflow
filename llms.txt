@@ -1,6 +1,6 @@
 # Superflow
 
-> A Claude Code skill that orchestrates a full dev workflow: onboarding, product discovery with expert panel brainstorming, autonomous execution with adaptive governance and PR-per-sprint, and merge. Markdown prompts + Python utility modules (queue, planner).
+> A pure Markdown Claude Code skill that orchestrates a full dev workflow: onboarding, product discovery with expert panel brainstorming, autonomous execution with adaptive governance and PR-per-sprint, and merge. Zero Python dependencies.
 
 ## Overview
 
@@ -54,18 +54,6 @@ Version: v4.1.0 (2026-03-26). MIT License.
 - Standard tier (Sonnet, medium effort): standard-implementer, standard-code-reviewer, standard-product-reviewer, standard-spec-reviewer, standard-doc-writer
 - Fast tier (Sonnet, low effort): fast-implementer
 
-## Utility Modules
-
-- [lib/queue.py](lib/queue.py): Sprint queue — JSON-based queue with DAG dependency resolution, metadata dict, atomic saves (137 lines, ~120 LOC)
-- [lib/planner.py](lib/planner.py): Plan-to-queue + charter-to-queue generator, shared heading parser, queue freshness validation (~336 lines, ~280 LOC)
-- [examples/sprint-queue-example.json](examples/sprint-queue-example.json): Queue file template with metadata example (56 lines)
-
-## Tests
-
-49+ tests across 2 test files:
-- [tests/test_queue.py](tests/test_queue.py): Queue tests — DAG resolution, metadata, atomic saves, status transitions
-- [tests/test_planner.py](tests/test_planner.py): Planner tests — plan-to-queue, charter-to-queue, heading parser
-
 ## Key Concepts
 
 - **Autonomy Charter:** Durable intent artifact generated at end of Phase 1. Contains goal, non-negotiables, success criteria, and governance mode. Injected into every sprint prompt and reviewer context — single source of truth for autonomous execution boundaries
@@ -77,6 +65,6 @@ Version: v4.1.0 (2026-03-26). MIT License.
 - **Breakage Scenario:** Every review finding must include a concrete scenario where the issue causes a real problem — no scenario = not a finding
 - **Compaction resilience:** Enforcement rules live in `~/.claude/rules/` (auto-loaded by Claude Code), phase docs are re-read from disk at boundaries
 - **Markers:** `<!-- updated-by-superflow:YYYY-MM-DD -->` in generated files — used to detect whether Phase 0 has run
-- **Sprint queue:** JSON file defining sprints with DAG dependencies and metadata dict (charter_file, governance_mode), used for planning reference
+- **Sprint plan:** Implementation plan defines sprints with dependencies and complexity tags, used for autonomous execution
 
 <!-- updated-by-superflow:2026-03-26 -->

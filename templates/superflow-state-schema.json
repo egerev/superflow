@@ -74,13 +74,7 @@
             "null"
           ]
         },
-        "queue_file": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "preflight": {
+"preflight": {
           "type": "object",
           "properties": {
             "stack": {

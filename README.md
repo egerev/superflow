@@ -77,9 +77,6 @@ Minimal example. Phase 0 generates the full list for your stack — [see Stage 4
 ```
 SKILL.md                        — Entry point, startup checklist
 superflow-enforcement.md        — Durable rules (→ ~/.claude/rules/)
-lib/
-  queue.py                      — Sprint queue with DAG dependency resolution
-  planner.py                    — Plan-to-queue generator
 references/
   phase0-onboarding.md          — Router (detection + stage loading)
   phase0/                       — 5 modular stage files + greenfield path
@@ -88,7 +85,6 @@ references/
   phase3-merge.md               — Sequential rebase merge
 prompts/                        — Agent templates (8 prompts)
 agents/                         — 12 agent definitions (deep/standard/fast tiers)
-tests/                          — Unit tests for queue and planner
 ```
 
 Originally inspired by [Superpowers](https://github.com/obra/superpowers) (Jesse Vincent). MIT License.
