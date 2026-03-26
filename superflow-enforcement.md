@@ -15,24 +15,20 @@ Survives context compaction. SKILL.md does not.
    6. Pass verdicts: APPROVE, ACCEPTED, PASS. Fail verdicts: REQUEST_CHANGES, NEEDS_FIXES, FAIL.
 4. **Tests with evidence.** Paste actual output before claiming done.
 5. **Re-read phase docs** at each sprint boundary via Read tool.
-6. **Dual-model reviews: specialize, don't duplicate.** Claude = Product lens (spec fit, user scenarios, data integrity). Secondary provider = Technical lens (correctness, security, architecture). Each model reviews what it's best at — no overlapping roles.
-7. **No secondary provider = two Claude agents.** Product (product-reviewer) + Technical (code-quality-reviewer). Same split, same coverage, just both Claude.
+6. **Dual-model reviews: specialize, don't duplicate.** Claude = Product lens (spec fit, user scenarios, data integrity). Secondary = Technical lens (correctness, security, architecture). No overlapping roles.
+7. **No secondary provider = two Claude agents.** Product (product-reviewer) + Technical (code-quality-reviewer).
 8. **One PR per sprint.** Execute silently after plan approval.
-9. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution was used, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode. When required: two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report. Per-sprint review misses cross-module issues.
+9. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode. When required: two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report.
 10. **Governance mode fixed for the run.** Replanner adjusts sprint scope, not governance mode. Once selected in Phase 1 Step 2, the mode persists through all sprints in the run.
 
 ## Secondary Provider Invocation
 
 ```bash
-# Codex general (product review, audit, spec review):
-$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=<LEVEL> "PROMPT_HERE" 2>&1
-
-# Codex code review (uses built-in review mode + custom prompt):
-$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=<LEVEL> --ephemeral "CUSTOM_PROMPT" 2>&1
-
-# Gemini: $TIMEOUT_CMD 600 gemini "PROMPT_HERE" 2>&1
-# Other:  $TIMEOUT_CMD 600 $SECONDARY_PROVIDER <non-interactive-flag> "PROMPT_HERE" 2>&1
-# None:   dispatch two Claude agents with split focus (Product + Technical)
+$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=<LEVEL> "PROMPT" 2>&1          # general
+$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=<LEVEL> --ephemeral "PROMPT" 2>&1  # code review
+$TIMEOUT_CMD 600 gemini "PROMPT" 2>&1                                                             # Gemini
+$TIMEOUT_CMD 600 $SECONDARY_PROVIDER <non-interactive-flag> "PROMPT" 2>&1                        # Other
+# No secondary → two Claude agents with split focus (Product + Technical)
 ```
 
 ## Reasoning Tiers
@@ -43,14 +39,14 @@ $TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=<LEVEL>
 | **standard** | `standard-spec-reviewer`, `standard-code-reviewer`, `standard-product-reviewer`, `standard-doc-writer`, `standard-implementer` (opus, effort: medium) | `-c model_reasoning_effort=high` + `prompts/codex/` | Phase 1 plan review, Phase 2 unified review, Phase 3 doc updates |
 | **fast** | `fast-implementer` (sonnet, effort: low) | `-c model_reasoning_effort=medium` | Simple implementation tasks |
 
-Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` during SKILL.md startup checklist (step 8). The Agent() tool does NOT accept an inline `effort` parameter — effort is controlled via agent definition files only.
+Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` during SKILL.md startup (step 3). Agent() does NOT accept inline `effort` — controlled via agent definition files only.
 
 ## Test & Process Discipline
 
 1. **One test process at a time.** Never run tests in parallel or retry without killing the previous run.
-2. **Always wrap tests with timeout:** `timeout 120 python3 -m unittest ...`. If timeout fires, investigate — don't retry.
-3. **Hanging test = unmocked subprocess.** Read the test, find the real call. Re-running won't fix it.
-4. **Commit fixes before external review.** Codex/secondary providers see only committed HEAD. Uncommitted fixes are invisible to them — they'll flag already-fixed issues.
+2. **Always wrap tests with timeout:** `timeout 120 <test-command>`. If timeout fires, investigate — don't retry.
+3. **Hanging test = unmocked external call.** Read the test, find the real call. Re-running won't fix it.
+4. **Commit fixes before external review.** Secondary providers see only committed HEAD — uncommitted fixes are invisible.
 5. **Exit worktree before merge.** `cd` to main repo root, remove worktree, THEN merge. CWD inside a worktree dies when branch is deleted.
 
 ## Rationalization Prevention
@@ -70,11 +66,11 @@ Before writing a spec, present Product Summary (features, problems solved, out o
 
 ## Phase 0 Gate
 
-On first run (no Superflow artifacts detected), Phase 0 is mandatory. Do not skip to Phase 1 without completing onboarding. See `references/phase0-onboarding.md`.
+On first run (no Superflow artifacts detected), Phase 0 is mandatory. Do not skip to Phase 1 without completing onboarding. `references/phase0-onboarding.md`
 
 ## Phase 3 Gate
 
-After Phase 2 Completion Report, do not merge without user saying "merge" / "мёрдж". Merge follows strict order: sequential, rebase, CI green, docs updated. See `references/phase3-merge.md`.
+After Phase 2 Completion Report, do not merge without user saying "merge" / "мёрдж". Merge follows strict order: sequential, rebase, CI green, docs updated. `references/phase3-merge.md`
 
 ## Telegram Progress
 
