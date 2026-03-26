@@ -2,6 +2,56 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.0.0] - 2026-03-26
+
+### Added — Expert Panel Brainstorming
+- **Expert panel replaces sequential Q&A**: Phase 1 Steps 4-6 dispatch 3-4 parallel expert persona agents (Product GM, Staff Engineer, UX/Workflow, Domain Expert) using `prompts/expert-panel.md`
+- **Board Memo synthesis**: orchestrator combines expert outputs into a single message with consensus, disagreements, risks, and decisions needed — replaces 3-5 sequential questions
+- **Devil's Advocate**: optional challenge of chosen direction after user reacts to Board Memo
+
+### Added — Autonomy Charter
+- **Charter artifact**: generated at end of Phase 1 (Step 12), saved to `docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`. Contains goal, non-negotiables, success criteria, governance mode
+- **Charter injection**: injected into sprint prompts (`{charter}` placeholder), replanner context, and reviewer context — single source of truth for autonomous execution boundaries
+- **Charter compliance check**: all reviewer agents (code-quality, product) and agent definitions (deep/standard code/product reviewers) now include charter compliance as a review focus area
+- **Queue metadata**: `SprintQueue.metadata` dict carries `charter_file`, `governance_mode`, `brief_file` across supervisor restarts
+
+### Added — Adaptive Governance
+- **Three governance modes**: light, standard, critical — auto-suggested in Phase 1 based on task complexity, risk, and team familiarity
+- **`_required_par_keys()`**: returns governance-aware set of required review evidence keys (light = single reviewer, standard+simple = single, else dual)
+- **`_should_run_holistic()`**: conditional holistic review based on governance mode and sprint count (always for critical, never for single-sprint light)
+- **`charter_to_queue()`**: new function in `lib/planner.py` for light mode — generates sprint queue directly from charter body without separate plan file
+
+### Added — Cross-Phase Data Flow
+- **State schema extensions**: `brief_file`, `charter_file`, `completion_data_file`, `governance_mode` fields in `.superflow-state.json`
+- **`_write_completion_data()`**: writes structured `completion-data.json` at end of Phase 2 for Phase 3 merge context
+- **Product brief injection**: brief content injected into sprint sessions and reviewer context via queue metadata
+- **Merge-update context preservation**: state writes preserve accumulated context across phase transitions
+
+### Added — Observability
+- **Popen-based execution**: `subprocess.Popen` replaces `subprocess.run` for sprint execution, enabling live heartbeat writes and progress polling during sprint runtime
+- **Intra-sprint progress**: supervisor reads `.superflow/sprint-progress.json` during polling loop, sends `notify_sprint_progress()` on step changes
+- **Progress digest**: `_send_digest()` sends periodic summary every N completed sprints (configurable via `digest_interval` parameter) with PR URLs and next sprint info
+- **Blocker escalation**: `notify_blocker_escalation()` sends prominent notification when sprint exhausts all retries (MAX_RETRIES_EXCEEDED)
+- **Merge reminder**: `notify_merge_reminder()` sent after all sprints complete to prompt Phase 3
+
+### Added — Telegram Full Coverage
+- **4 new notification methods**: `notify_sprint_progress()`, `notify_progress_digest()`, `notify_blocker_escalation()`, `notify_merge_reminder()` — total 20 event types (up from 16)
+
+### Changed
+- `lib/supervisor.py`: ~1970 lines (up from 1822) — Popen execution, charter injection, governance-aware review, digest, blocker escalation
+- `lib/queue.py`: 137 lines (up from 133) — metadata dict support in constructor, load, save
+- `lib/planner.py`: ~336 lines (up from 220) — `charter_to_queue()` for light governance mode
+- `lib/replanner.py`: 225 lines (up from 212) — reads charter from queue metadata, injects into replan prompt
+- `lib/notifications.py`: 196 lines (up from 159) — 4 new methods (progress, digest, blocker, merge_reminder)
+- `references/phase1-discovery.md`: ~374 lines (up from ~287) — expert panel, governance mode, charter generation
+- `templates/supervisor-sprint-prompt.md`: 69 lines (up from 58) — charter, governance_mode, governance_instructions placeholders
+- `templates/replan-prompt.md`: 29 lines (up from 26) — charter placeholder
+- `examples/sprint-queue-example.json`: 56 lines (up from 45) — metadata section with charter_file and governance_mode
+- `prompts/code-quality-reviewer.md`: 82 lines (up from 77) — charter compliance focus area (#8)
+- `prompts/product-reviewer.md`: 76 lines (up from 72) — charter compliance focus area (#5)
+- Agent definitions (4 files): deep/standard code/product reviewers now include charter compliance
+- Tests: 362+ (up from 333) — new tests for charter injection, Popen execution, governance tiering, digest, blocker escalation, notification methods
+
 ## [3.4.0] - 2026-03-25
 
 ### Changed — Phase 0 Modular Rewrite

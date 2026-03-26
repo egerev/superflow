@@ -46,7 +46,7 @@ superflow/
       github-actions-python.yml  — GitHub Actions for Python
   agents/                — Agent definitions with effort frontmatter (12 definitions)
   # Phase 0 creates <project>/.claude/skills/verify/SKILL.md during onboarding
-  prompts/               — Agent prompt templates (7 prompts)
+  prompts/               — Agent prompt templates (8 prompts, incl. expert-panel.md)
     codex/               — Codex-specific prompts (3 prompts)
   references/            — Phase documentation (phases 0-3)
     phase0-onboarding.md — Phase 0 router (detection, recovery matrix, stage loading)
@@ -57,7 +57,7 @@ superflow/
       stage4-setup.md    — 3 concurrent branches, strict file ownership
       stage5-completion.md — Markers, tech debt, restart
       greenfield.md      — Empty project path, G1-G6
-  tests/                 — Unit and integration tests (333 tests)
+  tests/                 — Unit and integration tests (362+ tests)
 ```
 
 ## Startup Checklist
@@ -132,7 +132,7 @@ fi
 - Phase 1: `references/phase1-discovery.md`
 - Phase 2: `references/phase2-execution.md`
 - Phase 3: `references/phase3-merge.md`
-- Prompts: `prompts/implementer.md`, `prompts/spec-reviewer.md`, `prompts/code-quality-reviewer.md`, `prompts/product-reviewer.md`
+- Prompts: `prompts/implementer.md`, `prompts/expert-panel.md`, `prompts/spec-reviewer.md`, `prompts/code-quality-reviewer.md`, `prompts/product-reviewer.md`
 - Documentation: `prompts/llms-txt-writer.md`, `prompts/claude-md-writer.md`
 - Testing: `prompts/testing-guidelines.md`
 - Agent definitions: `agents/deep-implementer.md`, `agents/standard-implementer.md`, `agents/fast-implementer.md`, `agents/deep-code-reviewer.md`, `agents/standard-code-reviewer.md`, `agents/deep-product-reviewer.md`, `agents/standard-product-reviewer.md`, `agents/deep-spec-reviewer.md`, `agents/standard-spec-reviewer.md`, `agents/deep-doc-writer.md`, `agents/standard-doc-writer.md`, `agents/deep-analyst.md`
