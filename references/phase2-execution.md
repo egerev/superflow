@@ -243,18 +243,15 @@ Codex and other external reviewers see only committed code (they extract HEAD in
 
 ## Final Holistic Review (after all sprints)
 
-After all sprint PRs created, before Completion Report. Reasoning: Deep tier.
+**Conditional — run only when any of the following apply:**
+- Total sprints ≥ 4
+- Parallel execution was used (max_parallel > 1)
+- Governance mode is "critical"
 
-### When Holistic Review is Required
+For ≤3 linear sequential sprints in light/standard mode, holistic review is skipped and the Completion Report proceeds without holistic evidence.
 
-| Condition | Required? |
-|-----------|-----------|
-| 4+ sprints | Yes |
-| Parallel execution used | Yes |
-| Governance mode = critical | Yes |
-| ≤3 linear sprints + light/standard | Skip |
-
-When required, both agents review ALL code across ALL sprints as a unified system. Same principle: Claude = Product, secondary = Technical.
+When holistic IS required: After all sprint PRs created, before Completion Report. Reasoning: Deep tier.
+Both agents review ALL code across ALL sprints as a unified system. Same principle: Claude = Product, secondary = Technical.
 
 Check Codex availability first. If available:
 a. Claude Product: `Agent(subagent_type: "deep-product-reviewer", run_in_background: true, prompt: "Review ALL sprint changes. Focus: end-to-end user flows, data integrity across sprints, spec compliance.")`
