@@ -22,7 +22,7 @@ Stage 3: "Post-merge"
   Todos:
   - "Sync local main"
   - "Prune worktrees"
-  - "Clean artifacts"
+  - "Clean artifacts and branches"
   - "Generate post-merge report"
   - "Send Telegram report"
 ```
@@ -170,6 +170,11 @@ for each PR in sprint order:
 - **Force-push after rebase is approved**: `git push --force-with-lease` is the standard post-rebase push and is explicitly permitted in Phase 3 conflict resolution
 - **Worktree cleanup**: BEFORE merge, not after. Remove worktrees for branches about to be merged, then `git worktree prune`
 - **Artifact cleanup**: after all PRs merged, remove `.par-evidence.json` from the working directory (if present). Do NOT commit removal — these are ephemeral gate artifacts.
+- **Branch cleanup**: after all PRs merged, prune stale remote refs and delete merged local branches:
+  ```bash
+  git remote prune origin
+  git branch --merged main | grep -v '^\*' | grep -v 'main$' | xargs git branch -d 2>/dev/null
+  ```
 
 ## CI Failure During Merge
 
