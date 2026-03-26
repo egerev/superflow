@@ -27,6 +27,39 @@ REQUIRED_HOLISTIC_KEYS = {"claude_product", "technical_review"}
 REQUIRED_SUMMARY_KEYS = {"status", "pr_url", "tests", "par"}
 
 
+def _required_par_keys(governance_mode, complexity):
+    """Return the set of required PAR evidence keys based on governance mode and complexity.
+
+    light + any         -> {"technical_review"}
+    standard + simple   -> {"technical_review"}
+    standard + medium   -> {"claude_product", "technical_review"}
+    standard + complex  -> {"claude_product", "technical_review"}
+    critical + any      -> {"claude_product", "technical_review"}
+    """
+    if governance_mode == "light":
+        return {"technical_review"}
+    if governance_mode == "standard" and complexity == "simple":
+        return {"technical_review"}
+    return {"claude_product", "technical_review"}
+
+
+def _should_run_holistic(total_sprints, has_parallel, governance_mode):
+    """Return True if a final holistic review should be run.
+
+    Triggers when:
+    - total_sprints >= 4, OR
+    - has_parallel is True, OR
+    - governance_mode == "critical"
+    """
+    if governance_mode == "critical":
+        return True
+    if has_parallel:
+        return True
+    if total_sprints >= 4:
+        return True
+    return False
+
+
 def _signal_handler(signum, frame):
     """Handle SIGTERM/SIGINT by setting the shutdown event."""
     _shutdown_event.set()
@@ -411,12 +444,18 @@ def _validate_evidence_verdicts(data, required_keys, context="PAR"):
     return (len(errors) == 0, errors)
 
 
-def _validate_par_evidence(wt_path, require_frontend=False):
+def _validate_par_evidence(wt_path, require_frontend=False,
+                           governance_mode=None, complexity=None):
     """Read and validate .par-evidence.json from worktree.
 
     Args:
         wt_path: Path to worktree root.
         require_frontend: If True, 'frontend_verification' key is mandatory.
+        governance_mode: Optional governance mode ('light', 'standard', 'critical').
+            When provided together with complexity, uses _required_par_keys() to
+            determine required keys instead of REQUIRED_PAR_KEYS.
+        complexity: Optional sprint complexity ('simple', 'medium', 'complex').
+            Only used when governance_mode is also provided.
 
     Returns (valid: bool, data: dict, errors: list[str]).
     """
@@ -433,7 +472,11 @@ def _validate_par_evidence(wt_path, require_frontend=False):
     if not isinstance(data, dict):
         return (False, {}, [f"PAR evidence must be a JSON object, got {type(data).__name__}"])
 
-    required = set(REQUIRED_PAR_KEYS)
+    if governance_mode is not None and complexity is not None:
+        required = _required_par_keys(governance_mode, complexity)
+    else:
+        required = set(REQUIRED_PAR_KEYS)
+
     if require_frontend:
         required.add("frontend_verification")
 
@@ -1422,7 +1465,7 @@ def _check_skip_requests(repo_root, queue, queue_path=None):
 
 
 def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
-        no_replan=False, notifier=None, repo_root=None):
+        no_replan=False, notifier=None, repo_root=None, governance_mode="standard"):
     """Main supervisor run loop.
 
     Loads the queue, runs preflight, then executes sprints.
@@ -1430,6 +1473,10 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
     execution via ThreadPoolExecutor. After each sprint (or batch), runs
     the adaptive replanner unless no_replan is set.
     Checks _shutdown_event after each sprint for graceful shutdown.
+
+    Args:
+        governance_mode: 'light', 'standard', or 'critical'. Controls whether
+            holistic review is required (via _should_run_holistic()).
     """
     from lib.queue import SprintQueue
     from lib.parallel import execute_parallel
@@ -1532,9 +1579,19 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
         )
         return
 
-    # Final Holistic Review gate (mandatory before completion report)
+    # Final Holistic Review gate (conditional on governance mode and sprint count)
     completed_count = queue.summary().get("completed", 0)
-    if completed_count > 0:
+    has_parallel = max_parallel > 1
+    total_sprints = len(queue.sprints)
+    run_holistic = _should_run_holistic(total_sprints, has_parallel, governance_mode)
+
+    if not run_holistic:
+        logger.info(
+            "Holistic review skipped (governance=%s, sprints=%d, parallel=%s)",
+            governance_mode, total_sprints, has_parallel,
+        )
+
+    if completed_count > 0 and run_holistic:
         evidence_path = os.path.join(
             os.path.dirname(checkpoints_dir),
             ".holistic-review-evidence.json",
@@ -1630,7 +1687,7 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
 
     # Generate completion report (only if there were completed sprints)
     if completed_count > 0:
-        report = generate_completion_report(queue, checkpoints_dir)
+        report = generate_completion_report(queue, checkpoints_dir, require_holistic=run_holistic)
         if report:
             print(report)
     else:
@@ -1639,52 +1696,58 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
         logger.info("No completed sprints — skipping completion report.")
 
 
-def generate_completion_report(queue, checkpoints_dir, output_path=None):
+def generate_completion_report(queue, checkpoints_dir, output_path=None, require_holistic=True):
     """Generate Demo Day style completion report from queue and checkpoints.
 
     Reads all checkpoints and formats a markdown report with per-sprint blocks
     (title, status, PR, tests, PAR) and a summary section.
 
-    GATE: Unconditionally requires .holistic-review-evidence.json in the
-    parent directory of checkpoints_dir. Raises RuntimeError if not found.
+    GATE: When require_holistic=True (default), requires .holistic-review-evidence.json
+    in the parent directory of checkpoints_dir. Raises RuntimeError if not found.
+    When require_holistic=False (holistic was correctly skipped per governance rules),
+    the gate is bypassed and the report is generated without holistic evidence.
 
     Args:
         queue: SprintQueue instance with current sprint states.
         checkpoints_dir: Path to directory containing sprint checkpoint files.
         output_path: If provided, write the report to this file path.
+        require_holistic: If True (default), holistic evidence is mandatory.
+            Pass False when holistic review was correctly skipped per governance rules.
 
     Returns:
         The report as a markdown string.
 
     Raises:
-        RuntimeError: If .holistic-review-evidence.json does not exist.
+        RuntimeError: If require_holistic=True and .holistic-review-evidence.json
+            does not exist or has invalid verdicts.
     """
-    # GATE: unconditional holistic review evidence check (existence + verdict validation)
+    # GATE: holistic review evidence check (conditional on require_holistic)
     evidence_path = os.path.join(
         os.path.dirname(checkpoints_dir),
         ".holistic-review-evidence.json",
     )
-    if not os.path.exists(evidence_path):
+    if require_holistic and not os.path.exists(evidence_path):
         raise RuntimeError(
             "Completion report blocked: .holistic-review-evidence.json not found. "
             "Run Final Holistic Review first."
         )
-    # Validate evidence contents — all reviewer verdicts must pass
-    try:
-        with open(evidence_path) as f:
-            holistic_data = json.load(f)
-        reviewers = holistic_data.get("reviewers", holistic_data)
-        valid, errors = _validate_evidence_verdicts(reviewers, REQUIRED_HOLISTIC_KEYS,
-                                                     context="Holistic")
-        if not valid:
+    # Validate evidence contents — all reviewer verdicts must pass (only when required)
+    if require_holistic and os.path.exists(evidence_path):
+        try:
+            with open(evidence_path) as f:
+                holistic_data = json.load(f)
+            reviewers = holistic_data.get("reviewers", holistic_data)
+            valid, errors = _validate_evidence_verdicts(reviewers, REQUIRED_HOLISTIC_KEYS,
+                                                         context="Holistic")
+            if not valid:
+                raise RuntimeError(
+                    "Completion report blocked: holistic review evidence has invalid verdicts. "
+                    f"Errors: {'; '.join(errors)}"
+                )
+        except (json.JSONDecodeError, IOError) as e:
             raise RuntimeError(
-                "Completion report blocked: holistic review evidence has invalid verdicts. "
-                f"Errors: {'; '.join(errors)}"
+                f"Completion report blocked: failed to parse holistic evidence: {e}"
             )
-    except (json.JSONDecodeError, IOError) as e:
-        raise RuntimeError(
-            f"Completion report blocked: failed to parse holistic evidence: {e}"
-        )
 
     from lib.checkpoint import load_all_checkpoints
 
