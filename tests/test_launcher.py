@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.launcher import (
     read_pid, launch, stop, get_status, restart, write_skip_request,
+    write_hold_request, clear_hold_request,
     LaunchResult, SupervisorStatus, _superflow_dir,
 )
 
@@ -446,6 +447,73 @@ class TestWriteSkipRequest(unittest.TestCase):
             data = json.load(f)
         self.assertEqual(data["sprint_id"], 5)
         self.assertEqual(data["reason"], "user abort")
+
+
+class TestWriteHoldRequest(unittest.TestCase):
+    """Tests for write_hold_request() — hold request file creation."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.repo_root = self.tmpdir
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_creates_hold_request_file(self):
+        """write_hold_request creates .superflow/hold-request.json."""
+        write_hold_request(self.repo_root)
+
+        hold_path = os.path.join(self.repo_root, ".superflow", "hold-request.json")
+        self.assertTrue(os.path.exists(hold_path))
+
+    def test_file_contains_valid_json_with_requested_at_and_source(self):
+        """hold-request.json contains requested_at and source fields."""
+        write_hold_request(self.repo_root)
+
+        hold_path = os.path.join(self.repo_root, ".superflow", "hold-request.json")
+        with open(hold_path) as f:
+            data = json.load(f)
+        self.assertIn("requested_at", data)
+        self.assertEqual(data["source"], "dashboard")
+
+    def test_requested_at_is_iso8601(self):
+        """requested_at value is a parseable ISO-8601 timestamp."""
+        import datetime
+        write_hold_request(self.repo_root)
+
+        hold_path = os.path.join(self.repo_root, ".superflow", "hold-request.json")
+        with open(hold_path) as f:
+            data = json.load(f)
+        # Should not raise
+        datetime.datetime.fromisoformat(data["requested_at"].replace("Z", "+00:00"))
+
+
+class TestClearHoldRequest(unittest.TestCase):
+    """Tests for clear_hold_request() — hold request file removal."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.repo_root = self.tmpdir
+        self.sf_dir = os.path.join(self.repo_root, ".superflow")
+        os.makedirs(self.sf_dir, exist_ok=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_removes_existing_hold_request_file(self):
+        """clear_hold_request removes an existing hold-request.json."""
+        hold_path = os.path.join(self.sf_dir, "hold-request.json")
+        with open(hold_path, "w") as f:
+            json.dump({"requested_at": "2026-01-01T00:00:00Z", "source": "dashboard"}, f)
+
+        clear_hold_request(self.repo_root)
+
+        self.assertFalse(os.path.exists(hold_path))
+
+    def test_no_error_when_file_absent(self):
+        """clear_hold_request does not raise when file does not exist."""
+        # Should not raise
+        clear_hold_request(self.repo_root)
 
 
 if __name__ == "__main__":

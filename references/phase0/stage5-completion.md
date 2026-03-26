@@ -160,6 +160,11 @@ Phase 1 will use the documentation and audit results from this session.
 
 TaskUpdate: "Show completion summary to user" → done
 
+If Telegram MCP available (`mcp__plugin_telegram_telegram__reply` tool is present), send at completion:
+```
+mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Phase 0 complete. Run /superflow to continue.")
+```
+
 ---
 
 ## Completion Checklist

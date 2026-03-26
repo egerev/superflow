@@ -1430,6 +1430,15 @@ def _run_replan(queue, queue_path, plan_path, repo_root, checkpoints_dir, notifi
     return changes
 
 
+def _check_hold_request(infra_dir):
+    """Check if a hold request exists in the .superflow directory.
+
+    Returns True if .superflow/hold-request.json exists, False otherwise.
+    """
+    hold_path = os.path.join(infra_dir, ".superflow", "hold-request.json")
+    return os.path.exists(hold_path)
+
+
 def _check_skip_requests(repo_root, queue, queue_path=None):
     """Check and apply skip requests from the sidecar directory.
 
@@ -1524,6 +1533,15 @@ def run(queue_path, plan_path=None, max_parallel=1, timeout=1800,
 
         # Check skip requests from sidecar
         _check_skip_requests(repo_root, queue, queue_path)
+
+        # Check hold request — pause until hold is cleared
+        if _check_hold_request(repo_root):
+            logger.info("Hold requested, pausing...")
+            while _check_hold_request(repo_root):
+                if _shutdown_event.is_set():
+                    break
+                time.sleep(10)
+            logger.info("Hold released, resuming.")
 
         runnable = queue.next_runnable(max_parallel=max_parallel)
         if not runnable:
