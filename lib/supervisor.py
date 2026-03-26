@@ -149,7 +149,7 @@ def _extract_plan_section(content: str, fragment: str) -> str:
     return "\n".join(lines[start_idx:end_idx]).strip()
 
 
-def build_prompt(sprint: dict, repo_root: str) -> str:
+def build_prompt(sprint: dict, repo_root: str, queue_metadata: dict | None = None) -> str:
     """Build the sprint execution prompt from the template.
 
     Reads template, CLAUDE.md, llms.txt, and the sprint plan section.
@@ -171,6 +171,21 @@ def build_prompt(sprint: dict, repo_root: str) -> str:
     if os.path.exists(llms_txt_path):
         with open(llms_txt_path) as f:
             llms_txt = f.read()
+
+
+    # Read charter file from queue metadata
+    charter = ""
+    meta = queue_metadata or {}
+    charter_file = meta.get("charter_file", "")
+    if charter_file:
+        charter_path = os.path.join(repo_root, charter_file)
+        if os.path.exists(charter_path):
+            with open(charter_path) as f:
+                charter = f.read()
+        else:
+            logger.warning("Charter file not found: %s", charter_path)
+    if not charter:
+        charter = "<!-- No Autonomy Charter provided for this sprint -->"
 
     # Extract plan section
     plan_file = sprint["plan_file"]
@@ -215,6 +230,7 @@ def build_prompt(sprint: dict, repo_root: str) -> str:
     result = result.replace("{sprint_plan}", sprint_plan)
     result = result.replace("{claude_md}", claude_md)
     result = result.replace("{llms_txt}", llms_txt)
+    result = result.replace("{charter}", charter)
     result = result.replace("{branch}", sprint["branch"])
     result = result.replace("{complexity}", complexity)
     result = result.replace("{implementation_tier}", implementation_tier)
@@ -988,7 +1004,7 @@ def _attempt_sprint(sprint, queue, queue_path, checkpoints_dir, repo_root,
         attempt_counter += 1
 
         # Rebuild prompt fresh each iteration to avoid unbounded growth
-        prompt = build_prompt(sprint, repo_root)
+        prompt = build_prompt(sprint, repo_root, queue_metadata=queue.metadata)
 
         # Append retry-specific instructions based on PREVIOUS iteration errors
         if last_par_errors:

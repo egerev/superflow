@@ -275,6 +275,46 @@ class TestReplanIntegration(unittest.TestCase):
         self.assertEqual(changes, [])
         mock_run.assert_not_called()
 
+
+
+    @patch("lib.replanner.subprocess.run")
+    def test_charter_injected_into_prompt(self, mock_run):
+        """Charter content should be injected into the replan prompt."""
+        # Update template to include charter placeholder
+        with open(os.path.join(self.tmpdir, "templates", "replan-prompt.md"), "w") as f:
+            f.write(
+                "Completed: {completed_sprints}\\n"
+                "Remaining: {remaining_sprints}\\n"
+                "Plan: {plan_content}\\n"
+                "Charter: {charter}\\n"
+            )
+        # Create a charter file
+        charter_dir = os.path.join(self.tmpdir, "docs")
+        os.makedirs(charter_dir, exist_ok=True)
+        with open(os.path.join(charter_dir, "charter.md"), "w") as f:
+            f.write("goal: Test goal\\nnon_negotiables:\\n  - No hacks")
+        # Set metadata on queue
+        sprints = [
+            _sprint(sid=1, status="completed"),
+            _sprint(sid=2, status="pending"),
+        ]
+        q = self._make_queue(sprints)
+        q.metadata = {"charter_file": "docs/charter.md"}
+
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout='{"changes": []}',
+            stderr="",
+        )
+
+        replan(q, self.queue_path, self.plan_path, self.tmpdir, self.cp_dir)
+
+        # Verify charter was in the prompt passed to subprocess
+        mock_run.assert_called_once()
+        prompt_input = mock_run.call_args.kwargs.get("input", "")
+        self.assertIn("goal: Test goal", prompt_input)
+        self.assertIn("No hacks", prompt_input)
+
     @patch("lib.replanner.subprocess.run")
     def test_subprocess_timeout(self, mock_run):
         """Subprocess timeout should be handled gracefully."""
