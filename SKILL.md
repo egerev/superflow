@@ -62,7 +62,9 @@ superflow/
    ```
    Telegram: check deferred tools list for `mcp__plugin_telegram_telegram__reply`. **Only mention Telegram updates if detected.** Do NOT promise Telegram without the plugin.
 4. **Check `.superflow-state.json`** for resume context:
-   - If `phase = 2` AND current branch is `main` AND no active worktrees for feat/* → state is stale from previous run. Reset: write fresh state with phase=1
+   - If `phase = 2` AND current branch is `main` AND no active worktrees for feat/*:
+     - If `context.completion_data_file` exists → Phase 2 completed, ready for Phase 3 merge
+     - Else → state is stale from previous run. Reset: write fresh state with phase=1
    - If `phase = 3` AND current branch is `main` → valid Phase 3 resume (merge in progress)
    - If `phase >= 2` AND on `feat/*` branch → valid resume, proceed with session recovery
    - If `phase = 1` → resume Phase 1 from saved stage
