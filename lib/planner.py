@@ -48,7 +48,7 @@ def _extract_sprint_section(lines: list, start_line: int, end_line: int) -> str:
     return "\n".join(lines[start_line:end_line])
 
 
-def plan_to_queue(plan_path: str, feature: str, base_branch: str = "feat") -> dict:
+def plan_to_queue(plan_path: str, feature: str, base_branch: str = "feat", state_path: str | None = None) -> dict:
     """Parse a plan file and return a queue dict matching the queue schema.
 
     Raises ValueError for:
@@ -140,7 +140,22 @@ def plan_to_queue(plan_path: str, feature: str, base_branch: str = "feat") -> di
     content_hash = f"sha256:{hashlib.sha256(content.encode()).hexdigest()}"
     now = datetime.now(timezone.utc).isoformat()
 
-    return {
+    # Read metadata from .superflow-state.json if available
+    metadata = {}
+    _state_file = state_path or ".superflow-state.json"
+    if os.path.exists(_state_file):
+        try:
+            with open(_state_file) as f:
+                state_data = json.load(f)
+            context = state_data.get("context", {})
+            for key in ("brief_file", "spec_file", "charter_file", "governance_mode"):
+                value = context.get(key)
+                if value:
+                    metadata[key] = value
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    result = {
         "feature": feature,
         "created": now,
         "generated_from": {
@@ -150,6 +165,9 @@ def plan_to_queue(plan_path: str, feature: str, base_branch: str = "feat") -> di
         },
         "sprints": sprints,
     }
+    if metadata:
+        result["metadata"] = metadata
+    return result
 
 
 def _check_no_cycles(sprints: list) -> None:

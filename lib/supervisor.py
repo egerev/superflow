@@ -187,6 +187,19 @@ def build_prompt(sprint: dict, repo_root: str, queue_metadata: dict | None = Non
     if not charter:
         charter = "<!-- No Autonomy Charter provided for this sprint -->"
 
+    # Read product brief file from queue metadata
+    product_brief = ""
+    brief_file = meta.get("brief_file", "")
+    if brief_file:
+        brief_path = os.path.join(repo_root, brief_file)
+        if os.path.exists(brief_path):
+            with open(brief_path) as f:
+                product_brief = f.read()
+        else:
+            logger.warning("Brief file not found: %s", brief_path)
+    if not product_brief:
+        product_brief = "No brief available."
+
     # Extract plan section
     plan_file = sprint["plan_file"]
     if "#" in plan_file:
@@ -231,6 +244,7 @@ def build_prompt(sprint: dict, repo_root: str, queue_metadata: dict | None = Non
     result = result.replace("{claude_md}", claude_md)
     result = result.replace("{llms_txt}", llms_txt)
     result = result.replace("{charter}", charter)
+    result = result.replace("{product_brief}", product_brief)
     result = result.replace("{branch}", sprint["branch"])
     result = result.replace("{complexity}", complexity)
     result = result.replace("{implementation_tier}", implementation_tier)
