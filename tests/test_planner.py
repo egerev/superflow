@@ -441,3 +441,86 @@ class TestSprintQueueGeneratedFrom(unittest.TestCase):
         with open(self.path) as f:
             reloaded = json.load(f)
         self.assertNotIn("generated_from", reloaded)
+
+
+class TestPlanToQueueStateMetadata(unittest.TestCase):
+    """Sprint 3: plan_to_queue() reads .superflow-state.json and populates queue metadata."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.plan_path = os.path.join(self.tmpdir, "plan.md")
+        with open(self.plan_path, "w") as f:
+            f.write("## Sprint 1: Test\nDo stuff.\n")
+        self.state_path = os.path.join(self.tmpdir, ".superflow-state.json")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir)
+
+    def _write_state(self, context: dict):
+        state = {
+            "version": 1,
+            "phase": 2,
+            "stage": "execution",
+            "stage_index": 0,
+            "last_updated": "2026-03-26T00:00:00Z",
+            "context": context,
+        }
+        with open(self.state_path, "w") as f:
+            json.dump(state, f)
+
+    def test_brief_file_stored_in_queue_metadata(self):
+        """plan_to_queue reads brief_file from state context and stores in metadata."""
+        self._write_state({"brief_file": "docs/brief.md"})
+        result = plan_to_queue(self.plan_path, "my-feature", state_path=self.state_path)
+        self.assertEqual(result.get("metadata", {}).get("brief_file"), "docs/brief.md")
+
+    def test_spec_file_stored_in_queue_metadata(self):
+        """plan_to_queue reads spec_file from state context and stores in metadata."""
+        self._write_state({"spec_file": "docs/spec.md"})
+        result = plan_to_queue(self.plan_path, "my-feature", state_path=self.state_path)
+        self.assertEqual(result.get("metadata", {}).get("spec_file"), "docs/spec.md")
+
+    def test_charter_file_stored_in_queue_metadata(self):
+        """plan_to_queue reads charter_file from state context and stores in metadata."""
+        self._write_state({"charter_file": "docs/charter.md"})
+        result = plan_to_queue(self.plan_path, "my-feature", state_path=self.state_path)
+        self.assertEqual(result.get("metadata", {}).get("charter_file"), "docs/charter.md")
+
+    def test_governance_mode_stored_in_queue_metadata(self):
+        """plan_to_queue reads governance_mode from state context and stores in metadata."""
+        self._write_state({"governance_mode": "strict"})
+        result = plan_to_queue(self.plan_path, "my-feature", state_path=self.state_path)
+        self.assertEqual(result.get("metadata", {}).get("governance_mode"), "strict")
+
+    def test_multiple_fields_all_stored(self):
+        """plan_to_queue stores all four fields when all are present in state."""
+        self._write_state({
+            "brief_file": "docs/brief.md",
+            "spec_file": "docs/spec.md",
+            "charter_file": "docs/charter.md",
+            "governance_mode": "relaxed",
+        })
+        result = plan_to_queue(self.plan_path, "my-feature", state_path=self.state_path)
+        meta = result.get("metadata", {})
+        self.assertEqual(meta.get("brief_file"), "docs/brief.md")
+        self.assertEqual(meta.get("spec_file"), "docs/spec.md")
+        self.assertEqual(meta.get("charter_file"), "docs/charter.md")
+        self.assertEqual(meta.get("governance_mode"), "relaxed")
+
+    def test_no_state_file_no_metadata(self):
+        """plan_to_queue returns no metadata key if state file does not exist."""
+        result = plan_to_queue(self.plan_path, "my-feature", state_path=self.state_path)
+        # metadata should be absent or empty
+        self.assertFalse(result.get("metadata"))
+
+    def test_state_file_missing_context_no_metadata(self):
+        """plan_to_queue returns no metadata if state has no context."""
+        state = {
+            "version": 1, "phase": 2, "stage": "execution",
+            "stage_index": 0, "last_updated": "2026-03-26T00:00:00Z",
+        }
+        with open(self.state_path, "w") as f:
+            json.dump(state, f)
+        result = plan_to_queue(self.plan_path, "my-feature", state_path=self.state_path)
+        self.assertFalse(result.get("metadata"))
