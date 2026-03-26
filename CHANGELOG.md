@@ -2,6 +2,12 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.1.3] - 2026-03-27
+
+### Fixed — Approval Gate Visibility
+- **Brief and plan displayed inline at approval gates**: Step 7 (Product Brief) and Step 12 (Plan Approval) now explicitly require full content displayed in chat before asking for approval — no more blind "go?" prompts
+- **Enforcement rule (compaction-safe)**: "Never ask for approval on content the user hasn't seen"
+
 ## [4.1.2] - 2026-03-27
 
 ### Fixed — Reasoning Tier Alignment
