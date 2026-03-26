@@ -150,5 +150,6 @@ Before finalizing, confirm each item:
 - [ ] Recent modules included (check `git log` for files added in last 30 days)
 - [ ] No stale entries (paths that were renamed or deleted)
 - [ ] File size is proportional to project complexity (no artificial cap)
+- [ ] Last line of the file is the Superflow marker: `<!-- updated-by-superflow:YYYY-MM-DD -->` (use today's date)
 </verification>
 ```

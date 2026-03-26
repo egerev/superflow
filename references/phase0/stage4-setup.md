@@ -95,7 +95,13 @@ IDEMPOTENCY: Check if each file exists before writing. If it exists, audit it. I
 
 **Quality bar:** Opus is required here. Every claim needs evidence (file path, count, command output). Wrong documentation misleads all future sessions — it is worse than no documentation.
 
-Report: 'Branch A complete — llms.txt: [created|updated, N entries], CLAUDE.md: [created|updated, X/Y paths valid]'
+**CRITICAL — Verify markers before reporting:**
+```bash
+grep -c 'updated-by-superflow' CLAUDE.md llms.txt
+```
+Both must return ≥1. If either returns 0, append the marker NOW: `echo '<!-- updated-by-superflow:YYYY-MM-DD -->' >> CLAUDE.md`
+
+Report: 'Branch A complete — llms.txt: [created|updated, N entries, marker: yes], CLAUDE.md: [created|updated, X/Y paths valid, marker: yes]'
 "
 )
 ```

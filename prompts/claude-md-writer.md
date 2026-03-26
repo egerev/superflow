@@ -144,5 +144,6 @@ Before finalizing, confirm each item:
 - [ ] Total length is under 200 lines (concise = actually consumed by the AI)
 - [ ] Each convention has evidence (grep output, file listing)
 - [ ] Known issues reference specific files, not vague areas
+- [ ] Last line of the file is the Superflow marker: `<!-- updated-by-superflow:YYYY-MM-DD -->` (use today's date)
 </verification>
 ```
