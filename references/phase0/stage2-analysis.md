@@ -23,6 +23,11 @@ Stage 2: "Analysis"
   - "Save evidence bundle to state"
 ```
 
+If Telegram MCP available (`mcp__plugin_telegram_telegram__reply` tool is present), send at stage start:
+```
+mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Analyzing your project...")
+```
+
 TaskCreate at stage start:
 ```
 TaskCreate(

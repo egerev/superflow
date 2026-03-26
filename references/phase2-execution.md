@@ -279,6 +279,23 @@ For tasks with 3+ sprints that should run unattended (overnight, multi-hour):
 
 **Key difference:** In supervisor mode, the supervisor creates the worktree and sets the working directory. The Claude session inside does NOT create its own worktree.
 
+## Telegram Commands
+
+When the supervisor is running and Telegram MCP is connected, the user can send commands from Telegram that the dashboard parses and dispatches via sidecar files.
+
+| Command | Action | Sidecar mechanism |
+|---------|--------|-------------------|
+| `/status` | Show current supervisor status (sprint, stage, heartbeat) | Read `.superflow-state.json` + `get_status()` |
+| `/skip N` | Skip sprint N | `write_skip_request(repo_root, N)` → `.superflow/skip-requests/skip-N-<ts>.json` |
+| `/hold` | Pause supervisor after current sprint completes | `write_hold_request(repo_root)` → `.superflow/hold-request.json` |
+| `/resume` | Release hold, supervisor continues | `clear_hold_request(repo_root)` → removes `.superflow/hold-request.json` |
+| `/merge` | Transition to Phase 3 (only if all sprints complete) | Read phase2-execution.md → Phase 3 |
+| `/log` | Show last 50 lines of supervisor log | `tail -50 .superflow/supervisor.log` |
+
+**Command flow:** Telegram message arrives via MCP → dashboard session parses command → writes sidecar file → supervisor picks up on next loop iteration → acknowledgment reply sent via `mcp__plugin_telegram_telegram__reply`.
+
+For `/status` and `/log`, no sidecar is needed — the dashboard reads state directly and sends the result via `mcp__plugin_telegram_telegram__reply`.
+
 ## Dashboard Mode (Auto-Launch)
 
 When the supervisor is launched automatically from Phase 1 Step 11, the Claude session enters dashboard mode. The session monitors the background supervisor and provides interactive commands.
@@ -314,6 +331,8 @@ On supervisor death (`alive=False`):
 | `stop` | `python3 -c "from lib.launcher import stop; ..."` → confirm, then SIGTERM |
 | `restart` | `python3 -c "from lib.launcher import restart; ..."` → resume + relaunch |
 | `skip N` | `python3 -c "from lib.launcher import write_skip_request; ..."` → write sidecar file |
+| `hold` | `python3 -c "from lib.launcher import write_hold_request; write_hold_request('.')"` → pause after current sprint |
+| `resume` | `python3 -c "from lib.launcher import clear_hold_request; clear_hold_request('.')"` → release hold |
 | `merge` | Only if all sprints complete. Transition to Phase 3 (read `references/phase3-merge.md`). |
 
 ### Reconnection Scenarios
