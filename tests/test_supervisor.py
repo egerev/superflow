@@ -18,6 +18,7 @@ from lib.supervisor import (
     run_holistic_review, _detect_codex, _run_single_reviewer,
     _build_holistic_prompt,
     _check_skip_requests,
+    _check_hold_request,
     VALID_PASS_VERDICTS, REQUIRED_PAR_KEYS, REQUIRED_HOLISTIC_KEYS, REQUIRED_SUMMARY_KEYS,
 )
 import lib.supervisor as supervisor_module
@@ -3536,6 +3537,43 @@ class TestHeartbeat(unittest.TestCase):
             ts = float(f.read().strip())
         # Heartbeat should be recent (within 10 seconds)
         self.assertLess(time.time() - ts, 10)
+
+
+class TestCheckHoldRequest(unittest.TestCase):
+    """Tests for _check_hold_request() — hold request detection."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.sf_dir = os.path.join(self.tmpdir, ".superflow")
+        os.makedirs(self.sf_dir, exist_ok=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+
+    def test_returns_true_when_hold_request_file_exists(self):
+        """_check_hold_request returns True when hold-request.json exists."""
+        hold_path = os.path.join(self.sf_dir, "hold-request.json")
+        with open(hold_path, "w") as f:
+            import json as _json
+            _json.dump({"requested_at": "2026-01-01T00:00:00Z", "source": "dashboard"}, f)
+
+        result = _check_hold_request(self.tmpdir)
+
+        self.assertTrue(result)
+
+    def test_returns_false_when_no_hold_request_file(self):
+        """_check_hold_request returns False when hold-request.json does not exist."""
+        result = _check_hold_request(self.tmpdir)
+
+        self.assertFalse(result)
+
+    def test_returns_false_when_superflow_dir_absent(self):
+        """_check_hold_request returns False when .superflow directory is missing."""
+        shutil.rmtree(self.sf_dir)
+
+        result = _check_hold_request(self.tmpdir)
+
+        self.assertFalse(result)
 
 
 if __name__ == "__main__":

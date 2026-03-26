@@ -120,6 +120,12 @@ If CWD is already inside a worktree, ALL subsequent commands will fail with "Pat
 
 Use the PR list and merge order from the Phase 2 Completion Report. If the report is unavailable (context compaction), enumerate open PRs: `gh pr list --state open --author @me --json number,title,headRefName --jq 'sort_by(.number)'`
 
+At merge start, if Telegram MCP available:
+```
+mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Merging N PRs...")
+```
+(Replace N with actual PR count.)
+
 PRs merge sequentially in sprint order (Sprint 1 first, then Sprint 2, etc.):
 
 ```
@@ -129,6 +135,8 @@ for each PR in sprint order:
      - If "CLOSED": warn user, skip
      - If "OPEN": proceed with merge
   1. gh pr checks <number> — verify CI green
+     - If CI failing, send Telegram (if MCP available):
+       mcp__plugin_telegram_telegram__reply(chat_id: <chat_id>, text: "PR #N CI failed, investigating...")
   2. gh pr merge <number> --rebase --delete-branch
   3. If merge fails due to conflict:
      a. git fetch origin main
@@ -139,6 +147,9 @@ for each PR in sprint order:
      f. Wait for CI, then retry step 2
   4. Verify: `gh pr view <number> --json state -q '.state'` must return "MERGED"
   5. git pull origin main  # sync local main
+  6. Send Telegram (if MCP available):
+     mcp__plugin_telegram_telegram__reply(chat_id: <chat_id>, text: "Merged PR #N (K/total)")
+     (Replace N with PR number, K with current count, total with total PR count.)
 ```
 
 ## Rules
@@ -181,4 +192,8 @@ After all PRs are merged:
 
 Sync local main: `git checkout main && git pull origin main`
 
-Send via Telegram if MCP connected (detected by availability of `mcp__plugin_telegram_telegram__reply` tool — see SKILL.md Startup Checklist).
+Send the post-merge report via Telegram if MCP connected (detected by availability of `mcp__plugin_telegram_telegram__reply` tool — see SKILL.md Startup Checklist):
+```
+mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "<post-merge report summary>")
+```
+Include merged PR numbers, CI status, test results, and branch cleanup status in the summary.

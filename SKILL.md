@@ -113,6 +113,8 @@ When supervisor is running in background (auto-launched from Phase 1 or manually
 | `stop` | Stop supervisor (SIGTERM to process group) |
 | `restart` | Stop + resume crashed sprints + relaunch |
 | `skip N` | Skip sprint N (writes sidecar request) |
+| `hold` | Pause supervisor after current sprint (writes hold-request sidecar) |
+| `resume` | Release hold, supervisor continues (removes hold-request sidecar) |
 | `merge` | Transition to Phase 3 (all sprints must be complete) |
 
 ## Timeout Helper

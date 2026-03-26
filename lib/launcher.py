@@ -318,6 +318,32 @@ def restart(repo_root, queue_path=None, plan_path=None, timeout=1800):
     return launch(queue_path, plan_path, repo_root, timeout=timeout)
 
 
+def write_hold_request(repo_root):
+    """Write a hold request for the supervisor to pause between sprints."""
+    import datetime
+    sf_dir = _superflow_dir(repo_root)
+    os.makedirs(sf_dir, exist_ok=True)
+    hold_path = os.path.join(sf_dir, "hold-request.json")
+    data = {
+        "requested_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "source": "dashboard",
+    }
+    tmp = hold_path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, hold_path)
+
+
+def clear_hold_request(repo_root):
+    """Remove the hold request file to resume supervisor execution."""
+    sf_dir = _superflow_dir(repo_root)
+    hold_path = os.path.join(sf_dir, "hold-request.json")
+    try:
+        os.unlink(hold_path)
+    except FileNotFoundError:
+        pass
+
+
 def write_skip_request(repo_root, sprint_id, reason="user requested"):
     """Write a skip request for the supervisor to pick up."""
     sf_dir = _superflow_dir(repo_root)

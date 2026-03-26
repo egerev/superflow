@@ -169,6 +169,11 @@ This brief is shared with:
 
 Keep it short (< 1 page). No frameworks — just clarity about what we're building and for whom.
 
+If Telegram MCP available, send the Product Summary + Brief as a file attachment before asking for approval:
+```
+mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Product Summary + Brief for approval:", files: ["/abs/path/to/docs/superflow/specs/YYYY-MM-DD-<topic>-brief.md"])
+```
+
 **APPROVAL GATE** (plain text — remote-friendly):
 
 > "Does this capture what we're building? Reply **'go'** to proceed to spec, **'fix ...'** to request changes, or **'restart'** to go back to brainstorming."
@@ -233,6 +238,11 @@ Present:
 - Sprint breakdown with task counts
 - Estimated PR count (1 per sprint)
 - Merge order and dependencies
+
+If Telegram MCP available, send the implementation plan as a file attachment before asking for final approval:
+```
+mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Implementation plan for final approval:", files: ["/abs/path/to/docs/superflow/plans/YYYY-MM-DD-<topic>.md"])
+```
 
 **FINAL GATE:** Ask the user: "Ready to start autonomous execution? Say 'go' when ready."
 - User says "go" / "start" / "давай" / affirmative → proceed to auto-launch flow below
