@@ -63,7 +63,7 @@ If you think any of these, STOP and do the thing:
 
 ## Product Approval Gate
 
-Before writing a spec, present Product Summary (features, problems solved, out of scope). Wait for user approval.
+Before writing a spec, present Product Summary + Brief **inline in the chat** (not just save to file). The user must SEE full content before approving — this is the last meaningful gate before autonomous execution. Same rule applies to Step 12 (plan approval): display full plan summary inline. Never ask for approval on content the user hasn't seen.
 
 ## Phase 0 Gate
 

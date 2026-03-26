@@ -259,7 +259,9 @@ Target: 2-3 round-trips total. Do not extend into a 7-question interview.
 ## Step 7: Product Approval (MERGED GATE)
 <!-- Stage 3: Product Approval, Todos 1-2 -->
 
-Present Product Summary + Product Brief together as a single document for approval.
+**CRITICAL: Display the full content inline in the chat before asking for approval.** The user must SEE what they're approving — this is the last meaningful approval gate before autonomous execution.
+
+Write the Product Summary + Product Brief, then **output it in full as a chat message** (not just save to file). Structure:
 
 ### Product Summary
 - What we're building (feature list)
@@ -274,7 +276,7 @@ Present Product Summary + Product Brief together as a single document for approv
 - **Success criteria**: How do we know this worked? (measurable outcomes)
 - **Edge cases**: What happens when things go wrong? (happy path + 2-3 failure modes)
 
-Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-brief.md`. Create `docs/superflow/specs/` if it doesn't exist.
+After displaying, save to `docs/superflow/specs/YYYY-MM-DD-<topic>-brief.md`. Create `docs/superflow/specs/` if it doesn't exist.
 
 After saving the brief, persist its path to state:
 ```bash
@@ -354,10 +356,14 @@ Both must APPROVE. If either returns NEEDS_REVISION: fix, re-review.
 ## Step 12: User Approval (FINAL GATE)
 <!-- Stage 5: Planning, Todo 4 -->
 
-Present:
-- Sprint breakdown with task counts
+**CRITICAL: Display the full plan summary inline in the chat.** The user must see what they're approving before autonomous execution begins.
+
+Present the complete plan overview:
+- Sprint breakdown with task counts and complexity tags
+- Key files touched per sprint
 - Estimated PR count (1 per sprint)
 - Merge order and dependencies
+- Total scope (number of sprints, estimated changes)
 
 If Telegram MCP available, send the implementation plan as a file attachment before asking for final approval:
 ```
