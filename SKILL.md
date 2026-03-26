@@ -8,7 +8,7 @@ description: "Use when user says 'superflow', 'суперфлоу', or asks for 
 Four phases: onboarding, discovery, execution, merge.
 
 Phase 0 (auto, first run only): Detect markers > Auto-detect + confirm > Analyze codebase (5 parallel agents) > Health report > Proposal (approval gate) > Docs + Environment (3 parallel branches) > Markers > Restart instruction
-Phase 1 (with user, 11 steps): Context > Research (parallel agents) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Approval (MERGED GATE) > Spec > Spec Review (dual-model) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE)
+Phase 1 (with user): Context > Governance mode > Research > Present findings > Expert Panel (parallel personas) > Board Memo (STOP GATE) > Direction Lock > Product Approval (MERGED GATE) > Spec > Spec Review > Plan > Plan Review > User Approval (FINAL GATE) > Autonomy Charter
 Phase 2 (autonomous, 10 steps per sprint + wave-based parallel dispatch): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers (parallel waves) > Unified Review (2 agents) > Test verification > Push+PR > Cleanup > Telegram
 Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase merge (with CI failure handling) > Post-merge report
 
@@ -46,7 +46,7 @@ superflow/
       github-actions-python.yml  — GitHub Actions for Python
   agents/                — Agent definitions with effort frontmatter (12 definitions)
   # Phase 0 creates <project>/.claude/skills/verify/SKILL.md during onboarding
-  prompts/               — Agent prompt templates (7 prompts)
+  prompts/               — Agent prompt templates (8 prompts, incl. expert-panel.md)
     codex/               — Codex-specific prompts (3 prompts)
   references/            — Phase documentation (phases 0-3)
     phase0-onboarding.md — Phase 0 router (detection, recovery matrix, stage loading)
@@ -57,7 +57,7 @@ superflow/
       stage4-setup.md    — 3 concurrent branches, strict file ownership
       stage5-completion.md — Markers, tech debt, restart
       greenfield.md      — Empty project path, G1-G6
-  tests/                 — Unit and integration tests (333 tests)
+  tests/                 — Unit and integration tests (362+ tests)
 ```
 
 ## Startup Checklist
@@ -130,7 +130,7 @@ fi
 - Phase 1: `references/phase1-discovery.md`
 - Phase 2: `references/phase2-execution.md`
 - Phase 3: `references/phase3-merge.md`
-- Prompts: `prompts/implementer.md`, `prompts/spec-reviewer.md`, `prompts/code-quality-reviewer.md`, `prompts/product-reviewer.md`
+- Prompts: `prompts/implementer.md`, `prompts/expert-panel.md`, `prompts/spec-reviewer.md`, `prompts/code-quality-reviewer.md`, `prompts/product-reviewer.md`
 - Documentation: `prompts/llms-txt-writer.md`, `prompts/claude-md-writer.md`
 - Testing: `prompts/testing-guidelines.md`
 - Agent definitions: `agents/deep-implementer.md`, `agents/standard-implementer.md`, `agents/fast-implementer.md`, `agents/deep-code-reviewer.md`, `agents/standard-code-reviewer.md`, `agents/deep-product-reviewer.md`, `agents/standard-product-reviewer.md`, `agents/deep-spec-reviewer.md`, `agents/standard-spec-reviewer.md`, `agents/deep-doc-writer.md`, `agents/standard-doc-writer.md`, `agents/deep-analyst.md`
