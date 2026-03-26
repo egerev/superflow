@@ -52,14 +52,25 @@ superflow/
    b. `git stash pop` → run tests again → compare
    c. If working tree tests fail but HEAD tests pass, the stashed changes have bugs — fix before proceeding
    d. If both pass, commit the stashed changes with appropriate message
-3. Detect secondary provider (see below)
-4. Detect timeout: `gtimeout` > `timeout` > perl fallback
-5. Detect Telegram MCP: `mcp__plugin_telegram_telegram__reply`. **Only mention Telegram updates to the user if detected.** Do NOT promise Telegram in sessions without the plugin.
-6. Detect mode: existing code = Enhancement, empty repo = Greenfield
-7. **Deploy agent definitions** (if missing): `test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null`
-8. **Run Phase 0** if first run (see detection in `references/phase0-onboarding.md`)
-9. Check `.superflow-state.json` for resume context (crash recovery, session restore)
-10. Read CLAUDE.md and project docs
+3. **Detect environment** (single bash call + context check):
+   ```bash
+   # All detection in one command
+   codex --version 2>/dev/null && echo "PROVIDER:codex" || { gemini --version 2>/dev/null && echo "PROVIDER:gemini" || { aider --version 2>/dev/null && echo "PROVIDER:aider" || echo "PROVIDER:none"; }; }
+   command -v gtimeout &>/dev/null && echo "TIMEOUT:gtimeout" || { command -v timeout &>/dev/null && echo "TIMEOUT:timeout" || echo "TIMEOUT:perl_fallback"; }
+   test -d .git && echo "MODE:enhancement" || echo "MODE:greenfield"
+   test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null
+   ```
+   Telegram: check deferred tools list for `mcp__plugin_telegram_telegram__reply`. **Only mention Telegram updates if detected.** Do NOT promise Telegram without the plugin.
+4. **Check `.superflow-state.json`** for resume context:
+   - If `phase >= 2` AND current branch is `main` AND no active worktrees for feat/* → state is stale. Reset: write fresh state with phase=1
+   - If `phase >= 2` AND on `feat/*` branch → valid resume, proceed with session recovery
+   - If `phase = 1` → resume Phase 1 from saved stage
+   - **Do NOT read old briefs, plans, or sprint queues from previous runs**
+5. **Phase 0 gate** (inline — do NOT read phase0-onboarding.md unless needed):
+   - If `.superflow-state.json` exists AND `phase > 0` → skip Phase 0
+   - If `.superflow-state.json` exists AND `phase = 0` → read `references/phase0-onboarding.md` for crash recovery
+   - If `.superflow-state.json` does not exist → read `references/phase0-onboarding.md` for full Phase 0
+6. Read project-specific docs if needed (CLAUDE.md is already loaded as project instructions — do not re-read)
 
 ## Secondary Provider Detection
 
