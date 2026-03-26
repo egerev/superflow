@@ -38,11 +38,15 @@ Stage 5: "Planning"
 
 ### State Management
 
-At the start of Phase 1, write `.superflow-state.json`:
+At the start of Phase 1, merge-update `.superflow-state.json` (preserves `context.*` from Phase 0):
 ```bash
-cat > .superflow-state.json << STATEEOF
-{"version":1,"phase":1,"phase_label":"Product Discovery","stage":"research","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
-STATEEOF
+python3 -c "
+import json, datetime, os
+p = '.superflow-state.json'
+s = json.load(open(p)) if os.path.exists(p) else {}
+s.update({'version':1,'phase':1,'phase_label':'Product Discovery','stage':'research','stage_index':0,'last_updated':datetime.datetime.now(datetime.timezone.utc).isoformat()})
+json.dump(s, open(p,'w'), indent=2)
+"
 ```
 
 After each stage transition, update via python3:
@@ -80,6 +84,8 @@ TaskUpdate(id: <task_id>, status: "completed")
 <!-- Stage 1: Research, Todo 1 -->
 
 Read CLAUDE.md, llms.txt, project docs, git history. Understand architecture, data model, existing features. Identify gaps.
+
+Read `context.tech_debt` from `.superflow-state.json` (if present). Surface: files >500 LOC, security issues, untested modules. Use these as inputs for brainstorming and spec — they represent known weaknesses from Phase 0 analysis.
 
 ## Step 2: Best Practices & Product Research
 <!-- Stage 1: Research, Todos 2-3 -->
@@ -160,6 +166,12 @@ Present Product Summary + Product Brief together as a single document for approv
 - **Edge cases**: What happens when things go wrong? (happy path + 2-3 failure modes)
 
 Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-brief.md`. Create `docs/superflow/specs/` if it doesn't exist.
+
+After saving the brief, persist its path to state:
+```bash
+python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s.setdefault('context',{})['brief_file']='docs/superflow/specs/YYYY-MM-DD-<topic>-brief.md'; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
+```
+Replace `YYYY-MM-DD-<topic>` with the actual filename used above.
 
 This brief is shared with:
 1. Spec writers (basis for technical spec)

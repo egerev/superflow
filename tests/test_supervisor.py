@@ -19,6 +19,7 @@ from lib.supervisor import (
     _build_holistic_prompt,
     _check_skip_requests,
     VALID_PASS_VERDICTS, REQUIRED_PAR_KEYS, REQUIRED_HOLISTIC_KEYS, REQUIRED_SUMMARY_KEYS,
+    _write_completion_data,
 )
 import lib.supervisor as supervisor_module
 from lib.queue import SprintQueue
@@ -3018,6 +3019,136 @@ class TestWriteState(unittest.TestCase):
             state = json.load(f)
         self.assertEqual(state["stage"], "implementation")
         self.assertEqual(state["stage_index"], 1)
+
+
+
+class TestWriteStatePreservesContext(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+    def _make_queue(self, sprints=None):
+        if sprints is None:
+            sprints = [_sprint(1, status="completed"), _sprint(2, status="in_progress")]
+        return SprintQueue("test", "2026-01-01", sprints)
+    def _write_existing_state(self, extra):
+        state_path = os.path.join(self.tmpdir, ".superflow-state.json")
+        base = {"version": 1, "phase": 1, "sprint": None, "stage": "idle",
+                "stage_index": 0, "tasks_done": [], "tasks_total": 0,
+                "last_updated": "2026-01-01T00:00:00Z"}
+        base.update(extra)
+        with open(state_path, "w") as f:
+            json.dump(base, f)
+    def test_context_preserved_on_update(self):
+        self._write_existing_state({"context": {"brief_file": "docs/brief.md", "charter_file": "docs/charter.md"}})
+        q = self._make_queue()
+        _write_state(self.tmpdir, phase=2, sprint=1, stage="setup", queue=q)
+        with open(os.path.join(self.tmpdir, ".superflow-state.json")) as f:
+            state = json.load(f)
+        self.assertEqual(state["context"]["brief_file"], "docs/brief.md")
+        self.assertEqual(state["context"]["charter_file"], "docs/charter.md")
+    def test_projection_fields_updated(self):
+        self._write_existing_state({"context": {"governance_mode": "standard"}})
+        q = self._make_queue()
+        _write_state(self.tmpdir, phase=2, sprint=1, stage="implementation", queue=q)
+        with open(os.path.join(self.tmpdir, ".superflow-state.json")) as f:
+            state = json.load(f)
+        self.assertEqual(state["phase"], 2)
+        self.assertEqual(state["stage"], "implementation")
+        self.assertEqual(state["context"]["governance_mode"], "standard")
+    def test_no_existing_file_works(self):
+        q = self._make_queue()
+        _write_state(self.tmpdir, phase=2, sprint=1, stage="setup", queue=q)
+        with open(os.path.join(self.tmpdir, ".superflow-state.json")) as f:
+            state = json.load(f)
+        self.assertEqual(state["phase"], 2)
+    def test_corrupt_existing_file_ignored(self):
+        state_path = os.path.join(self.tmpdir, ".superflow-state.json")
+        with open(state_path, "w") as f:
+            f.write("not valid json")
+        q = self._make_queue()
+        _write_state(self.tmpdir, phase=2, sprint=1, stage="setup", queue=q)
+        with open(state_path) as f:
+            state = json.load(f)
+        self.assertEqual(state["phase"], 2)
+
+
+class TestWriteCompletionData(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.cp_dir = os.path.join(self.tmpdir, "checkpoints")
+        os.makedirs(self.cp_dir, exist_ok=True)
+        self._write_holistic_evidence()
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir)
+    def _write_holistic_evidence(self, data=None):
+        evidence_path = os.path.join(self.tmpdir, ".holistic-review-evidence.json")
+        evidence = data or {"timestamp": "2026-01-01T00:00:00Z", "claude_product": "APPROVE", "technical_review": "APPROVE", "provider": "split-focus"}
+        with open(evidence_path, "w") as f:
+            json.dump(evidence, f)
+    def _make_queue(self, sprints=None):
+        if sprints is None:
+            sprints = [_sprint(sid=1, title="Auth", status="completed"), _sprint(sid=2, title="API", status="completed")]
+        return SprintQueue("my-feature", "2026-01-01T00:00:00Z", sprints)
+    def _save_cp(self, sid, extra=None):
+        data = {"sprint_id": sid, "status": "completed", "summary": {}}
+        if extra: data.update(extra)
+        save_checkpoint(self.cp_dir, sid, data)
+    def test_returns_output_path(self):
+        q = self._make_queue()
+        result = _write_completion_data(q, self.cp_dir, self.tmpdir)
+        self.assertIsNotNone(result)
+        self.assertTrue(result.endswith("completion-data.json"))
+    def test_creates_file_at_expected_path(self):
+        q = self._make_queue()
+        _write_completion_data(q, self.cp_dir, self.tmpdir)
+        expected = os.path.join(self.tmpdir, "docs", "superflow", "completion-data.json")
+        self.assertTrue(os.path.exists(expected))
+    def test_json_structure(self):
+        q = self._make_queue()
+        result_path = _write_completion_data(q, self.cp_dir, self.tmpdir)
+        with open(result_path) as f: data = json.load(f)
+        self.assertEqual(data["feature"], "my-feature")
+        self.assertIn("generated_at", data)
+        self.assertIn("sprints", data)
+        self.assertIn("holistic_verdict", data)
+        self.assertEqual(len(data["sprints"]), 2)
+    def test_sprint_fields(self):
+        self._save_cp(1, {"summary": {"tests": {"passed": 10, "failed": 0}, "par": {"claude_product": "APPROVE", "technical_review": "APPROVE", "provider": "split-focus"}}})
+        q = self._make_queue()
+        q.sprints[0]["pr"] = "https://github.com/org/repo/pull/42"
+        result_path = _write_completion_data(q, self.cp_dir, self.tmpdir)
+        with open(result_path) as f: data = json.load(f)
+        s1 = data["sprints"][0]
+        self.assertEqual(s1["id"], 1)
+        self.assertEqual(s1["title"], "Auth")
+        self.assertEqual(s1["status"], "completed")
+        self.assertEqual(s1["pr"], "https://github.com/org/repo/pull/42")
+        self.assertIn("tests", s1)
+        self.assertIn("par", s1)
+    def test_holistic_verdict_populated(self):
+        q = self._make_queue()
+        result_path = _write_completion_data(q, self.cp_dir, self.tmpdir)
+        with open(result_path) as f: data = json.load(f)
+        self.assertEqual(data["holistic_verdict"]["claude_product"], "APPROVE")
+    def test_merges_context_into_state(self):
+        state_path = os.path.join(self.tmpdir, ".superflow-state.json")
+        with open(state_path, "w") as f:
+            json.dump({"version": 1, "phase": 2, "context": {}}, f)
+        q = self._make_queue()
+        result_path = _write_completion_data(q, self.cp_dir, self.tmpdir)
+        with open(state_path) as f: state = json.load(f)
+        self.assertEqual(state["context"]["completion_data_file"], result_path)
+    def test_missing_holistic_evidence_returns_none(self):
+        os.remove(os.path.join(self.tmpdir, ".holistic-review-evidence.json"))
+        q = self._make_queue()
+        result = _write_completion_data(q, self.cp_dir, self.tmpdir)
+        self.assertIsNone(result)
+    def test_atomic_write_no_tmp_left(self):
+        q = self._make_queue()
+        _write_completion_data(q, self.cp_dir, self.tmpdir)
+        expected = os.path.join(self.tmpdir, "docs", "superflow", "completion-data.json")
+        self.assertFalse(os.path.exists(expected + ".tmp"))
 
 
 class TestVerifySteps(unittest.TestCase):
