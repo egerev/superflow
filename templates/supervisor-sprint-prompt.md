@@ -24,6 +24,11 @@ You are executing Sprint {sprint_id}: {sprint_title} of the Superflow workflow a
 - **Implementation model:** {impl_model}
 - **Implementation effort:** {impl_effort}
 
+## Governance Mode
+{governance_mode}
+
+{governance_instructions}
+
 ## Pre-verified
 - {baseline_status}
 

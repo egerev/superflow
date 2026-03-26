@@ -170,6 +170,122 @@ def plan_to_queue(plan_path: str, feature: str, base_branch: str = "feat", state
     return result
 
 
+def charter_to_queue(charter_text: str, feature: str, base_branch: str = "feat") -> dict:
+    """Parse sprint breakdown from an Autonomy Charter body (light-mode path).
+
+    Expects headings like: ## Sprint N: Title [complexity: X]
+    The bracket complexity tag is optional; defaults to 'medium'.
+    Dependencies use the same format as plan files: **Dependencies:** Sprint M
+
+    Raises ValueError if no sprint headings found or circular dependencies detected.
+    """
+    # Strip YAML frontmatter if present
+    body = charter_text
+    if body.startswith("---"):
+        end = body.find("---", 3)
+        if end != -1:
+            body = body[end + 3:].strip()
+
+    # Parse sprint headings — supports bracket complexity tag
+    bracket_re = re.compile(
+        r'^##\s+Sprint\s+(\d+)\s*(?:[:—\-]\s*(.+?))\s*(?:\[complexity:\s*(\w+)\])?\s*$',
+        re.MULTILINE,
+    )
+    lines = body.split('\n')
+    headings = []
+
+    for match in bracket_re.finditer(body):
+        sprint_id = int(match.group(1))
+        title = (match.group(2) or f"Sprint {sprint_id}").strip()
+        complexity = (match.group(3) or "medium").lower()
+        start_line = body[:match.start()].count('\n')
+        headings.append({
+            "id": sprint_id,
+            "title": title,
+            "start_line": start_line,
+            "end_line": None,
+            "complexity": complexity,
+        })
+
+    # Also try headings without complexity bracket (fallback)
+    if not headings:
+        plain_headings = _parse_sprint_headings(body)
+        for h in plain_headings:
+            h["complexity"] = "medium"
+        headings = plain_headings
+
+    if not headings:
+        raise ValueError("No sprint headings found in charter body")
+
+    # Fill end_line
+    for i, h in enumerate(headings):
+        if i + 1 < len(headings):
+            h["end_line"] = headings[i + 1]["start_line"]
+        else:
+            h["end_line"] = len(lines)
+
+    # Check for duplicate IDs
+    ids = [h["id"] for h in headings]
+    seen = set()
+    for sid in ids:
+        if sid in seen:
+            raise ValueError(f"Duplicate sprint ID: {sid}")
+        seen.add(sid)
+
+    id_set = set(ids)
+
+    _depends_re = re.compile(
+        r'(?:depends.on|Dependencies):\s*\*?\*?\s*(?:Sprint\s+)?(\d+(?:\s*,\s*(?:Sprint\s+)?\d+)*)',
+        re.IGNORECASE,
+    )
+
+    sprints = []
+    for h in headings:
+        section = _extract_sprint_section(lines, h["start_line"], h["end_line"])
+
+        # Extract depends_on
+        dm = _depends_re.search(section)
+        if dm:
+            raw = dm.group(1)
+            parts = re.split(r'\s*,\s*', raw)
+            depends_on = []
+            for part in parts:
+                part = re.sub(r'(?i)^sprint\s+', '', part.strip())
+                if part:
+                    depends_on.append(int(part))
+        else:
+            depends_on = []
+
+        # Validate dependency references exist
+        for dep in depends_on:
+            if dep not in id_set:
+                raise ValueError(
+                    f"Sprint {h['id']} depends on Sprint {dep}, which does not exist"
+                )
+
+        sprints.append({
+            "id": h["id"],
+            "title": h["title"],
+            "status": "pending",
+            "complexity": h["complexity"],
+            "branch": f"{base_branch}/{feature}-sprint-{h['id']}",
+            "depends_on": depends_on,
+            "pr": None,
+            "retries": 0,
+            "max_retries": 2,
+            "error_log": None,
+        })
+
+    _check_no_cycles(sprints)
+
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        "feature": feature,
+        "created": now,
+        "sprints": sprints,
+    }
+
+
 def _check_no_cycles(sprints: list) -> None:
     """Kahn's algorithm topological sort — raises ValueError on cycle."""
     graph = {s["id"]: list(s["depends_on"]) for s in sprints}

@@ -8,8 +8,9 @@ Phase 1 has 5 stages. Use TaskCreate at each stage start, TaskUpdate as todos co
 Stage 1: "Research"
   Todos:
   - "Read project context (CLAUDE.md, llms.txt, docs)"
-  - "Dispatch best practices research"
-  - "Dispatch product expert research"
+  - "Governance mode selection"
+  - "Dispatch best practices research (skip in light mode)"
+  - "Dispatch product expert research (skip in light mode)"
   - "Present research findings"
 
 Stage 2: "Brainstorming"
@@ -88,8 +89,66 @@ Read CLAUDE.md, llms.txt, project docs, git history. Understand architecture, da
 
 Read `context.tech_debt` from `.superflow-state.json` (if present). Surface: files >500 LOC, security issues, untested modules. Use these as inputs for brainstorming and spec — they represent known weaknesses from Phase 0 analysis.
 
-## Step 2: Best Practices & Product Research
-<!-- Stage 1: Research, Todos 2-3 -->
+## Step 2: Governance Mode Selection
+<!-- Stage 1: Research, Todo 2 -->
+
+Assess the task along three dimensions and auto-suggest a governance mode:
+
+| Dimension | Low | Medium | High |
+|-----------|-----|--------|------|
+| **Novelty** | Bug fix, config change, well-understood pattern | New feature using existing patterns | New architecture, unfamiliar domain |
+| **Blast radius** | 1-2 files | 3-10 files | 10+ files, cross-module |
+| **Ambiguity** | Clear requirements, obvious solution | Some open questions | Significant unknowns, multiple valid approaches |
+
+**Scoring:**
+- All low → **light**
+- Any high → **critical**
+- Otherwise → **standard**
+
+Present the assessment with reasoning:
+> "This looks like a **[light/standard/critical]** task because [reasoning based on dimensions]. Use this mode? (yes / override to light/standard/critical)"
+
+Wait for confirmation. Store the selected mode in `.superflow-state.json`:
+```bash
+python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s.setdefault('context',{})['governance_mode']='MODE'; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
+```
+Replace `MODE` with `light`, `standard`, or `critical`.
+
+### Mode Behavior Reference
+
+| Aspect | Light | Standard | Critical |
+|--------|-------|----------|----------|
+| **Research agents** | Skip (Step 3) | Full (2 parallel agents) | Full + security research agent |
+| **Brainstorming** | 1 round-trip max | 3-5 questions | 3-5 questions + extended debate round |
+| **Spec** | Inline in charter (brief + spec + plan in one doc) | Separate spec file | Separate spec + threat model section |
+| **Spec review** | Skip | Dual-model (Product + Technical) | Dual-model (Product + Technical) |
+| **Plan review** | Single Claude reviewer | Dual-model (Product + Technical) | Deep-tier dual-model review |
+| **Charter** | Includes inline spec + plan (generated via `charter_to_queue()`) | Separate file, references spec/plan | Separate file, references spec/plan |
+
+### Conditional Flow by Mode
+
+- **Light mode**: Skip Step 3 (research) → 1 round-trip brainstorm (Step 5) → Product Approval (Step 7) → Write inline charter with brief+spec+plan (Step 13) → Skip spec review (Step 9) → Single Claude plan reviewer (Step 11) → User Approval (Step 12) → Generate queue via `charter_to_queue()` from charter body
+- **Standard mode**: Full flow as documented (no changes)
+- **Critical mode**: Full flow + dispatch security research agent in Step 3 + add threat model section to spec in Step 8 + use deep-tier reviewers in Steps 9 and 11
+
+### Light Mode Launch Path
+
+In light mode, the charter body contains the sprint breakdown directly. Instead of `plan_to_queue()` (which reads from a plan file), use `charter_to_queue()` from `lib/planner.py`:
+
+```python
+from lib.planner import charter_to_queue, save_queue
+with open(charter_path) as f:
+    charter_text = f.read()
+q = charter_to_queue(charter_text, 'FEATURE')
+save_queue(q, 'docs/superflow/sprint-queue.json')
+```
+
+Charter sprint headings use the format: `## Sprint N: Title [complexity: X]`
+
+## Step 3: Best Practices & Product Research
+<!-- Stage 1: Research, Todos 3-4 -->
+
+**Skip this step in light mode** — proceed directly to Step 5 (Brainstorming).
 
 Dispatch **parallel background research** using the Agent tool (`run_in_background: true` for each):
 
@@ -112,12 +171,12 @@ Wait for all background tasks to complete. If research yields insufficient resul
 
 **NOT optional.** Synthesize findings before proceeding.
 
-## Step 3: Present Research Findings
-<!-- Stage 1: Research, Todo 4 -->
+## Step 4: Present Research Findings
+<!-- Stage 1: Research, Todo 5 -->
 
 Present a brief summary of research results to the user before brainstorming. Include product expert proposals. This ensures the user sees what was discovered and can steer the conversation.
 
-## Step 4: Dispatch Expert Panel
+## Step 5: Multi-Expert Brainstorming
 <!-- Stage 2: Brainstorming, Todo 1 -->
 
 Dispatch 3-4 parallel background agents, each with a distinct expert persona. Use the prompt template from `prompts/expert-panel.md`, filling in `{project_context}` (CLAUDE.md + llms.txt content), `{tech_debt}` (Phase 0 tech_debt findings), `{user_problem}` (user's initial description), and `{research}` (Step 2-3 findings).
@@ -246,7 +305,7 @@ Keep it short (< 1 page). No frameworks — just clarity about what we're buildi
 
 - "go" / "approve" → proceed to Step 8 (Spec)
 - "fix ..." / "changes" → ask what to change, update, re-present
-- "restart" → go back to Step 4 (expert panel)
+- "restart" → go back to Step 5 (brainstorming)
 
 ## Step 8: Spec Document
 <!-- Stage 4: Specification, Todo 1 -->
@@ -312,7 +371,7 @@ Present:
 ## Step 13: Generate Autonomy Charter
 <!-- Stage 5: Planning, Todo 5 -->
 
-After user approval and before auto-launch, generate an Autonomy Charter from the brief, spec, and plan:
+After user approval and before auto-launch, generate an Autonomy Charter from the brief, spec, and plan. Include the selected governance mode from Step 2:
 
 **Charter structure** (YAML frontmatter + Markdown body):
 
@@ -325,7 +384,7 @@ non_negotiables:
 success_criteria:
   - "Measurable outcome 1 (from brief success criteria)"
   - "Measurable outcome 2"
-governance_mode: "supervised"
+governance_mode: "light|standard|critical"  # from Step 2 selection
 ---
 ```
 

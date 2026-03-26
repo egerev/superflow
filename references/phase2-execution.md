@@ -182,14 +182,23 @@ Sprint complexity drives model selection. Tag each sprint in the plan:
 | medium | standard-implementer | sonnet | medium | 2-5 files, some new logic. Default if untagged. |
 | complex | deep-implementer | opus | high | 5+ files, new architecture, security-sensitive |
 
-## Review Optimization (Unified Review)
+## Review Tiering by Governance Mode
 
-All sprints receive the full 2-agent unified review. The agent count is always 2 (Product + Technical).
-What changes by sprint complexity is the SCOPE each reviewer examines:
+Reviewer count depends on governance mode and sprint complexity:
 
+| Governance | Complexity | Reviewers |
+|-----------|-----------|-----------|
+| light | any | 1 (Technical only) |
+| standard | simple | 1 (Technical only) |
+| standard | medium/complex | 2 (Product + Technical) |
+| critical | any | 2 (Product + Technical) |
+
+**Review scope** by sprint complexity (applies regardless of governance mode):
 - Simple (1-2 files, <50 lines): reviewers check only changed files + their tests
 - Medium (2-5 files): reviewers check changed files + integration points with unchanged code
 - Complex (5+ files): reviewers check changed files + cross-module impact + architectural fit
+
+For light-mode sprints, record PAR as: `{"claude_product":"SKIPPED","technical_review":"APPROVE","provider":"...","governance":"light"}`
 
 ## No Secondary Provider
 
@@ -235,7 +244,17 @@ Codex and other external reviewers see only committed code (they extract HEAD in
 ## Final Holistic Review (after all sprints)
 
 After all sprint PRs created, before Completion Report. Reasoning: Deep tier.
-Both agents review ALL code across ALL sprints as a unified system. Same principle: Claude = Product, secondary = Technical.
+
+### When Holistic Review is Required
+
+| Condition | Required? |
+|-----------|-----------|
+| 4+ sprints | Yes |
+| Parallel execution used | Yes |
+| Governance mode = critical | Yes |
+| ≤3 linear sprints + light/standard | Skip |
+
+When required, both agents review ALL code across ALL sprints as a unified system. Same principle: Claude = Product, secondary = Technical.
 
 Check Codex availability first. If available:
 a. Claude Product: `Agent(subagent_type: "deep-product-reviewer", run_in_background: true, prompt: "Review ALL sprint changes. Focus: end-to-end user flows, data integrity across sprints, spec compliance.")`
