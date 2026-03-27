@@ -158,6 +158,15 @@ Phase 1 will use the documentation and audit results from this session.
 **If nothing was configured** (user declined everything):
 > "Phase 0 complete! Run `/clear` then `/superflow` to start Phase 1."
 
+**Commit onboarding results to current branch:**
+Phase 0 artifacts (CLAUDE.md, llms.txt, health report, permissions, hooks) must be committed so other sessions/branches can detect that onboarding was completed. Ask the user:
+
+> "Phase 0 created several files. Commit them now so other sessions see the onboarding? (yes/no)"
+
+If yes: `git add CLAUDE.md llms.txt docs/superflow/project-health-report.md .claude/ && git commit -m "chore: superflow Phase 0 onboarding"`. If on a feature branch, note: "These will reach main after your next merge/PR."
+
+If on main directly: commit and push so all future branches inherit the markers.
+
 TaskUpdate: "Show completion summary to user" → done
 
 If Telegram MCP available (`mcp__plugin_telegram_telegram__reply` tool is present), send at completion:
