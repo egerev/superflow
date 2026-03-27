@@ -52,8 +52,10 @@ STATEEOF
 Run ALL detection commands simultaneously via Bash (no sequential waits):
 
 ```bash
-# Markers
+# Markers (check local first, then main branch as fallback)
 grep -l "updated-by-superflow\|superflow:onboarded" CLAUDE.md llms.txt 2>/dev/null
+git show main:CLAUDE.md 2>/dev/null | grep -q "updated-by-superflow\|superflow:onboarded" && echo "MARKER_ON_MAIN:CLAUDE.md"
+git show main:llms.txt 2>/dev/null | grep -q "updated-by-superflow\|superflow:onboarded" && echo "MARKER_ON_MAIN:llms.txt"
 
 # File count (tracked, excluding config/infra only)
 git ls-files | grep -v -E '^\\.gitignore$|^\\.github/' | wc -l | tr -d ' '

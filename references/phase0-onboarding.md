@@ -38,8 +38,16 @@ If `.superflow-state.json` exists AND `phase=0` AND `stage_index < 5`:
 
 **Priority 2: Marker-based detection** (check in order, stop at first match):
 
-1. `CLAUDE.md` does NOT contain either marker → **full Phase 0** from Stage 1
-2. `llms.txt` does NOT contain either marker → **partial**: Stage 1 (repopulate preflight) → write `context.approval = {mode: "skip", items: []}` → Stage 4 Branch A only (create llms.txt)
+Check markers on the current branch first. **If not found AND current branch ≠ main, also check main:**
+```bash
+# Check current branch
+grep -q "updated-by-superflow\|superflow:onboarded" CLAUDE.md 2>/dev/null && echo "LOCAL" || \
+  git show main:CLAUDE.md 2>/dev/null | grep -q "updated-by-superflow\|superflow:onboarded" && echo "ON_MAIN"
+```
+If markers exist on main but not locally → the current branch was created before Phase 0 completed. **Skip Phase 0** (markers are in main, they'll arrive after merge/rebase).
+
+1. `CLAUDE.md` does NOT contain either marker (neither locally nor on main) → **full Phase 0** from Stage 1
+2. `llms.txt` does NOT contain either marker (neither locally nor on main) → **partial**: Stage 1 (repopulate preflight) → write `context.approval = {mode: "skip", items: []}` → Stage 4 Branch A only (create llms.txt)
 3. `docs/superflow/project-health-report.md` does NOT exist → **partial**: Stage 1 → Stage 2 → Stage 3 → Stage 5
 4. All present → **skip Phase 0**, proceed to Phase 1
 
