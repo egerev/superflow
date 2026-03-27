@@ -85,3 +85,4 @@ SKILL.md (entry point, ~120 lines)
 - Permissions JSON: single-sourced in `references/phase0/stage4-setup.md` (Branch B); `README.md` has a short example with a link to the canonical source
 - Greenfield templates (nextjs.md, python.md) provide config files but not source file contents — LLM generates those
 - **Phase 3 post-compaction merge regression**: context compaction during Phase 3 merge loop can cause agent to fall back to local `git merge` instead of `gh pr merge --rebase --delete-branch`, leaving GitHub PRs open and creating non-linear history. Mitigated by adding merge method rule to `superflow-enforcement.md` (survives compaction). Full fix: re-read `phase3-merge.md` before each PR merge, not just at stage start.
+<!-- updated-by-superflow:2026-03-27 -->
