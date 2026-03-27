@@ -75,7 +75,7 @@ superflow/
    - If `.superflow-state.json` does not exist → **check main branch for markers before triggering Phase 0**:
      ```bash
      grep -q "updated-by-superflow\|superflow:onboarded" CLAUDE.md 2>/dev/null && echo "MARKER_LOCAL" || \
-       { git show main:CLAUDE.md 2>/dev/null | grep -q "updated-by-superflow\|superflow:onboarded" && echo "MARKER_ON_MAIN"; } || echo "NO_MARKER"
+       (git show main:CLAUDE.md 2>/dev/null | grep -q "updated-by-superflow\|superflow:onboarded" && echo "MARKER_ON_MAIN" || echo "NO_MARKER")
      ```
      - `MARKER_LOCAL` or `MARKER_ON_MAIN` → skip Phase 0, write fresh state with phase=1
      - `NO_MARKER` → read `references/phase0-onboarding.md` for full Phase 0
