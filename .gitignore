@@ -4,7 +4,7 @@
 .par-evidence.json
 .DS_Store
 *.swp
-docs/superflow/checkpoints/
+docs/superflow/
 __pycache__/
 *.pyc
 .claude/
