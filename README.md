@@ -50,20 +50,24 @@ Phase 0 runs automatically on first `/superflow` — sets up permissions, hooks,
 
 ### Permissions
 
-Add to `~/.claude/settings.json` for autonomous execution without `--dangerously-skip-permissions`:
+Phase 0 auto-generates the full permission list for your stack. To set up manually, add to `~/.claude/settings.json`:
 
 ```json
 {
   "permissions": {
     "allow": [
-      "Bash(git *)", "Bash(gh *)",
-      "Bash(npm *)", "Bash(codex *)", "Bash(timeout *)"
+      "Bash(git *)", "Bash(gh *)", "Bash(ls *)", "Bash(cat *)",
+      "Bash(find *)", "Bash(jq *)", "Bash(sed *)", "Bash(awk *)",
+      "Bash(mkdir *)", "Bash(cp *)", "Bash(mv *)",
+      "Bash(codex *)", "Bash(timeout *)", "Bash(gtimeout *)",
+      "Bash(python3 *)", "Bash(node *)",
+      "Bash(npm *)", "Bash(pip *)", "Bash(pytest *)", "Bash(ruff *)"
     ]
   }
 }
 ```
 
-Minimal example. Phase 0 generates the full list for your stack — [see Stage 4 Setup](references/phase0/stage4-setup.md).
+Core permissions (git, gh, shell utils, codex, timeout) are always needed. Stack-specific ones (npm/pip/pytest/ruff/bundle/cargo/docker) are added based on detected stack — [see Stage 4 Setup](references/phase0/stage4-setup.md).
 
 ## Requirements
 
