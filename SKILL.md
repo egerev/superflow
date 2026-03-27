@@ -79,7 +79,18 @@ superflow/
      ```
      - `MARKER_LOCAL` or `MARKER_ON_MAIN` → skip Phase 0, write fresh state with phase=1
      - `NO_MARKER` → read `references/phase0-onboarding.md` for full Phase 0
-6. Read project-specific docs if needed (CLAUDE.md is already loaded as project instructions — do not re-read)
+6. **Display startup banner** — output immediately after detection, before any phase routing:
+   ```
+   ╔════════════════════════════════╗
+   ║  ⚡ SUPERFLOW v4.2.0          ║
+   ╚════════════════════════════════╝
+   ```
+   Then list detected status using checkmarks/warnings:
+   - `✅` / `—` for: secondary provider (name + version), timeout command, Telegram
+   - `⚠️` for: missing state file, Phase 0 required, stale state detected
+   - Final line: `Mode: enhancement/greenfield | Phase: N | Governance: mode/—`
+   Keep it compact (banner + 4-6 status lines). Do not repeat detection details already shown.
+7. Read project-specific docs if needed (CLAUDE.md is already loaded as project instructions — do not re-read)
 
 ## Secondary Provider Detection
 
