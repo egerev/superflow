@@ -405,9 +405,11 @@ governance_mode: "light|standard|critical"  # from Step 2 selection
 
 Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`. Update `.superflow-state.json` context with `charter_file` path.
 
+**CRITICAL: Display the charter inline in the chat.** This is the final summary of everything decided in Phase 1 — the user must see exactly what constraints will govern autonomous execution. Show the full charter (goal, non-negotiables, success criteria, governance mode, and body notes).
+
 The charter is injected into every sprint prompt and reviewer context — serving as the single source of truth for what the autonomous executor is and isn’t allowed to do.
 
-After Phase 1 the context window is heavily loaded with brainstorming history, review findings, and intermediate drafts. Phase 2 is a different mode (autonomous manager) and benefits from a clean start.
+After displaying the charter and confirming with the user, transition to Phase 2. The context window is heavily loaded with brainstorming history, review findings, and intermediate drafts. Phase 2 is a different mode (autonomous manager) and benefits from a clean start.
 
 1. Update `.superflow-state.json` to phase=2, verify plan/spec/charter file paths in context
 2. Tell the user:
