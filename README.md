@@ -41,9 +41,16 @@ Agent: [Phase 3: docs → merge → cleanup]
 
 ## Install
 
+**Option A — Git (recommended, auto-updates with `git pull`):**
 ```bash
 git clone https://github.com/egerev/superflow.git
 ln -s $(pwd)/superflow ~/.claude/skills/superflow
+```
+
+**Option B — [Download .skill package](https://github.com/egerev/superflow/releases/latest/download/superflow.skill):**
+```bash
+curl -LO https://github.com/egerev/superflow/releases/latest/download/superflow.skill
+unzip superflow.skill -d ~/.claude/skills/
 ```
 
 Phase 0 runs automatically on first `/superflow` — sets up permissions, hooks, and documentation.
