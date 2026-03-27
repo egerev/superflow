@@ -81,10 +81,13 @@ superflow/
      - `NO_MARKER` → read `references/phase0-onboarding.md` for full Phase 0
 6. **Display startup banner** — output immediately after detection, before any phase routing:
    ```
-   ╔════════════════════════════════╗
-   ║  ⚡ SUPERFLOW v4.2.0          ║
-   ╚════════════════════════════════╝
+   ╔═══════════════════════════════════╗
+   ║  SUPERFLOW v4.2.0                ║
+   ║  Autonomous Dev Workflow          ║
+   ╚═══════════════════════════════════╝
    ```
+   IMPORTANT: The `║` characters on the right side MUST align vertically. Count characters carefully — each line between `║` markers must be the same width. Test by verifying all `║` on the right are in the same column.
+
    Then list detected status using checkmarks/warnings:
    - `✅` / `—` for: secondary provider (name + version), timeout command, Telegram
    - `⚠️` for: missing state file, Phase 0 required, stale state detected
