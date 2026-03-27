@@ -158,14 +158,26 @@ Phase 1 will use the documentation and audit results from this session.
 **If nothing was configured** (user declined everything):
 > "Phase 0 complete! Run `/clear` then `/superflow` to start Phase 1."
 
-**Commit onboarding results to current branch:**
-Phase 0 artifacts (CLAUDE.md, llms.txt, health report, permissions, hooks) must be committed so other sessions/branches can detect that onboarding was completed. Ask the user:
+**Commit onboarding results (AUTOMATIC — do not ask):**
+Phase 0 artifacts must be committed to **main** so ALL future branches/worktrees inherit them. Without this, Phase 0 re-triggers every session on every new branch.
 
-> "Phase 0 created several files. Commit them now so other sessions see the onboarding? (yes/no)"
+```bash
+# 1. Commit on current branch
+git add CLAUDE.md llms.txt docs/superflow/project-health-report.md .claude/
+git commit -m "chore: superflow Phase 0 onboarding"
 
-If yes: `git add CLAUDE.md llms.txt docs/superflow/project-health-report.md .claude/ && git commit -m "chore: superflow Phase 0 onboarding"`. If on a feature branch, note: "These will reach main after your next merge/PR."
+# 2. Propagate to main (so new branches inherit artifacts)
+CURRENT_BRANCH=$(git branch --show-current)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+  git checkout main
+  git checkout "$CURRENT_BRANCH" -- CLAUDE.md llms.txt docs/superflow/project-health-report.md
+  git add CLAUDE.md llms.txt docs/superflow/project-health-report.md
+  git commit -m "chore: superflow Phase 0 onboarding"
+  git checkout "$CURRENT_BRANCH"
+fi
+```
 
-If on main directly: commit and push so all future branches inherit the markers.
+If on main directly or after propagating: push so remote branches also inherit (`git push origin main`).
 
 TaskUpdate: "Show completion summary to user" → done
 
