@@ -2,7 +2,14 @@
 
 All notable changes to superflow will be documented in this file.
 
-## [4.1.3] - 2026-03-27
+## [4.2.0] - 2026-03-27
+
+### Added
+- **Tech debt cross-reference at spec writing**: After writing the spec (Step 8), cross-references `context.tech_debt` and CLAUDE.md Known Issues with files in the spec. Surfaces relevant tech debt to user: "This spec modifies [module X], there's planned refactoring — include in scope?" Accepted items get a dedicated "Tech Debt Resolution" section and separate plan tasks
+
+### Fixed — Phase 0 Reliability
+- **Phase 0 marker detection checks main branch**: When markers not found locally, falls back to `git show main:CLAUDE.md` before triggering Phase 0. Fixes repeated Phase 0 runs on already-onboarded projects when starting from feature branches
+- **Phase 0 completion prompts to commit artifacts**: After onboarding, asks user to commit CLAUDE.md, llms.txt, health report so other sessions/branches detect onboarding was done
 
 ### Fixed — Approval Gate Visibility
 - **Brief and plan displayed inline at approval gates**: Step 7 (Product Brief) and Step 12 (Plan Approval) now explicitly require full content displayed in chat before asking for approval — no more blind "go?" prompts

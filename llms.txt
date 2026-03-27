@@ -11,7 +11,7 @@ Superflow is a 4-phase development workflow skill for Claude Code:
 - **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — git worktrees, TDD, wave-based parallel dispatch, governance-aware review tiering, charter compliance checks, one PR per sprint
 - **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification, structured completion data (`completion-data.json`), and documentation update
 
-Version: v4.1.3 (2026-03-27). MIT License.
+Version: v4.2.0 (2026-03-27). MIT License.
 
 ## File Structure
 

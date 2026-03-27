@@ -1,4 +1,4 @@
-# superflow v4.1.3
+# superflow v4.2.0
 
 Autonomous dev workflow for Claude Code. Describe a feature — get reviewed PRs.
 
