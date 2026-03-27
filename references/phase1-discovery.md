@@ -307,6 +307,11 @@ mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Pro
 ## Step 8: Spec Document
 <!-- Stage 4: Specification, Todo 1 -->
 
+**Tech debt cross-reference:** Before writing the spec, re-read `context.tech_debt` from `.superflow-state.json` and the project's CLAUDE.md "Known Issues & Tech Debt" section. Cross-reference with files being modified in this feature. If any tech debt item touches the same modules/files:
+- Surface it to the user: "This feature modifies [module X]. There's a planned refactoring: [tech debt description]. Should we include it in scope?"
+- Wait for user decision before finalizing the spec
+- If accepted, add a "Tech Debt Resolution" section to the spec
+
 Write to `docs/superflow/specs/YYYY-MM-DD-<topic>-design.md`. Reference the product brief.
 
 Include:
@@ -315,6 +320,7 @@ Include:
 - **File-level changes**: which files are modified/created
 - **Edge cases and error handling**: from the brief's edge cases
 - **Testing strategy**: what tests validate correctness
+- **Tech debt resolution** (if applicable): related tech debt items included in scope
 - **Out of scope**: explicit boundaries
 
 Create `docs/superflow/specs/` if it doesn't exist.
@@ -337,6 +343,8 @@ Both must return PASS to proceed.
 <!-- Stage 5: Planning, Todo 1 -->
 
 Write to `docs/superflow/plans/YYYY-MM-DD-<topic>.md`. Create `docs/superflow/plans/` if it doesn't exist.
+
+If the spec includes a "Tech Debt Resolution" section, allocate a dedicated sprint (or tasks within a sprint) for the tech debt work. Don't silently mix tech debt fixes into feature tasks — keep them traceable.
 
 Break into sprints (independently deployable), 3-8 tasks each, each task 2-5 min. Include: files, steps, commit message.
 
