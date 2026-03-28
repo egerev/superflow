@@ -122,9 +122,10 @@ Mandatory checks — show evidence for every finding:
 2. Find all TODO/FIXME/HACK/XXX comments — total count and top 10 locations.
 3. Count test files vs source files — calculate the ratio.
 4. Find source files with NO corresponding test file.
-5. Check for code duplication: similar function signatures across modules.
+5. Check for code duplication: find functions/components with similar names or logic across modules. List each pair with file:line. Focus on utility functions, validation logic, and data transformations — these are duplicated most often.
 6. Check linter config exists and is enforced (pre-commit hooks, CI checks).
-7. Find dead code: unused imports, unreachable functions (use available tooling).
+7. Find dead code: unused imports, unreachable functions, orphaned event handlers, components with zero references. Use project tooling if available (knip, ts-prune, vulture). Trace call chains — dead code often hides behind 2-3 levels of indirection.
+8. Check for type redefinition: search for types/interfaces that duplicate auto-generated types (*.generated.ts, *.d.ts, __generated__/, Prisma types, GraphQL types, OpenAPI schemas). Red flags: `as unknown as`, `as any` casts, interface names that shadow generated ones. List each redefinition with file:line and the original generated type it duplicates.
 
 Adjust depth for team context: if solo+beginner flag basics (missing linter, zero tests);
 if team, flag shared conventions and coverage gaps.

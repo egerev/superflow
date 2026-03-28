@@ -313,6 +313,14 @@ b. Codex Technical: `$TIMEOUT_CMD 900 codex exec review -c model_reasoning_effor
 
 If no Codex: 2 split-focus Claude agents (Product: deep-product-reviewer, Technical: deep-code-reviewer), both using deep-tier agent definitions.
 
+**Cross-sprint codebase hygiene (MANDATORY in holistic review):**
+Both reviewers must explicitly check for these three issues across ALL sprint changes combined:
+1. **Code duplication across sprints** — different sprints may have independently implemented similar logic. Search for similar function names, shared patterns, repeated validation/transformation code across sprint boundaries.
+2. **Type redefinition across sprints** — later sprints may redefine types that earlier sprints already created, or that exist in auto-generated files. Check for `as unknown as`, `as any` casts bridging between sprint-local types.
+3. **Dead code from incremental refactoring** — when sprint N refactors code from sprint N-1, old code paths may remain. Trace call chains for functions/components that lost all callers across the combined diff.
+
+These issues are invisible in per-sprint review but become apparent when viewing all changes as a unified system. Flag as HIGH severity — they compound over time.
+
 Fix CRITICAL/HIGH issues before Completion Report.
 
 ## Completion Report (Product Release Format)
