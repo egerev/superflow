@@ -4,7 +4,7 @@ Execute continuously. Never ask, never pause. Orchestrator never writes code dir
 
 ## Stage Structure (Per Sprint)
 
-Each sprint passes through 5 stages. Use TaskCreate at sprint start, TaskUpdate as todos complete.
+Each sprint passes through 6 stages. Use TaskCreate at sprint start, TaskUpdate as todos complete.
 
 ```
 Stage 1: "Setup"
@@ -32,7 +32,12 @@ Stage 4: "PAR"
   - "Fix NEEDS_FIXES (if any)"
   - "Write .par-evidence.json"
 
-Stage 5: "Ship"
+Stage 5: "Docs"
+  Todos:
+  - "Dispatch doc-update agent"
+  - "Commit doc changes"
+
+Stage 6: "Ship"
   Todos:
   - "Push and create PR"
   - "Verify PR created"
@@ -157,9 +162,43 @@ When a sprint has multiple tasks, analyze them for parallelism before dispatchin
    }
    ```
    Both verdicts must be APPROVE/ACCEPTED/PASS. If either agent returned issues, they must be fixed and the agent re-run before evidence is written.
-8. <!-- Stage 5: Ship, Todos 1-2 --> **Push + PR**: verify `.par-evidence.json` exists with both verdicts passing. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
-9. <!-- Stage 5: Ship, Todo 3 --> **Cleanup**: verify PR was created successfully (`gh pr view` returns data), then `git worktree remove .worktrees/sprint-N`
-10. <!-- Stage 5: Ship, Todo 4 --> **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." Then next sprint.
+8. <!-- Stage 5: Docs, Todos 1-2 --> **Documentation update** — dispatch `standard-doc-writer` to update CLAUDE.md and llms.txt based on sprint changes:
+   ```
+   Agent(
+     subagent_type: "standard-doc-writer",
+     prompt: "
+   Update project documentation to reflect changes from Sprint N.
+
+   **Read first:**
+   - `git diff main...HEAD` to see what this sprint changed
+   - Current `CLAUDE.md` and `llms.txt`
+   - `prompts/claude-md-writer.md` and `prompts/llms-txt-writer.md` for standards
+
+   **CLAUDE.md — update if any of these changed:**
+   - New key files or modules added → add to Key Files table
+   - New conventions introduced → add to Conventions
+   - New commands or workflows → add to relevant section
+   - Architecture changed → update Architecture section
+   If nothing materially changed, skip CLAUDE.md.
+
+   **llms.txt — update if any of these changed:**
+   - New API endpoints or features → add to relevant section
+   - New dependencies or integrations → document
+   - Removed functionality → remove from docs
+   If nothing materially changed, skip llms.txt.
+
+   **Rules:**
+   - Minimal edits only — update what changed, don't rewrite
+   - Verify every path/command you document actually exists
+   - Keep CLAUDE.md under 200 lines
+   - Preserve existing markers (<!-- updated-by-superflow:... -->)
+   "
+   )
+   ```
+   After agent completes, commit doc changes: `git add CLAUDE.md llms.txt && git commit -m "docs: update project documentation for sprint N" || true` (the `|| true` handles the case where nothing changed).
+9. <!-- Stage 6: Ship, Todos 1-2 --> **Push + PR**: verify `.par-evidence.json` exists with both verdicts passing. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
+10. <!-- Stage 6: Ship, Todo 3 --> **Cleanup**: verify PR was created successfully (`gh pr view` returns data), then `git worktree remove .worktrees/sprint-N`
+11. <!-- Stage 6: Ship, Todo 4 --> **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." Then next sprint.
 
 ## Sprint Completion Checklist
 
@@ -169,6 +208,7 @@ Before creating the PR, verify ALL:
 - [ ] Unified review completed: 2 agents (Product + Technical), both APPROVE/ACCEPTED
 - [ ] Full test suite passes with pasted evidence
 - [ ] `.par-evidence.json` written with both verdicts passing
+- [ ] Documentation updated (CLAUDE.md, llms.txt) or confirmed unchanged
 - [ ] PR created with `--base main`
 - [ ] Worktree cleaned up
 
