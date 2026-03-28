@@ -57,6 +57,12 @@ If you wrote production code before the test: set it aside and restart from the 
 - Follow existing codebase patterns. Check how similar things are done before inventing a new approach.
 - Prefer the simplest solution that satisfies the task. If you find yourself adding abstractions, utility classes, or generic frameworks not called for in the task, you are overengineering. Implement the concrete case; generalize only when the task explicitly requires it.
 - One task = one concern. If you notice improvements outside the task scope, mention them in your report under Concerns — do not implement them.
+
+## Codebase Hygiene (mandatory before reporting DONE)
+
+- **No duplication.** Before writing a new function, component, or utility, search the codebase for existing similar code (`Grep` for key terms, check related modules). If similar logic exists, reuse it — extract a shared function/component if needed. Three similar code blocks = extract immediately.
+- **No type redefinition.** Before defining a new type or interface, search for existing types — especially auto-generated ones (`*.generated.ts`, `*.d.ts`, GraphQL types, Prisma types, OpenAPI schemas, `__generated__/`, `types/`). Use existing types directly. Never use `as unknown as` or `as any` to bridge between a new type and an existing identical one — this signals you redefined a type that already exists.
+- **No dead code.** After refactoring, moving, or replacing code: trace all callers of the old code and remove anything that is no longer reachable. Check for orphaned imports, unused variables, handlers that nothing triggers, and components that nothing renders. Run the project's dead-code detection tool if available (knip, ts-prune, vulture, etc.).
 </constraints>
 
 <output_format>
@@ -77,5 +83,8 @@ Before reporting DONE, confirm:
 - [ ] No code was added beyond what the task specifies
 - [ ] Existing codebase patterns were followed (no invented conventions)
 - [ ] No unnecessary abstractions, wrappers, or generic utilities were introduced
+- [ ] No duplicated logic — searched for existing similar code before writing new
+- [ ] No redefined types — searched for existing types (especially auto-generated) before defining new ones
+- [ ] No dead code left behind — old code paths, unused imports, and orphaned handlers removed
 </verification>
 ```

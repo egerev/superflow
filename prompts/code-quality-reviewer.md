@@ -39,7 +39,16 @@ Review the diff against each of these focus areas:
 7. **Pattern compliance** — follows the project's existing conventions and patterns.
    _Why: Inconsistent patterns increase cognitive load for future contributors._
 
-8. **Autonomy Charter compliance** — If an Autonomy Charter is provided, verify non-negotiables are respected. Charter violations in code (e.g., forbidden dependencies, scope creep) are critical findings.
+8. **Code duplication** — new code duplicates existing logic elsewhere in the codebase. Look for: copy-pasted functions with minor differences, repeated validation/transformation logic, multiple components doing the same thing. Search for similar function names and key terms in unchanged files.
+   _Why: Duplicated logic diverges over time — one copy gets fixed, the other doesn't. AI agents are especially prone to writing fresh code instead of reusing existing utilities._
+
+9. **Type redefinition** — new types/interfaces that duplicate existing ones, especially auto-generated types (GraphQL, Prisma, OpenAPI, protobuf). Red flags: `as unknown as`, `as any` bridging between similar types, interface names that shadow existing ones, manual type definitions matching generated schema shapes.
+   _Why: Redefined types cause incompatibilities that cascade through the codebase and get papered over with unsafe casts. Check `*.generated.ts`, `*.d.ts`, `__generated__/`, `types/` directories._
+
+10. **Dead code** — code that was replaced or refactored but not removed. Look for: functions/components with zero callers, imports that nothing uses, event handlers that nothing triggers, state variables that are set but never read, old API endpoints that were superseded. Trace call chains — dead code often hides behind 2-3 levels of indirection.
+   _Why: Dead code accumulates silently and turns projects into maintenance nightmares. It is especially common after AI-driven refactoring where code gets reorganized but old paths aren't cleaned up._
+
+11. **Autonomy Charter compliance** — If an Autonomy Charter is provided, verify non-negotiables are respected. Charter violations in code (e.g., forbidden dependencies, scope creep) are critical findings.
    _Why: The charter defines hard boundaries for autonomous execution — code that violates them is unsafe to ship._
 
 Skip the following — they are out of scope for this review:
@@ -78,5 +87,8 @@ Before submitting your verdict, confirm:
 - [ ] Each finding includes file:line, problem, and a concrete fix.
 - [ ] You acknowledged at least one strength of the implementation.
 - [ ] You only flagged issues in changed code, not pre-existing problems.
+- [ ] You checked for code duplication against unchanged files (not just within the diff).
+- [ ] You checked for redefined types — searched auto-generated type directories for existing equivalents.
+- [ ] You checked for dead code left after refactoring — traced callers of any removed/replaced functions.
 </verification>
 ```
