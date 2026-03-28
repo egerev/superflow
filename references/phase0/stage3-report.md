@@ -93,9 +93,9 @@ Synthesize results from Stage 2 agents into a full report. Save to `docs/superfl
 
 ---
 
-## Step 3.2 — Show Informative Summary (~15 lines)
+## Step 3.2 — Show Actionable Summary
 
-Do NOT show the full report inline. Show a compact summary in the user's language:
+Do NOT show the full report inline. Show a focused summary in the user's language that highlights what matters NOW vs what will be addressed over time:
 
 ```
 ## Project Audit Complete
@@ -103,19 +103,39 @@ Do NOT show the full report inline. Show a compact summary in the user's languag
 **Stack:** [e.g. Python 3.11 + FastAPI + PostgreSQL (detected from imports in src/)]
 **Size:** [N] source files, [LOC] LOC across [M] modules
 
-### Key Findings
-1. **Security** ([N] issues): [brief description with file:line for each]
-2. **Test coverage**: [N test files] / [M source files] ([ratio]%). Missing: [modules]
-3. **Tech debt**: [N] TODO/FIXME comments, [N] files >500 LOC
+### 🔴 Needs Attention Now
+[Only include this section if there are CRITICAL/HIGH findings. List 1-3 most urgent issues:]
+- **[Security/Architecture/etc]:** [concrete issue with file:line] — [1-sentence fix suggestion]
+- **[Issue 2]:** ...
+
+[If nothing critical: "No critical issues found — the codebase is in good shape for feature work."]
+
+### 📊 Project Health
+- **Test coverage**: [N test files] / [M source files] ([ratio]%). [Untested: module1, module2]
+- **Code duplication**: [N instances found / none detected]
+- **Type hygiene**: [N redefined types / clean]
+- **Dead code**: [N unreachable functions / clean]
+- **Tech debt**: [N] TODO/FIXME, [N] files >500 LOC
+
+### 🔄 Tech Debt Strategy
+The findings above are saved and will be addressed progressively:
+when you work on new features, Superflow cross-references your changes
+with known tech debt. If a feature touches a module with issues,
+it suggests bundling the fix into the same sprint — closing gaps
+gradually without dedicated refactoring sprints.
 
 ### What I'll Set Up
-- Create CLAUDE.md + llms.txt
+- Create CLAUDE.md + llms.txt (project documentation for AI agents)
 - Configure permissions for autonomous execution
 - [Set up auto-formatting hooks — [formatter] detected] (if applicable)
-- Create /verify skill
+- Create /verify skill (quick health check command)
 
 Full report: docs/superflow/project-health-report.md
 ```
+
+**If critical findings exist**, after the summary add:
+> "I recommend fixing the critical issues before starting feature work. Want me to create a fix plan? (yes/skip)"
+If yes: note the issues — they'll become Sprint 0 in Phase 1 planning.
 
 ---
 
