@@ -1,4 +1,4 @@
-# superflow v4.2.0
+# superflow v4.3.0
 
 Autonomous dev workflow for Claude Code. Describe a feature — get reviewed PRs.
 
@@ -29,7 +29,7 @@ Agent: [Phase 3: docs → merge → cleanup]
 
 **Phase 1 — Discovery.** Expert panel brainstorming (parallel persona agents produce a Board Memo), governance mode selection, spec and plan with dual-model review. Generates an Autonomy Charter before execution.
 
-**Phase 2 — Execution.** Fully autonomous. Governance-aware review tiering (light/standard/critical), charter compliance checks, wave-based parallel dispatch, PR per sprint.
+**Phase 2 — Execution.** Fully autonomous. Governance-aware review tiering (light/standard/critical), charter compliance checks, wave-based parallel dispatch, per-sprint documentation updates, codebase hygiene checks (duplication, type redefinition, dead code), PR per sprint.
 
 **Phase 3 — Merge.** You say "merge" — sequential rebase merge with CI checks and doc updates.
 

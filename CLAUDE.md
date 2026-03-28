@@ -1,7 +1,7 @@
 # Superflow — Claude Instructions
 
 ## Project Overview
-Superflow is a pure Markdown Claude Code skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, autonomous execution with PR-per-sprint, and merge. v4.1.1, MIT License.
+Superflow is a pure Markdown Claude Code skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, autonomous execution with PR-per-sprint, and merge. v4.3.0, MIT License.
 
 ## Key Rules
 - All documentation output in English — user communication follows their language preference

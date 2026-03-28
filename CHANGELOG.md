@@ -2,6 +2,21 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.3.0] - 2026-03-28
+
+### Added — Codebase Hygiene Pipeline
+- **Per-sprint documentation updates**: New Stage 5 "Docs" between PAR and Ship. Dispatches `standard-doc-writer` to update CLAUDE.md and llms.txt based on sprint diff. Skips if nothing materially changed. Phase 2 sprints now have 6 stages (was 5)
+- **Code duplication checks**: Implementer searches for existing similar code before writing new. Reviewer checks new code against unchanged files across the codebase — not just within the diff
+- **Type redefinition checks**: Implementer searches auto-generated types (`*.generated.ts`, Prisma, GraphQL, OpenAPI) before defining new ones. Reviewer flags `as unknown as` / `as any` casts bridging between duplicate types
+- **Dead code checks**: Implementer traces all callers and removes unreachable code after refactoring. Reviewer traces call chains 2-3 levels deep for orphaned functions, handlers, and components
+- **Holistic cross-sprint hygiene**: Final holistic review now mandates cross-sprint checks for all three issues — duplication, type redefinition, and dead code that spans sprint boundaries
+- **Phase 0 type redefinition diagnosis**: Code Quality agent (Stage 2) now checks for types that duplicate auto-generated ones as part of initial project audit
+
+### Fixed — Phase 0 Re-trigger Loop
+- **zsh shell compatibility**: Phase 0 marker detection command used `{ }` brace grouping which breaks in zsh — replaced with `( )` subshell. The broken syntax caused `NO_MARKER` to always appear in output alongside `MARKER_LOCAL`, confusing the LLM into re-triggering Phase 0 every session
+- **Auto-commit onboarding artifacts**: Stage 5 no longer asks for user confirmation — commits automatically. Previously, if the session ended before the user said "yes", artifacts were never committed
+- **Propagate artifacts to main**: When Phase 0 runs on a feature branch, artifacts (CLAUDE.md, llms.txt, health report) are now copied to main via `git checkout <branch> -- <files>`. Previously, artifacts stayed on the feature branch and every new branch from main re-triggered Phase 0
+
 ## [4.2.0] - 2026-03-27
 
 ### Added
