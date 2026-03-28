@@ -117,6 +117,88 @@ When a sprint has multiple tasks, analyze them for parallelism before dispatchin
 
 ---
 
+## Sprint-Level Parallel Dispatch
+
+Before the execution loop, analyze the plan for sprint-level parallelism. Independent sprints run concurrently — each in its own worktree.
+
+**Sprint wave analysis (runs once at Phase 2 start):**
+
+1. Parse the plan for each sprint's `files:` and `depends_on:` metadata
+2. Build a dependency graph:
+   - Explicit dependencies from `depends_on:` field
+   - Implicit dependencies: if Sprint A and Sprint B modify any of the same files, B depends on A (or vice versa — lower sprint number goes first)
+3. Group sprints into waves using topological sort:
+   - Wave 1: all sprints with no dependencies (in-degree = 0)
+   - Wave 2: sprints whose dependencies are all in Wave 1
+   - Wave N: sprints whose dependencies are all in Waves 1..(N-1)
+4. Store the wave plan in `.superflow-state.json` under `context.sprint_waves`
+
+**Example:**
+```
+Plan: 6 sprints
+Sprint 1: files=[src/api/], depends_on=[]
+Sprint 2: files=[src/ui/], depends_on=[]
+Sprint 3: files=[src/api/], depends_on=[1]
+Sprint 4: files=[src/ui/], depends_on=[2]
+Sprint 5: files=[tests/], depends_on=[1,2]
+Sprint 6: files=[docs/], depends_on=[]
+
+Graph → Waves:
+  Wave 1: [Sprint 1, Sprint 2, Sprint 6]  — all independent
+  Wave 2: [Sprint 3, Sprint 4, Sprint 5]  — dependencies satisfied
+
+6 sprints → 2 waves → ~2x speedup
+```
+
+**Execution loop (replaces sequential sprint-by-sprint):**
+
+```
+for each wave in sprint_waves:
+  if wave has 1 sprint:
+    run sprint sequentially (normal Per-Sprint Flow)
+  else:
+    for each sprint in wave:
+      dispatch sprint as Agent(run_in_background: true) with full Per-Sprint Flow
+    wait for all sprints in wave to complete
+
+    # Post-wave merge check
+    for each pair of sprints in wave:
+      check for file conflicts between their branches
+    if conflicts found:
+      resolve conflicts manually on the later sprint's branch
+
+    # Merge completed wave PRs before next wave
+    # (so next wave's sprints see the combined codebase)
+```
+
+**Each parallel sprint runs the full Per-Sprint Flow** (Setup → Implementation → Review → PAR → Docs → Ship) independently in its own worktree. The orchestrator dispatches them as background agents and waits.
+
+**Parallel sprint agent dispatch:**
+```
+Agent(
+  subagent_type: "standard-implementer",  # or appropriate tier
+  run_in_background: true,
+  prompt: "
+Execute Sprint N: [title] — full Per-Sprint Flow.
+
+Read references/phase2-execution.md for the complete flow.
+Read the plan at [plan_path] for Sprint N details.
+Charter: [charter_content]
+
+Your worktree: .worktrees/sprint-N on branch feat/<feature>-sprint-N
+
+Execute all 6 stages: Setup → Implementation → Review → PAR → Docs → Ship.
+Create the PR at the end. Report back with PR URL or BLOCKED status.
+"
+)
+```
+
+**Fallback:** If ≤3 total sprints or all sprints are in a single wave chain (each depends on the previous), skip wave analysis and run sequentially. The overhead of parallel orchestration isn't worth it.
+
+**Holistic review trigger:** When `max_parallel > 1` (any wave had 2+ sprints), holistic review is mandatory (enforcement rule 9).
+
+---
+
 ## Per-Sprint Flow
 
 1. <!-- Stage 1: Setup, Todo 1 --> **Re-read** this file (`references/phase2-execution.md`) and the current sprint's SPEC (from the plan in `docs/superflow/specs/` or `docs/superflow/plans/`)

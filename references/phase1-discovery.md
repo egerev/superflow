@@ -347,6 +347,27 @@ If the spec includes a "Tech Debt Resolution" section, allocate a dedicated spri
 
 Break into sprints (independently deployable), 3-8 tasks each, each task 2-5 min. Include: files, steps, commit message.
 
+**Sprint parallelism metadata (required):** For each sprint, include:
+- `files:` — list of files this sprint modifies/creates
+- `depends_on:` — list of sprint numbers this sprint depends on (empty = independent)
+
+Example:
+```
+## Sprint 1: Backend API [complexity: medium]
+files: src/api/routes.py, src/api/handlers.py, tests/test_api.py
+depends_on: []
+
+## Sprint 2: Frontend UI [complexity: medium]
+files: src/components/Dashboard.tsx, src/hooks/useApi.ts
+depends_on: []
+
+## Sprint 3: Integration tests [complexity: simple]
+files: tests/test_integration.py
+depends_on: [1, 2]
+```
+
+The orchestrator uses this to build a sprint dependency graph and dispatch independent sprints in parallel waves. Sprints with no file overlap and no `depends_on` run concurrently in the same wave.
+
 ## Step 11: Plan Review (dual-model parallel)
 <!-- Stage 5: Planning, Todos 2-3 -->
 
@@ -368,9 +389,15 @@ Both must APPROVE. If either returns NEEDS_REVISION: fix, re-review.
 Present the complete plan overview:
 - Sprint breakdown with task counts and complexity tags
 - Key files touched per sprint
+- **Sprint wave plan** — show which sprints run in parallel:
+  ```
+  Wave 1: [Sprint 1, Sprint 2, Sprint 6] — parallel (independent files)
+  Wave 2: [Sprint 3, Sprint 4, Sprint 5] — parallel (depends on Wave 1)
+  Estimated speedup: 6 sprints → 2 waves
+  ```
 - Estimated PR count (1 per sprint)
 - Merge order and dependencies
-- Total scope (number of sprints, estimated changes)
+- Total scope (number of sprints, number of waves, estimated changes)
 
 If Telegram MCP available, send the implementation plan as a file attachment before asking for final approval:
 ```
