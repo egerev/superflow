@@ -177,6 +177,7 @@ for each wave in sprint_waves:
 ```
 Agent(
   subagent_type: "standard-implementer",  # or appropriate tier
+  model: "sonnet",  # ALWAYS explicit — frontmatter model is not reliably inherited
   run_in_background: true,
   prompt: "
 Execute Sprint N: [title] — full Per-Sprint Flow.
@@ -248,6 +249,7 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
    ```
    Agent(
      subagent_type: "standard-doc-writer",
+     model: "sonnet",  # explicit — frontmatter not reliably inherited
      prompt: "
    Update project documentation to reflect changes from Sprint N.
 
@@ -302,7 +304,9 @@ Sprint complexity drives model selection. Tag each sprint in the plan:
 |-----------|-------|-------|--------|------|
 | simple | fast-implementer | sonnet | low | 1-2 files, CRUD/template, <50 lines |
 | medium | standard-implementer | sonnet | medium | 2-5 files, some new logic. Default if untagged. |
-| complex | deep-implementer | opus | high | 5+ files, new architecture, security-sensitive |
+| complex | deep-implementer | sonnet | high | 5+ files, new architecture, security-sensitive |
+
+**IMPORTANT: Always pass `model: "sonnet"` explicitly in Agent() calls for ALL implementers and doc-writers.** Agent definition frontmatter `model:` is NOT reliably inherited — without explicit `model:`, subagents inherit the parent's model (Opus), wasting tokens on implementation tasks that Sonnet handles equally well.
 
 ## Review Tiering by Governance Mode
 

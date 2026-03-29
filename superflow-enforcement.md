@@ -41,6 +41,8 @@ $TIMEOUT_CMD 600 $SECONDARY_PROVIDER <non-interactive-flag> "PROMPT" 2>&1       
 
 Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` during SKILL.md startup (step 3). Agent() does NOT accept inline `effort` — controlled via agent definition files only.
 
+**CRITICAL: Always pass `model:` explicitly in every Agent() call.** Frontmatter `model:` in agent definitions is NOT reliably inherited — without explicit `model:`, subagents inherit the parent's model (Opus), burning expensive tokens on implementation tasks. Rule: implementers and doc-writers → `model: "sonnet"`, reviewers and analysts → `model: "opus"`.
+
 ## Test & Process Discipline
 
 1. **One test process at a time.** Never run tests in parallel or retry without killing the previous run.
