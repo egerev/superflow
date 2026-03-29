@@ -48,7 +48,10 @@ Review the diff against each of these focus areas:
 10. **Dead code** — code that was replaced or refactored but not removed. Look for: functions/components with zero callers, imports that nothing uses, event handlers that nothing triggers, state variables that are set but never read, old API endpoints that were superseded. Trace call chains — dead code often hides behind 2-3 levels of indirection.
    _Why: Dead code accumulates silently and turns projects into maintenance nightmares. It is especially common after AI-driven refactoring where code gets reorganized but old paths aren't cleaned up._
 
-11. **Autonomy Charter compliance** — If an Autonomy Charter is provided, verify non-negotiables are respected. Charter violations in code (e.g., forbidden dependencies, scope creep) are critical findings.
+11. **Plan completeness** — Compare the implementation against the sprint's plan tasks. For each task in the plan, verify the code actually implements it — not a stub, not a placeholder, not a TODO. Check: are all specified LLM calls present? All service integrations? All data flows? If similar work was done in a previous sprint (e.g., Sprint 3 implemented `run_daily()` at 400 lines), the current sprint's analogous method should be at comparable depth — a 60-line stub for equivalent work is a red flag.
+   _Why: Syntactically correct stubs that pass tests are the most dangerous failure mode in autonomous execution. They look done but deliver nothing. This is the #1 cause of wasted sprints._
+
+12. **Autonomy Charter compliance** — If an Autonomy Charter is provided, verify non-negotiables are respected. Charter violations in code (e.g., forbidden dependencies, scope creep) are critical findings.
    _Why: The charter defines hard boundaries for autonomous execution — code that violates them is unsafe to ship._
 
 Skip the following — they are out of scope for this review:
@@ -90,5 +93,7 @@ Before submitting your verdict, confirm:
 - [ ] You checked for code duplication against unchanged files (not just within the diff).
 - [ ] You checked for redefined types — searched auto-generated type directories for existing equivalents.
 - [ ] You checked for dead code left after refactoring — traced callers of any removed/replaced functions.
+- [ ] You compared the implementation against the sprint plan tasks — every task is fully implemented, not stubbed.
+- [ ] You checked implementation depth matches similar components (a 60-line stub for work equivalent to a 400-line sibling is a red flag).
 </verification>
 ```

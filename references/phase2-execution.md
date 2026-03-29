@@ -201,7 +201,7 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
 
 ## Per-Sprint Flow
 
-1. <!-- Stage 1: Setup, Todo 1 --> **Re-read** this file (`references/phase2-execution.md`) and the current sprint's SPEC (from the plan in `docs/superflow/specs/` or `docs/superflow/plans/`)
+1. <!-- Stage 1: Setup, Todo 1 --> **Re-read** this file (`references/phase2-execution.md`), the **charter** (from `context.charter_file` in `.superflow-state.json`), AND the **specific sprint section** from the plan. Extract and paste the exact task list for this sprint into the implementer prompt — do NOT rely on LLM memory of the plan. The implementer must see every task, every file path, every expected behavior verbatim.
 2. <!-- Stage 1: Setup, Todo 2 --> **Telegram update** (if MCP connected): "Starting sprint N: [title]"
 3. <!-- Stage 1: Setup, Todo 3 --> **Worktree**: verify `.worktrees/` is gitignored (`git check-ignore -q .worktrees || echo '.worktrees/' >> .gitignore`), then `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`
 4. <!-- Stage 1: Setup, Todo 4 --> **Baseline tests** in worktree: run full test suite, record output. If tests fail on baseline, stop and report — do not build on a broken base.

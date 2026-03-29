@@ -31,8 +31,8 @@ Evaluate the implementation from a product and user perspective:
 3. **Data correctness** — Amounts, dates, currencies, and labels are correct. A user would trust the output.
    _Why: Incorrect data erodes user trust faster than any other issue._
 
-4. **Completeness** — A user can complete the full task without dead ends or missing steps.
-   _Why: Incomplete flows force users to find workarounds or abandon the feature._
+4. **Completeness** — A user can complete the full task without dead ends or missing steps. Additionally, compare the diff against the sprint plan — verify every planned task is implemented in substance, not stubbed. A method that should do 5 things but only does 1 is a blocker, even if it compiles and tests pass.
+   _Why: Incomplete flows force users to find workarounds. Stubs that pass tests are the most dangerous failure mode — they look shipped but deliver nothing._
 
 5. **Autonomy Charter compliance** — If an Autonomy Charter is provided, validate against its goal, non-negotiables, and success criteria. Deviations from charter constraints are blockers.
    _Why: The charter defines the boundaries of autonomous execution — violating it undermines user trust._
