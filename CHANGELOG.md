@@ -2,6 +2,25 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.4.0] - 2026-03-29
+
+### Added — Sprint-Level Parallel Execution
+- **Wave-based sprint dispatch**: Plan now requires `files:` and `depends_on:` per sprint. Phase 2 builds a dependency graph (topological sort) and groups independent sprints into waves. Sprints in the same wave run concurrently in separate worktrees. 6 sprints with partial dependencies → 2-3 waves → ~2x speedup
+- **Two-level parallelism**: Sprint-level (wave dispatch) + task-level (within each sprint). Both work together
+- **Wave plan shown at approval**: Step 12 (User Approval) now displays the sprint wave breakdown and estimated speedup
+
+### Added — Actionable Phase 0 Summary
+- **"Needs Attention Now" section**: Critical/high findings highlighted with concrete fix suggestions. If nothing critical: "codebase is in good shape"
+- **Project Health metrics**: Includes duplication, type hygiene, dead code alongside test coverage and tech debt counts
+- **Tech Debt Strategy explanation**: Tells the user that findings are saved and will be progressively addressed when future features touch affected modules (via Phase 1 Step 8 cross-reference)
+- **Sprint 0 offer**: If critical issues found, offers to create a fix plan before feature work
+
+### Fixed — Stub Sprint Prevention (postmortem: alaya-os Company Intelligence Pipeline)
+- **Root cause**: Sprint 5 plan specified 5 tasks (daily briefs, cross-day dedup, LLM report, service storage, TaskIQ emission) but implementer delivered a 60-line stub doing only 1. Reviewers approved because code compiled and tests passed
+- **Plan completeness validation** (code-quality-reviewer): New focus area #11 — reviewer compares implementation against sprint plan tasks. Flags stubs, checks implementation depth matches similar components (60 lines vs sibling's 400 = red flag)
+- **Product reviewer completeness**: Now validates plan-to-code coverage, not just user-flow dead ends. "Method should do 5 things but only does 1 = blocker"
+- **Verbatim plan injection**: Per-Sprint Flow now requires re-reading charter AND pasting exact sprint task list into implementer prompt — prevents context compaction from erasing plan details by later sprints
+
 ## [4.3.0] - 2026-03-28
 
 ### Added — Codebase Hygiene Pipeline
