@@ -143,6 +143,16 @@ Compose a one-line summary and ask as plain text (remote-friendly — works via 
 > "Detected: [stack] + [framework], [team_size] developer(s), CI: [ci]. I'll audit docs, code quality, and security. ~2 min.
 > Reply **'go'** to start, **'fix ...'** to correct something, or **'skip'** to go straight to Phase 1."
 
+**Do NOT recommend 'skip' on first run.** Even if CLAUDE.md already exists, Phase 0 does much more than documentation:
+- Security audit (hardcoded secrets, injection risks, dependency CVEs)
+- Code quality analysis (duplication, dead code, type redefinition, test coverage)
+- Permissions and hooks setup for autonomous execution
+- /verify skill creation
+- llms.txt creation (if missing)
+- Health report with prioritized tech debt
+
+Only mention skip as available, never as recommended. Default recommendation is always 'go'.
+
 If no response within a reasonable time (non-interactive mode), proceed with `confirm` automatically.
 
 ---
