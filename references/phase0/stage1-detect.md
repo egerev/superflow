@@ -140,18 +140,13 @@ This is a greenfield or near-empty project (e.g., only README.md + LICENSE, no m
 
 Compose a one-line summary and ask as plain text (remote-friendly — works via Telegram):
 
-> "Detected: [stack] + [framework], [team_size] developer(s), CI: [ci]. I'll audit docs, code quality, and security. ~2 min.
-> Reply **'go'** to start, **'fix ...'** to correct something, or **'skip'** to go straight to Phase 1."
+> "Detected: [stack] + [framework], [team_size] developer(s), CI: [ci].
+> I'll run: security audit, code quality analysis, permissions + hooks setup, and create project docs. ~2 min.
+> Reply **'go'** to start or **'fix ...'** to correct something."
 
-**Do NOT recommend 'skip' on first run.** Even if CLAUDE.md already exists, Phase 0 does much more than documentation:
-- Security audit (hardcoded secrets, injection risks, dependency CVEs)
-- Code quality analysis (duplication, dead code, type redefinition, test coverage)
-- Permissions and hooks setup for autonomous execution
-- /verify skill creation
-- llms.txt creation (if missing)
-- Health report with prioritized tech debt
+**Do NOT offer 'skip' in the message.** Phase 0 runs once per project and sets up critical infrastructure (security audit, permissions, hooks, docs). Skipping it means no security findings, no permissions for autonomous execution, no hooks, no health report.
 
-Only mention skip as available, never as recommended. Default recommendation is always 'go'.
+If the user explicitly asks to skip (unprompted), handle it via Step 6 "skip" path — but never suggest it.
 
 If no response within a reasonable time (non-interactive mode), proceed with `confirm` automatically.
 
