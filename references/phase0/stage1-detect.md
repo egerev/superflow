@@ -128,11 +128,11 @@ Compile results into a dict. Example shape:
 
 Check for manifest files: `ls package.json pyproject.toml go.mod Cargo.toml Gemfile 2>/dev/null`
 
-If (`file_count=0` AND `source_count=0` AND no manifest files) OR (`file_count≤5` AND `commit_count≤2` AND `source_count=0` AND no manifest files):
+If `source_count=0` AND no manifest files:
 
-This is a greenfield or near-empty project (e.g., only README.md + LICENSE, no manifests). Tell the user: "This looks like a new project! I'll help set up the foundation." → load and follow `references/phase0/greenfield.md`. Do not proceed with the steps below.
+This is a greenfield project — there is no application code regardless of how many docs, CI configs, or commits exist. Tell the user: "This looks like a new project! I'll help set up the foundation." → load and follow `references/phase0/greenfield.md`. Do not proceed with the steps below.
 
-> **Not greenfield:** A repo with manifest files (package.json, pyproject.toml, etc.) but no source code is treated as an existing project — the user already chose a stack.
+> **Not greenfield:** A repo with manifest files (package.json, pyproject.toml, etc.) but no source code is treated as an existing project — the user already chose a stack and scaffolding is partially done.
 
 ---
 
