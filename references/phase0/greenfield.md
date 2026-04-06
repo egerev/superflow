@@ -11,9 +11,10 @@ This file is re-read after context compaction. Re-read it if you lose context.
 ## When This Path Is Active
 
 Stage 1 detects greenfield when:
-- Fewer than 5 source files exist (excluding dotfiles and config)
-- No `src/`, `lib/`, or `app/` directory with actual code
-- No package.json, pyproject.toml, go.mod, or Cargo.toml present
+- Zero source files exist (`.js`, `.ts`, `.py`, `.rb`, `.go`, `.rs`)
+- No manifest files present (package.json, pyproject.toml, go.mod, Cargo.toml, Gemfile)
+
+A repo may have docs, CI configs, issue templates, and many commits — it is still greenfield if there is no application code and no manifest.
 
 If detected, skip Stage 2 (analysis), Stage 3 (proposal), and Stage 4 Branch A (docs).
 Enter at Step G1 below. After G6, rejoin at Stage 4 Branch B.
