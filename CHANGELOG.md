@@ -2,6 +2,15 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.7.0] - 2026-04-15
+
+### Added — PreCompact State Externalization
+- **New hook script**: `hooks/precompact-state-externalization.sh` — runs immediately before context compaction, dumps `.superflow-state.json` plus the last 40 transcript entries to `<project>/.superflow/compact-log/precompact-<ts>.md` (or `~/.superflow/compact-log/` outside a SuperFlow project), and emits `hookSpecificOutput.additionalContext` pointing the orchestrator at the dump path. Reads the Claude Code hook payload from stdin with env-var fallback for older versions
+- **New reference**: `hooks/README.md` — describes the hook, install instructions, design notes (idempotent, gitignored by default, fail-safe), and credits the [mvara-ai/precompact-hook](https://github.com/mvara-ai/precompact-hook) reference implementation
+- **Phase 0 anti-regression check extended**: `SKILL.md` step 5a and `references/anti-regression-check.md` now also detect whether the PreCompact hook is wired into `~/.claude/settings.json`. Missing → surfaced as `PreCompactHook` in the same conversational prompt introduced in 4.6.0. The `jq`-based apply script installs the hook idempotently (appends only if no existing entry references `precompact-state-externalization.sh`)
+- **New section in `references/phase2-execution.md`**: "Compaction Recovery" instructs the orchestrator to `ls -t .superflow/compact-log/` after a PostCompact rules re-read and hydrate from the most recent dump before resuming work
+- **Rationale**: compaction is lossy by design. `PostCompact` restores rules, but in-progress sprint context, review output, and subagent summaries can be dropped. A PreCompact snapshot on disk gives the orchestrator a deterministic recovery path without depending on the compactor preserving task state
+
 ## [4.6.0] - 2026-04-15
 
 ### Added — Phase 0 Anti-Regression Settings Check

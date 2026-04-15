@@ -365,6 +365,19 @@ Codex and other external reviewers see only committed code (they extract HEAD in
 - **Commit fixes BEFORE dispatching Codex/secondary provider reviews.** Otherwise reviewers will flag already-fixed issues.
 - If you must review uncommitted code, note that Codex findings need cross-checking against the working tree.
 
+## Compaction Recovery
+
+Phase 2 runs for hours — context compaction will fire at least once on any non-trivial run. The `PostCompact` hook re-injects SuperFlow rules, but in-progress sprint details, recent review output, and the current task queue can still be summarized away during compaction itself.
+
+To hydrate cleanly after compaction:
+
+1. Re-read `~/.claude/rules/superflow-enforcement.md` and `references/phase2-execution.md` (enforcement rule 5). Not optional.
+2. Re-read `.superflow-state.json` for current sprint / stage / stage_index.
+3. Then: `ls -t .superflow/compact-log/ 2>/dev/null | head -1` — if a dump exists, read it with the Read tool. That is the PreCompact snapshot saved by `hooks/precompact-state-externalization.sh` (see `hooks/README.md`). It contains the pre-compaction state file, the last 40 transcript entries, and any active sprint context that the summarizer might have dropped.
+4. Only after hydrating should you resume work. Resuming without reading the latest dump risks repeating a step that already ran or skipping one that didn't finish.
+
+If `.superflow/compact-log/` does not exist, the PreCompact hook isn't installed — continue without hydration and note it for the next onboarding cycle.
+
 ## Failure & Debugging
 
 1. Read failure output. Identify the failing assertion or error.
