@@ -21,6 +21,7 @@ Survives context compaction. SKILL.md does not.
 8a. **NEVER `gh pr merge --admin`.** If CI is red, fix CI first. After every `gh pr create`, run `gh run list` and wait for CI green before merging. If CI fails, investigate with `gh run view <id> --log-failed`, fix, push, wait for green.
 9. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode. When required: two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report.
 10. **Governance mode fixed for the run.** Replanner adjusts sprint scope, not governance mode. Once selected in Phase 1 Step 2, the mode persists through all sprints in the run.
+11. **Orchestrator delegates investigation to subagents.** In Phase 2 the orchestrator does NOT use Read/Grep/Glob directly on source files larger than 50 lines, and does NOT use Bash for anything beyond: status checks (`git status`, `gh run list`, `gh pr view`, `ls`, `pwd`, `which`, `date`), state I/O (`.superflow-state.json`, `.par-evidence.json`, CHANGELOG appends), and short `echo`/`printf` for user-visible progress. Any code reading, codebase exploration, research, or investigation → dispatch `deep-analyst` (or `standard-implementer` for lighter work) and require a <2k-token summary in response. Raw file contents do not belong in the orchestrator's context. See `references/phase2-execution.md` § Orchestrator Tool Budget.
 
 ## Secondary Provider Invocation
 
@@ -65,6 +66,8 @@ If you think any of these, STOP and do the thing:
 - "I'll just git merge locally" → use `gh pr merge --rebase --delete-branch`
 - "CI is broken but my tests pass locally" → fix CI first, then merge
 - "I'll use --admin to bypass CI" → NEVER. Fix the CI failure. Branch protection is there for a reason.
+- "I'll just quickly Read this file myself" → dispatch `deep-analyst` with the specific question; take the summary back
+- "It's just one Grep" → if the result could be >50 lines or context is already >60% of budget, dispatch instead
 
 ## Product Approval Gate
 

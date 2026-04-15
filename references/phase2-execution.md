@@ -92,6 +92,36 @@ TaskCreate(
 
 ---
 
+## Orchestrator Tool Budget
+
+In Phase 2 the orchestrator coordinates; it does not investigate or read code itself. The orchestrator's allowed direct tools are:
+
+- **Bash for status:** `git status`, `git log --oneline -N`, `git diff --stat`, `gh run list`, `gh pr view`, `ls`, `pwd`, `which`, `date`, short `echo` / `printf` for progress
+- **Bash for state I/O:** writing/reading `.superflow-state.json`, `.par-evidence.json`, CHANGELOG appends, `.superflow/compact-log/` listings
+- **Read for short config/state files (<50 lines):** `package.json`, `.superflow-state.json`, `.par-evidence.json`, the specific sprint section of the plan
+- **TaskCreate / TaskUpdate** for per-sprint stage tracking
+- **Agent (Task) tool** to dispatch subagents
+
+Anything else — and **especially** reading source code, exploring directories, running test suites, parsing JSON outputs longer than a few lines — belongs in a `deep-analyst` subagent that returns a <2k-token summary. Give the subagent the question, not a list of files to read.
+
+**Why this matters.** Orchestrator context grows monotonically through Phase 2. Every Read of a 500-line file adds 500 lines to a context that is already holding plan, charter, sprint state, PAR evidence, dual-model review output, and accumulated turn-history. Subagents return summaries; their own contexts are discarded when they exit. On a 6-8h autonomous run, the difference between "read files directly" and "route through analysts" is the difference between hitting the auto-compact threshold 10x vs. 2x.
+
+**Examples of correct delegation:**
+
+- *"What does module X do?"* → dispatch `deep-analyst` with the question; expect a bulleted summary back.
+- *"Does the codebase already have a function that does Y?"* → dispatch analyst to Grep + Read candidates + return a single-line answer (name/path or "no").
+- *"Why is test Z failing?"* → dispatch analyst to read the test, failure output, and suspected source files; return the root cause in 2-3 sentences.
+
+Exceptions to the budget, when a direct read is cheaper than a dispatch round-trip:
+
+- Files the orchestrator has already Read in the current sprint (still in context).
+- Files < 50 lines where the full content is the answer (e.g. confirming a PR's `.par-evidence.json` format).
+- Single-line status outputs (`git status --short`, `gh run list --limit 3`).
+
+See enforcement Rule 11 for the durable, compaction-surviving version of this budget.
+
+---
+
 ## Parallel Dispatch within a Sprint
 
 When a sprint has multiple tasks, analyze them for parallelism before dispatching.
