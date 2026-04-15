@@ -50,11 +50,14 @@ DUMP_FILE="$DUMP_DIR/precompact-${TS}.md"
     echo '```'
     echo ""
   fi
-  # Transcript tail: prefer explicit path from hook payload; fall back to glob.
+  # Transcript tail: prefer explicit path from hook payload; fall back to the
+  # Claude Code encoded project dir. Encoding maps both `/` and `.` to `-`,
+  # with the leading dash preserved (e.g. `/Users/x/.claude/y` becomes
+  # `-Users-x--claude-y`). Verified against `~/.claude/projects/`.
   if [ -z "$TRANSCRIPT_FILE" ] || [ ! -r "$TRANSCRIPT_FILE" ]; then
     TRANSCRIPT_DIR="$HOME/.claude/projects"
-    ENCODED_CWD="$(printf '%s' "$CWD" | sed 's|/|-|g; s|^-||')"
-    TRANSCRIPT_FILE="$(ls -t "$TRANSCRIPT_DIR"/*"$ENCODED_CWD"*/"$SESSION_ID".jsonl 2>/dev/null | head -1 || true)"
+    ENCODED_CWD="$(printf '%s' "$CWD" | sed 's|/|-|g; s|\.|-|g')"
+    TRANSCRIPT_FILE="$(ls -t "$TRANSCRIPT_DIR/$ENCODED_CWD/$SESSION_ID".jsonl 2>/dev/null | head -1 || true)"
   fi
   if [ -n "$TRANSCRIPT_FILE" ] && [ -r "$TRANSCRIPT_FILE" ]; then
     echo "## Recent transcript (last 40 entries from $TRANSCRIPT_FILE)"
