@@ -2,6 +2,14 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.8.0] - 2026-04-15
+
+### Added — Orchestrator Tool Budget (Rule 11)
+- **New enforcement Rule 11** in `superflow-enforcement.md`: in Phase 2 the orchestrator does NOT use Read/Grep/Glob directly on source files larger than 50 lines, and does NOT use Bash for anything beyond status checks, state I/O, and short progress output. All code reading, codebase exploration, research, and investigation route to `deep-analyst` (or `standard-implementer` for lighter work) with a <2k-token summary expected in response
+- **New section in `references/phase2-execution.md`**: "Orchestrator Tool Budget" enumerates allowed direct tools (Bash status/state, Read <50 lines, TaskCreate/TaskUpdate, Agent), lists correct-delegation examples, and calls out the rare exceptions where a direct read beats a dispatch round-trip
+- **Two new rationalizations** in the prevention list: "I'll just quickly Read this file myself" → dispatch analyst; "It's just one Grep" → dispatch if result could be >50 lines or context is already >60% of budget
+- **Why**: orchestrator context grows monotonically through Phase 2. Every directly-Read 500-line file adds 500 lines to a context already holding plan, charter, state, PAR evidence, review output, and turn history. Subagents return summaries and discard their own context on exit. On a 6-8h autonomous run, consistent delegation is the difference between hitting auto-compact ~2x versus ~10x — and the quality of the final holistic review depends on the orchestrator still being coherent at sprint N
+
 ## [4.7.0] - 2026-04-15
 
 ### Added — PreCompact State Externalization
