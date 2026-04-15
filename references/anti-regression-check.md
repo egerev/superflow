@@ -42,7 +42,7 @@ jq -e '.env.CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING == "1"' "$SETTINGS" >/dev/null
 jq -e '.env.MAX_THINKING_TOKENS' "$SETTINGS" >/dev/null 2>&1 || MISSING+=("MAX_THINKING_TOKENS")
 jq -e '.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW' "$SETTINGS" >/dev/null 2>&1 || MISSING+=("CLAUDE_CODE_AUTO_COMPACT_WINDOW")
 jq -e '.showThinkingSummaries == true' "$SETTINGS" >/dev/null 2>&1 || MISSING+=("showThinkingSummaries")
-jq -e '[.hooks.PreCompact // [] | .[]?.hooks[]?.command? // empty] | any(. | contains("precompact-state-externalization.sh"))' "$SETTINGS" >/dev/null 2>&1 || MISSING+=("PreCompactHook")
+jq -e '[.hooks.PreCompact? // [] | select(type == "array") | .[]?.hooks[]?.command? // empty] | any(endswith("/precompact-state-externalization.sh"))' "$SETTINGS" >/dev/null 2>&1 || MISSING+=("PreCompactHook")
 
 if [ ${#MISSING[@]} -eq 0 ]; then
   echo "ALL_SET"
@@ -116,6 +116,8 @@ cp "$SETTINGS" "$BACKUP_DIR/settings.json.$(date +%Y%m%d-%H%M%S).pre-anti-regres
 # SuperFlow hook).
 HOOK_CMD="$HOME/.claude/skills/superflow/hooks/precompact-state-externalization.sh"
 jq --arg cmd "$HOOK_CMD" '
+  # Normalize .hooks.PreCompact: absent or non-array becomes an empty array so
+  # the append below can never error. Preserves any existing array entries.
   .env = (.env // {}) + {
     "CLAUDE_CODE_EFFORT_LEVEL": "max",
     "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
@@ -125,10 +127,11 @@ jq --arg cmd "$HOOK_CMD" '
   | .showThinkingSummaries = true
   | .hooks = (.hooks // {})
   | .hooks.PreCompact = (
-      (.hooks.PreCompact // [])
+      (if (.hooks.PreCompact | type) == "array" then .hooks.PreCompact else [] end) as $existing
+      | $existing
       + (
-          if ([.hooks.PreCompact // [] | .[]?.hooks[]?.command? // empty]
-               | any(. | contains("precompact-state-externalization.sh")))
+          if ([$existing[]?.hooks[]?.command? // empty]
+               | any(endswith("/precompact-state-externalization.sh")))
           then []
           else [{"hooks": [{"type": "command", "command": $cmd}]}]
           end
@@ -165,6 +168,33 @@ EOF
 ```
 
 To re-trigger the check on a future session: `rm ~/.claude/.superflow-anti-regression-checked`.
+
+---
+
+## Recommended PostCompact hook
+
+The Phase 0 check does **not** detect or install `PostCompact` automatically (its `additionalContext` text is prose-heavy and too easy to false-negative on). But a correctly configured PostCompact hook is what makes the PreCompact dump useful — it tells the orchestrator to re-read the rules AND read the latest dump from `.superflow/compact-log/`.
+
+Canonical recommendation to document in onboarding:
+
+```json
+{
+  "hooks": {
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostCompact\",\"additionalContext\":\"CONTEXT COMPACTION OCCURRED. If you are running a SuperFlow workflow, you MUST immediately: (1) Read ~/.claude/rules/superflow-enforcement.md (2) Read the SuperFlow SKILL.md file (3) Re-read references/phase2-execution.md if in Phase 2 (4) ls -t .superflow/compact-log/ — if a dump exists, Read the most recent one to hydrate pre-compaction state. Critical reminders: NEVER write code directly - dispatch subagents. ALWAYS use git worktrees. ALWAYS run Product Acceptance Review before PRs.\"}}'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+If the user already has a PostCompact hook (likely, for SuperFlow users running 4.x), the apply script should NOT overwrite it — ask the user to add step (4) to their existing `additionalContext` manually. The reason: the existing text may have been customized, and merging prose safely is out of scope for `jq`.
 
 ---
 
