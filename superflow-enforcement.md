@@ -18,6 +18,7 @@ Survives context compaction. SKILL.md does not.
 6. **Dual-model reviews: specialize, don't duplicate.** Claude = Product lens (spec fit, user scenarios, data integrity). Secondary = Technical lens (correctness, security, architecture). No overlapping roles.
 7. **No secondary provider = two Claude agents.** Product (product-reviewer) + Technical (code-quality-reviewer).
 8. **One PR per sprint.** Execute silently after plan approval.
+8a. **NEVER `gh pr merge --admin`.** If CI is red, fix CI first. After every `gh pr create`, run `gh run list` and wait for CI green before merging. If CI fails, investigate with `gh run view <id> --log-failed`, fix, push, wait for green.
 9. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode. When required: two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report.
 10. **Governance mode fixed for the run.** Replanner adjusts sprint scope, not governance mode. Once selected in Phase 1 Step 2, the mode persists through all sprints in the run.
 
@@ -62,6 +63,8 @@ If you think any of these, STOP and do the thing:
 - "This sprint is too small for PAR" → run PAR
 - "Per-sprint PAR is enough" → check if holistic is required (Rule 9 conditions)
 - "I'll just git merge locally" → use `gh pr merge --rebase --delete-branch`
+- "CI is broken but my tests pass locally" → fix CI first, then merge
+- "I'll use --admin to bypass CI" → NEVER. Fix the CI failure. Branch protection is there for a reason.
 
 ## Product Approval Gate
 
