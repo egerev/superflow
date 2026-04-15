@@ -2,7 +2,7 @@
 name: standard-doc-writer
 description: "Documentation update agent for incremental doc updates (Phase 3)"
 model: opus
-effort: medium
+effort: high
 ---
 
 <role>

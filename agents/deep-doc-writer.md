@@ -2,7 +2,7 @@
 name: deep-doc-writer
 description: "Documentation generation agent for llms.txt and CLAUDE.md (Phase 0 first-time creation)"
 model: opus
-effort: high
+effort: max
 ---
 
 <role>

@@ -2,7 +2,7 @@
 name: deep-implementer
 description: "Deep implementation agent for complex tasks (new architecture, security-sensitive)"
 model: sonnet
-effort: high
+effort: max
 ---
 
 <role>

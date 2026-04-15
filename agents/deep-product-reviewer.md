@@ -2,7 +2,7 @@
 name: deep-product-reviewer
 description: "Deep product acceptance review for critical reviews"
 model: opus
-effort: high
+effort: max
 ---
 
 <role>
