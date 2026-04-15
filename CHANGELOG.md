@@ -2,6 +2,19 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.6.0] - 2026-04-15
+
+### Added — Phase 0 Anti-Regression Settings Check
+- **Inline detection in SKILL.md** (new step 5a, between Phase 0 gate and startup banner): at the start of every session, run a small `jq`-based bash check against `~/.claude/settings.json` for the four recommended env vars introduced in 4.5.0 (`CLAUDE_CODE_EFFORT_LEVEL=max`, `CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1`, `MAX_THINKING_TOKENS`, `CLAUDE_CODE_AUTO_COMPACT_WINDOW`) plus `showThinkingSummaries: true`
+- **New reference**: `references/anti-regression-check.md` — full detection script, user prompt template (translatable), `jq`-based apply script with auto-backup, marker file format, edge case handling
+- **Marker file**: `~/.claude/.superflow-anti-regression-checked` (JSON: `{checked_at, decision, missing_at_check, superflow_version}`) prevents re-prompting after the user's decision. To re-trigger: `rm` the marker
+- **Conversational, never auto-applies**: three options shown to user — `[y]es apply` / `[n]o defer` / `[s]kip-permanently`. After apply, prompts user to restart Claude Code (env vars are read at process start)
+- **Fail-safe**: if `jq` missing, `settings.json` malformed, or settings file absent, the check skips silently without blocking SuperFlow startup
+- **Rationale**: closes the loop on 4.5.0 — new SuperFlow users no longer need to manually find the recommended settings; Phase 0 surfaces them on first run with full context (links to issue #42796 and bcherny HN reply)
+
+### Why `CLAUDE_CODE_AUTO_COMPACT_WINDOW=400000` is mandatory (not optional)
+The Phase 2 use case justifies this even when the user prefers `1M + manual /clear` discipline elsewhere. Phase 2 is **fully autonomous** for 6-8 hours, sprint after sprint, with no `/clear` opportunity. The orchestrator's context grows monotonically: plans, subagent results, reviews, fix iterations, evidence. By the end of a long Phase 2 the context sits at 800-900k+, which is exactly when the final holistic review (governance="critical") makes whole-run decisions — the worst possible moment for the documented reads-per-edit / quality degradation. The `PostCompact` hook (already in `~/.claude/settings.json`) re-injects SuperFlow rules after every compaction, and Rule 5 (re-read phase docs at sprint boundary) further compensates — so compaction is *safe by architecture* in SuperFlow specifically. More frequent compaction (400k threshold) means smaller individual compressions and less cumulative loss than one big 1M → 200k compaction at the end.
+
 ## [4.5.0] - 2026-04-15
 
 ### Changed — Anti-Regression Effort Bumps

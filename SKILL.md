@@ -79,6 +79,21 @@ superflow/
      ```
      - `MARKER_LOCAL` or `MARKER_ON_MAIN` → skip Phase 0, write fresh state with phase=1
      - `NO_MARKER` → read `references/phase0-onboarding.md` for full Phase 0
+5a. **Anti-regression settings check** (inline — runs once per machine, do NOT read `references/anti-regression-check.md` unless needed):
+   ```bash
+   if [ -f ~/.claude/.superflow-anti-regression-checked ]; then echo "DISMISSED"; \
+   elif [ ! -r ~/.claude/settings.json ]; then echo "NO_SETTINGS"; \
+   else MISSING=(); \
+     jq -e '.env.CLAUDE_CODE_EFFORT_LEVEL == "max"' ~/.claude/settings.json >/dev/null 2>&1 || MISSING+=("CLAUDE_CODE_EFFORT_LEVEL"); \
+     jq -e '.env.CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING == "1"' ~/.claude/settings.json >/dev/null 2>&1 || MISSING+=("CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING"); \
+     jq -e '.env.MAX_THINKING_TOKENS' ~/.claude/settings.json >/dev/null 2>&1 || MISSING+=("MAX_THINKING_TOKENS"); \
+     jq -e '.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW' ~/.claude/settings.json >/dev/null 2>&1 || MISSING+=("CLAUDE_CODE_AUTO_COMPACT_WINDOW"); \
+     jq -e '.showThinkingSummaries == true' ~/.claude/settings.json >/dev/null 2>&1 || MISSING+=("showThinkingSummaries"); \
+     [ ${#MISSING[@]} -eq 0 ] && echo "ALL_SET" || printf "MISSING:%s\n" "$(IFS=,; echo "${MISSING[*]}")"; \
+   fi
+   ```
+   - `DISMISSED` / `ALL_SET` / `NO_SETTINGS` → silent, continue to step 6
+   - `MISSING:...` → read `references/anti-regression-check.md` and follow it (conversational: show user the diff, ask y/n/skip-permanently, apply via jq if user agrees, write marker file). After the user decision, continue to step 6.
 6. **Display startup banner** — output immediately after detection, before any phase routing:
    ```
    ╔═══════════════════════════════════╗
