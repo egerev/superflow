@@ -2,7 +2,7 @@
 name: standard-product-reviewer
 description: "Standard product review for per-sprint unified review"
 model: opus
-effort: medium
+effort: high
 ---
 
 <role>

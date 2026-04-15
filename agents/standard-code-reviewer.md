@@ -2,7 +2,7 @@
 name: standard-code-reviewer
 description: "Standard code quality review for per-sprint unified review"
 model: opus
-effort: medium
+effort: high
 ---
 
 <role>

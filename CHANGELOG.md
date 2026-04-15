@@ -2,6 +2,32 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [4.5.0] - 2026-04-15
+
+### Changed — Anti-Regression Effort Bumps
+- **Context**: Anthropic confirmed two regression-causing changes to Claude Code in Feb-Mar 2026: (1) adaptive thinking made the model self-pace reasoning length per turn, sometimes producing zero-thinking turns even at `effort=high`; (2) the default effort level was lowered from `high` to `medium`. See [issue #42796](https://github.com/anthropics/claude-code/issues/42796) and the [bcherny HN reply](https://news.ycombinator.com/item?id=47664442). Independent benchmarks (@Frisch12) show `CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1` covers only 1 of 5 adaptive code-paths in the cli — subagent paths via `V9H()` still ignore the env var. The legal lever for subagents is the `effort:` frontmatter in `~/.claude/agents/*.md` files
+- **deep-* agents**: `effort: high` → `effort: max`. Affects `deep-analyst`, `deep-code-reviewer`, `deep-doc-writer`, `deep-implementer`, `deep-product-reviewer`, `deep-spec-reviewer`. Used in Phase 0 audit, Phase 1 spec review, Phase 2 final holistic review, and llms.txt/CLAUDE.md generation
+- **standard-* agents**: `effort: medium` → `effort: high`. Affects `standard-code-reviewer`, `standard-doc-writer`, `standard-implementer`, `standard-product-reviewer`, `standard-spec-reviewer`. Used in per-sprint unified review, plan review, and Phase 3 doc updates
+- **fast-implementer**: unchanged at `effort: low` (intentionally cheap for CRUD/config/file-move tasks)
+- **Trade-off**: higher token spend per sprint and higher latency in exchange for guaranteed reasoning depth. Particularly important for SuperFlow because subagents (where most code is written and reviewed) cannot fall back to keyword triggers like `ultrathink` — those are detected only on the main user prompt
+
+### Added — Anti-Bypass CI Rule (8a)
+- **Rule 8a**: NEVER use `gh pr merge --admin`. After every `gh pr create`, run `gh run list` and wait for CI green before merging. If CI fails, investigate via `gh run view <id> --log-failed`, fix, push, wait for green
+- **Rationale**: branch protection exists for a reason. Bypassing CI with `--admin` defeats the entire dual-model review and verification discipline that PAR is built on
+- **Rationalization Prevention**: added two new traps to the prevention list — "CI is broken but my tests pass locally" → fix CI first; "I'll use --admin to bypass CI" → NEVER
+
+### Recommended — settings.json env vars
+For users running SuperFlow on Claude Code 2.1.108+, add to `~/.claude/settings.json`:
+```json
+{ "env": {
+    "CLAUDE_CODE_EFFORT_LEVEL": "max",
+    "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
+    "MAX_THINKING_TOKENS": "63999",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "400000"
+}, "showThinkingSummaries": true }
+```
+`MAX_THINKING_TOKENS` is only honored when `DISABLE_ADAPTIVE_THINKING=1` is set (adaptive nullifies it — see [claude-agent-sdk#168](https://github.com/anthropics/claude-agent-sdk-typescript/issues/168)). `AUTO_COMPACT_WINDOW=400000` keeps the working context tight enough that CLAUDE.md and SuperFlow rules don't get drowned out in 1M-context sessions.
+
 ## [4.4.0] - 2026-03-29
 
 ### Added — Sprint-Level Parallel Execution

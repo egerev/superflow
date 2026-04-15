@@ -2,7 +2,7 @@
 name: deep-code-reviewer
 description: "Deep code quality review — correctness, security, performance for critical reviews"
 model: opus
-effort: high
+effort: max
 ---
 
 <role>

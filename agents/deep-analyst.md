@@ -2,7 +2,7 @@
 name: deep-analyst
 description: "Deep analysis agent for Phase 0 codebase audit (shared by all 4 analyst roles)"
 model: opus
-effort: high
+effort: max
 ---
 
 <role>

@@ -2,7 +2,7 @@
 name: standard-implementer
 description: "Standard implementation agent for medium-complexity tasks"
 model: sonnet
-effort: medium
+effort: high
 ---
 
 <role>

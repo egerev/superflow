@@ -2,7 +2,7 @@
 name: standard-spec-reviewer
 description: "Standard spec compliance review for per-sprint unified review and plan review"
 model: opus
-effort: medium
+effort: high
 ---
 
 <role>
