@@ -89,6 +89,7 @@ superflow/
      jq -e '.env.MAX_THINKING_TOKENS' ~/.claude/settings.json >/dev/null 2>&1 || MISSING+=("MAX_THINKING_TOKENS"); \
      jq -e '.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW' ~/.claude/settings.json >/dev/null 2>&1 || MISSING+=("CLAUDE_CODE_AUTO_COMPACT_WINDOW"); \
      jq -e '.showThinkingSummaries == true' ~/.claude/settings.json >/dev/null 2>&1 || MISSING+=("showThinkingSummaries"); \
+     jq -e '[.hooks.PreCompact // [] | .[]?.hooks[]?.command? // empty] | any(. | contains("precompact-state-externalization.sh"))' ~/.claude/settings.json >/dev/null 2>&1 || MISSING+=("PreCompactHook"); \
      [ ${#MISSING[@]} -eq 0 ] && echo "ALL_SET" || printf "MISSING:%s\n" "$(IFS=,; echo "${MISSING[*]}")"; \
    fi
    ```

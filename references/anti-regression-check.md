@@ -42,6 +42,7 @@ jq -e '.env.CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING == "1"' "$SETTINGS" >/dev/null
 jq -e '.env.MAX_THINKING_TOKENS' "$SETTINGS" >/dev/null 2>&1 || MISSING+=("MAX_THINKING_TOKENS")
 jq -e '.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW' "$SETTINGS" >/dev/null 2>&1 || MISSING+=("CLAUDE_CODE_AUTO_COMPACT_WINDOW")
 jq -e '.showThinkingSummaries == true' "$SETTINGS" >/dev/null 2>&1 || MISSING+=("showThinkingSummaries")
+jq -e '[.hooks.PreCompact // [] | .[]?.hooks[]?.command? // empty] | any(. | contains("precompact-state-externalization.sh"))' "$SETTINGS" >/dev/null 2>&1 || MISSING+=("PreCompactHook")
 
 if [ ${#MISSING[@]} -eq 0 ]; then
   echo "ALL_SET"
@@ -77,6 +78,12 @@ Recommended additions to ~/.claude/settings.json:
 
   showThinkingSummaries: true                    # restore visible thinking blocks in UI
 
+Plus a PreCompact hook (dumps sprint state to .superflow/compact-log/ before
+compaction so the orchestrator can hydrate afterwards — see hooks/README.md):
+
+  hooks.PreCompact:
+    ~/.claude/skills/superflow/hooks/precompact-state-externalization.sh
+
 Trade-off: higher token spend per session, slightly higher latency. SuperFlow workflows benefit most.
 
 Sources: github.com/anthropics/claude-code/issues/42796 · news.ycombinator.com/item?id=47664442
@@ -104,13 +111,30 @@ BACKUP_DIR=~/.claude/backups
 mkdir -p "$BACKUP_DIR"
 cp "$SETTINGS" "$BACKUP_DIR/settings.json.$(date +%Y%m%d-%H%M%S).pre-anti-regression.bak"
 
-# Merge env keys (idempotent; preserves existing env vars)
-jq '.env = (.env // {}) + {
-  "CLAUDE_CODE_EFFORT_LEVEL": "max",
-  "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
-  "MAX_THINKING_TOKENS": "63999",
-  "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "400000"
-} | .showThinkingSummaries = true' "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
+# Merge env keys + append PreCompact hook entry (idempotent; preserves existing
+# env vars and any existing PreCompact entries that don't already reference the
+# SuperFlow hook).
+HOOK_CMD="$HOME/.claude/skills/superflow/hooks/precompact-state-externalization.sh"
+jq --arg cmd "$HOOK_CMD" '
+  .env = (.env // {}) + {
+    "CLAUDE_CODE_EFFORT_LEVEL": "max",
+    "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING": "1",
+    "MAX_THINKING_TOKENS": "63999",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "400000"
+  }
+  | .showThinkingSummaries = true
+  | .hooks = (.hooks // {})
+  | .hooks.PreCompact = (
+      (.hooks.PreCompact // [])
+      + (
+          if ([.hooks.PreCompact // [] | .[]?.hooks[]?.command? // empty]
+               | any(. | contains("precompact-state-externalization.sh")))
+          then []
+          else [{"hooks": [{"type": "command", "command": $cmd}]}]
+          end
+        )
+    )
+' "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
 
 echo "Applied. Backup at: $BACKUP_DIR/settings.json.*.pre-anti-regression.bak"
 ```
