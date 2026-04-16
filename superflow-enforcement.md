@@ -21,10 +21,11 @@ Survives context compaction. SKILL.md does not.
 8a. **NEVER `gh pr merge --admin`.** If CI is red, fix CI first. After every `gh pr create`, run `gh run list` and wait for CI green before merging. If CI fails, investigate with `gh run view <id> --log-failed`, fix, push, wait for green.
 9. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode. When required: two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report.
 10. **Governance mode fixed for the run.** Replanner adjusts sprint scope, not governance mode. Once selected in Phase 1 Step 2, the mode persists through all sprints in the run.
-11. **Orchestrator delegates investigation to subagents.** In Phase 2 the orchestrator does NOT use Read/Grep/Glob directly on source files larger than 50 lines, and does NOT use Bash for anything beyond: status checks (`git status`, `gh run list`, `gh pr view`, `ls`, `pwd`, `which`, `date`), state I/O (`.superflow-state.json`, `.par-evidence.json`, CHANGELOG appends), and short `echo`/`printf` for user-visible progress. Any code reading, codebase exploration, research, or investigation → dispatch `deep-analyst` (or `standard-implementer` for lighter work) and require a <2k-token summary in response. Raw file contents do not belong in the orchestrator's context. See `references/phase2-execution.md` § Orchestrator Tool Budget.
+11. **Orchestrator delegates investigation to subagents.** In Phase 2 the orchestrator does NOT use Read/Grep/Glob directly on source files larger than 50 lines, and does NOT use Bash for anything beyond: status checks (`git status`, `gh run list`, `gh pr view`, `ls`, `pwd`, `which`, `date`), state I/O (`.superflow-state.json`, `.par-evidence.json`, CHANGELOG appends), and short `echo`/`printf` for user-visible progress. Any code reading, codebase exploration, research, or investigation → dispatch `deep-analyst` (or `standard-implementer` for lighter work) and require a <2k-token summary in response. Raw file contents do not belong in the orchestrator's context. See `references/phase2-execution.md` § Orchestrator Tool Budget. **In Codex runtime:** `spawn_agent` replaces `Agent()`. Same budget rules apply. See `references/codex-dispatch-patterns.md`.
 
 ## Secondary Provider Invocation
 
+**When Claude is orchestrator (RUNTIME:claude):**
 ```bash
 $TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=<LEVEL> "PROMPT" 2>&1          # general
 $TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=<LEVEL> --ephemeral "PROMPT" 2>&1  # code review
@@ -32,6 +33,14 @@ $TIMEOUT_CMD 600 gemini "PROMPT" 2>&1                                           
 $TIMEOUT_CMD 600 $SECONDARY_PROVIDER <non-interactive-flag> "PROMPT" 2>&1                        # Other
 # No secondary → two Claude agents with split focus (Product + Technical)
 ```
+
+**When Codex is orchestrator (RUNTIME:codex):**
+```bash
+$TIMEOUT_CMD 600 claude -p "PROMPT" 2>&1                                                          # general
+$TIMEOUT_CMD 600 claude -p "$(cat prompts/claude/code-reviewer.md) DIFF_CONTEXT" 2>&1             # code review
+# No secondary → two Codex agents with split focus via spawn_agent (Product + Technical)
+```
+See `references/codex-dispatch-patterns.md` for the complete dispatch mapping.
 
 ## Reasoning Tiers
 

@@ -46,22 +46,42 @@ superflow/
 
 ## Startup Checklist
 
-1. Read `.claude/rules/superflow-enforcement.md`
-2. **Session recovery check** (only on `feat/*` branches): `git status --short`. If uncommitted changes exist from a crashed previous session:
+1. **Detect runtime** (before anything else):
+   ```bash
+   # Runtime detection — detect Claude positively, default to Codex
+   [ -n "$CLAUDE_CODE_SESSION_ID" ] && echo "RUNTIME:claude" || echo "RUNTIME:codex"
+   ```
+   Store the result. All subsequent steps branch on `RUNTIME`.
+2. **Read durable rules:**
+   - `RUNTIME:claude` → Read `.claude/rules/superflow-enforcement.md`
+   - `RUNTIME:codex` → Read `codex/AGENTS.md`
+3. **Session recovery check** (only on `feat/*` branches): `git status --short`. If uncommitted changes exist from a crashed previous session:
    a. `git stash` → run tests on clean HEAD → note results
    b. `git stash pop` → run tests again → compare
    c. If working tree tests fail but HEAD tests pass, the stashed changes have bugs — fix before proceeding
    d. If both pass, commit the stashed changes with appropriate message
-3. **Detect environment** (single bash call + context check):
+4. **Detect environment** (single bash call + context check):
    ```bash
-   # All detection in one command
-   codex --version 2>/dev/null && echo "PROVIDER:codex" || { gemini --version 2>/dev/null && echo "PROVIDER:gemini" || { aider --version 2>/dev/null && echo "PROVIDER:aider" || echo "PROVIDER:none"; }; }
+   # All detection in one command — secondary provider detection
+   if [ "$RUNTIME" = "codex" ]; then
+     # Codex is primary → detect Claude as secondary
+     claude --version 2>/dev/null && echo "SECONDARY:claude" || echo "SECONDARY:none"
+   else
+     # Claude is primary → detect Codex as secondary
+     codex --version 2>/dev/null && echo "SECONDARY:codex" || { gemini --version 2>/dev/null && echo "SECONDARY:gemini" || { aider --version 2>/dev/null && echo "SECONDARY:aider" || echo "SECONDARY:none"; }; }
+   fi
    command -v gtimeout &>/dev/null && echo "TIMEOUT:gtimeout" || { command -v timeout &>/dev/null && echo "TIMEOUT:timeout" || echo "TIMEOUT:perl_fallback"; }
    test -e .git && echo "MODE:enhancement" || echo "MODE:greenfield"
-   test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null
+   # Deploy agent definitions for the detected runtime
+   if [ "$RUNTIME" = "codex" ]; then
+     test -f ~/.codex/agents/deep-analyst.toml || cp ~/.claude/skills/superflow/codex/agents/*.toml ~/.codex/agents/ 2>/dev/null
+   else
+     test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null
+   fi
    ```
    Telegram: check deferred tools list for `mcp__plugin_telegram_telegram__reply`. **Only mention Telegram updates if detected.** Do NOT promise Telegram without the plugin.
-4. **Check `.superflow-state.json`** for resume context:
+   **Codex runtime:** also persist runtime to state: `context.runtime = "codex"` when writing `.superflow-state.json`.
+5. **Check `.superflow-state.json`** for resume context:
    - If `phase = 2` AND current branch is `main`:
      - If `context.charter_file` exists on disk → valid resume (handoff, mid-execution, or completed)
      - Else → state is stale from a previous run. Reset: write fresh state with phase=1
@@ -113,6 +133,7 @@ superflow/
 
 ## Secondary Provider Detection
 
+**When RUNTIME=claude** (Claude is orchestrator):
 ```bash
 codex --version 2>/dev/null && SECONDARY_PROVIDER="codex"
 [ -z "$SECONDARY_PROVIDER" ] && gemini --version 2>/dev/null && SECONDARY_PROVIDER="gemini"
@@ -120,7 +141,28 @@ codex --version 2>/dev/null && SECONDARY_PROVIDER="codex"
 # If none found -> split-focus Claude (two agents, different lenses)
 ```
 
+**When RUNTIME=codex** (Codex is orchestrator):
+```bash
+claude --version 2>/dev/null && SECONDARY_PROVIDER="claude"
+# If none found -> split-focus Codex (two agents, different lenses)
+```
+
 Use detected provider silently. No warnings about missing providers.
+
+## Codex Runtime Specifics
+
+When RUNTIME=codex, the following differences apply throughout all phases:
+
+- **Dispatch**: use spawn_agent tool with agent name from .toml definitions in `~/.codex/agents/`
+- **Parallelism**: implicit (max_threads=6), no run_in_background needed. But max_depth=1 — no nested spawning
+- **Secondary**: Claude CLI — `$TIMEOUT_CMD 600 claude -p "PROMPT" 2>&1`
+- **Durable rules**: `codex/AGENTS.md` — re-read after ANY `/compact`
+- **Progress tracking**: printf (no TaskCreate/TaskUpdate available)
+- **Hooks**: `~/.codex/hooks.json` (SessionStart + Stop), no PreCompact/PostCompact
+- **Context budget**: ~258K — use `/compact` between sprints, session-per-sprint for 4+ sprints
+- **Phase docs routing**: read `references/codex/<phase>.md` for dispatch, main `references/<phase>.md` for logic
+- **Sprint execution**: sequential only (max_depth=1 prevents sprint-level delegation)
+- **Skill discovery**: symlink `~/.agents/skills/superflow → ~/.claude/skills/superflow` for Codex discovery
 
 ## State Management
 
