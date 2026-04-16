@@ -2,8 +2,7 @@
 
 Reference scripts for Claude Code hooks that improve SuperFlow's behavior on
 long-running autonomous sessions. These files are **not** installed automatically
-— the Phase 0 anti-regression check (`references/anti-regression-check.md`)
-detects missing hooks and offers to install them with user consent.
+— install manually by following the instructions in each script's section below.
 
 ## `precompact-state-externalization.sh`
 
