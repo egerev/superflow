@@ -62,7 +62,7 @@
             "null"
           ]
         },
-"plan_file": {
+        "plan_file": {
           "type": [
             "string",
             "null"
@@ -74,7 +74,7 @@
             "null"
           ]
         },
-"preflight": {
+        "preflight": {
           "type": "object",
           "properties": {
             "stack": {
@@ -176,6 +176,15 @@
           ],
           "default": "standard",
           "description": "Review governance level"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "claude",
+            "codex"
+          ],
+          "default": "claude",
+          "description": "Detected runtime environment \u2014 persisted for compaction recovery"
         }
       }
     },
