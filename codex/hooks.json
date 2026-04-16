@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [{
+          "type": "command",
+          "command": "/bin/bash -c 'cat \"$PWD/.superflow-state.json\" 2>/dev/null || echo \"{}\"'",
+          "statusMessage": "Loading Superflow state"
+        }]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [{
+          "type": "command",
+          "command": "/bin/bash \"$HOME/.claude/skills/superflow/hooks/codex-stop-state-dump.sh\"",
+          "timeout": 10
+        }]
+      }
+    ]
+  }
+}

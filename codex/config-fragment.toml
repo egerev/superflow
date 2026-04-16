@@ -1,0 +1,13 @@
+# Superflow — recommended Codex CLI configuration
+# Merge into ~/.codex/config.toml
+
+[agents]
+max_threads = 6       # Parallel subagent cap (Superflow uses up to 5)
+max_depth = 1         # Codex constraint: subagents cannot spawn sub-subagents
+
+[features]
+codex_hooks = true    # Required for SessionStart + Stop hooks
+multi_agent = true    # Required for spawn_agent tool
+
+# Recommended for Superflow Phase 2 (long autonomous runs):
+# model_auto_compact_token_limit = 200000
