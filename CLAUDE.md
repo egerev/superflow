@@ -1,7 +1,7 @@
 # Superflow — Claude Instructions
 
 ## Project Overview
-Superflow is a pure Markdown Claude Code skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, autonomous execution with PR-per-sprint, and merge. v4.4.0, MIT License.
+Superflow is a pure Markdown skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, autonomous execution with PR-per-sprint, and merge. v5.0.0, MIT License. Supports both **Claude Code** and **Codex CLI** as primary orchestrator (auto-detected at startup via `$CLAUDE_CODE_SESSION_ID`).
 
 ## Key Rules
 - All documentation output in English — user communication follows their language preference
@@ -12,9 +12,17 @@ Superflow is a pure Markdown Claude Code skill that orchestrates a 4-phase dev w
 
 ## Architecture
 ```
-SKILL.md (entry point, ~120 lines)
+SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
   ├── superflow-enforcement.md (durable rules → ~/.claude/rules/)
+  ├── codex/
+  │   ├── AGENTS.md (durable rules for Codex → ~/.codex/AGENTS.md)
+  │   ├── agents/*.toml (12 Codex agent definitions → ~/.codex/agents/)
+  │   ├── hooks.json (SessionStart + Stop hooks → ~/.codex/hooks.json)
+  │   └── config-fragment.toml (reference config for ~/.codex/config.toml)
   ├── references/
+  │   ├── codex/ (Codex dispatch overlays — one per phase)
+  │   ├── codex-dispatch-patterns.md (complete Agent→spawn_agent mapping table)
+  │   ├── codex-context-strategy.md (258K context budget guide)
   │   ├── phase0-onboarding.md (router — detection, recovery matrix, stage loading)
   │   ├── phase0/
   │   │   ├── stage1-detect.md (parallel preflight, auto-detection, confirmation)
@@ -85,4 +93,7 @@ SKILL.md (entry point, ~120 lines)
 - Permissions JSON: single-sourced in `references/phase0/stage4-setup.md` (Branch B); `README.md` has a short example with a link to the canonical source
 - Greenfield templates (nextjs.md, python.md) provide config files but not source file contents — LLM generates those
 - **Phase 3 post-compaction merge regression**: context compaction during Phase 3 merge loop can cause agent to fall back to local `git merge` instead of `gh pr merge --rebase --delete-branch`, leaving GitHub PRs open and creating non-linear history. Mitigated by adding merge method rule to `superflow-enforcement.md` (survives compaction). Full fix: re-read `phase3-merge.md` before each PR merge, not just at stage start.
+- **Codex `max_depth=1`**: subagents cannot spawn sub-subagents — prevents sprint-level delegation in Phase 2. Sprints execute sequentially in Codex runtime. Wave-based parallelism only available in Claude runtime.
+- **Codex no PreCompact/PostCompact**: compaction recovery relies on Stop hook dumps + SessionStart re-injection + self-referential rule in AGENTS.md. Less reliable than Claude's hook-based recovery.
+- **Codex context ~258K**: 4x smaller than Claude's 1M. Long Phase 2 runs (4+ sprints) require session-per-sprint strategy or aggressive /compact usage.
 <!-- updated-by-superflow:2026-03-27 -->
