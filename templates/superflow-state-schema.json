@@ -199,8 +199,8 @@
           "description": "ISO 8601 timestamp of the last heartbeat write"
         },
         "current_sprint": {
-          "type": "integer",
-          "description": "Sprint number currently in progress"
+          "type": ["integer", "null"],
+          "description": "Sprint number currently in progress. Null when state was written before sprint assignment."
         },
         "sprint_goal": {
           "type": "string",
@@ -208,7 +208,7 @@
         },
         "merge_method": {
           "type": "string",
-          "description": "Merge strategy in use, e.g. 'rebase'"
+          "description": "Merge method for Phase 3. Canonical: 'rebase' → actual command 'gh pr merge <N> --rebase --delete-branch'. Never local git merge."
         },
         "active_worktree": {
           "type": "string",
@@ -231,7 +231,7 @@
         },
         "phase2_step": {
           "type": "string",
-          "description": "Current Phase 2 stage label: setup | implementation | review | par | docs | ship"
+          "description": "Stage name enum: setup | implementation | review | par | docs | ship. (Supersedes early-draft integer form.)"
         }
       }
     },
