@@ -81,6 +81,17 @@ superflow/
    ```
    Telegram: check deferred tools list for `mcp__plugin_telegram_telegram__reply`. **Only mention Telegram updates if detected.** Do NOT promise Telegram without the plugin.
    **Codex runtime:** also persist runtime to state: `context.runtime = "codex"` when writing `.superflow-state.json`.
+4b. **Event log setup** — initialize the run's event log:
+    ```bash
+    export SUPERFLOW_RUN_ID="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)"
+    mkdir -p .superflow
+    # Source the emit helper (no-op if already sourced)
+    source ~/.claude/skills/superflow/tools/sf-emit.sh 2>/dev/null || true
+    sf_emit run.start runtime="$RUNTIME" phase="$CURRENT_PHASE" 2>/dev/null || true
+    ```
+    Persist `SUPERFLOW_RUN_ID` into `.superflow-state.json` under `context.run_id` for recovery after `/clear`.
+
+    Note: If `tools/sf-emit.sh` is missing (v4.x installs without Run 2), log a one-line warning and continue — event log is telemetry, not required for execution.
 5. **Check `.superflow-state.json`** for resume context:
    - If `phase = 2` AND current branch is `main`:
      - If `context.charter_file` exists on disk → valid resume (handoff, mid-execution, or completed)
