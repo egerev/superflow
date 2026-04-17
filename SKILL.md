@@ -118,7 +118,7 @@ superflow/
 6. **Display startup banner** — output immediately after detection, before any phase routing:
    ```
    ╔═══════════════════════════════════╗
-   ║  ⚡ SUPERFLOW v4.2.0              ║
+   ║  ⚡ SUPERFLOW v5.0.0              ║
    ║  Autonomous Dev Workflow          ║
    ╚═══════════════════════════════════╝
    ```
