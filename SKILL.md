@@ -91,6 +91,11 @@ superflow/
       fi
       export SUPERFLOW_RUN_ID
     fi
+    # Persist run_id into state so /clear + resume restores it (atomic write)
+    if [ -f .superflow-state.json ]; then
+      tmp=$(mktemp .superflow-state.XXXXXX)
+      jq --arg rid "$SUPERFLOW_RUN_ID" '.context.run_id = $rid' .superflow-state.json > "$tmp" && mv "$tmp" .superflow-state.json
+    fi
     mkdir -p .superflow
     # Runtime-aware path discovery — try Claude, Codex, agents, then repo-local
     _SF_EMIT_FOUND=""
@@ -104,7 +109,7 @@ superflow/
     if [ -z "${_SF_EMIT_FOUND:-}" ]; then
       echo "⚠️  sf-emit.sh not found — event telemetry disabled (see superflow v5 Run 2)" >&2
     fi
-    sf_emit run.start runtime="${RUNTIME:-claude}" phase:int="${CURRENT_PHASE:-0}" 2>/dev/null || true
+    sf_emit run.start runtime="${RUNTIME:-claude}" phase:int="${CURRENT_PHASE:-0}" || true
     ```
     Persist `SUPERFLOW_RUN_ID` into `.superflow-state.json` under `context.run_id` for recovery after `/clear`.
 
