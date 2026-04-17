@@ -135,22 +135,42 @@ sf_emit() {
   done
 
   # Generate event fields
-  local event_id ts
+  local event_id ts instance_id
   event_id="$(_sf_uuid)" || return 1
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  instance_id="${SUPERFLOW_INSTANCE_ID:-default}"
 
   # Build complete event JSON via jq — no shell interpolation of user values
   local event_json
-  event_json="$(jq -n \
-    --arg id     "$event_id" \
-    --arg ts     "$ts" \
-    --arg run_id "$SUPERFLOW_RUN_ID" \
-    --arg type   "$type" \
-    "${jq_args[@]}" \
-    "{ id: \$id, ts: \$ts, run_id: \$run_id, type: \$type, data: (${jq_data_filter}) }")" || {
-    echo "sf_emit: jq failed to build event JSON" >&2
-    return 1
-  }
+  local jq_filter='{ v: 1, id: $id, ts: $ts, run_id: $run_id, instance_id: $instance_id, type: $type, data: ('"${jq_data_filter}"') }'
+  # Optionally include parent_id if SF_PARENT_ID is set
+  if [ -n "${SF_PARENT_ID:-}" ]; then
+    jq_filter='{ v: 1, id: $id, ts: $ts, run_id: $run_id, instance_id: $instance_id, parent_id: $parent_id, type: $type, data: ('"${jq_data_filter}"') }'
+    event_json="$(jq -cn \
+      --arg id          "$event_id" \
+      --arg ts          "$ts" \
+      --arg run_id      "$SUPERFLOW_RUN_ID" \
+      --arg instance_id "$instance_id" \
+      --arg parent_id   "$SF_PARENT_ID" \
+      --arg type        "$type" \
+      "${jq_args[@]}" \
+      "$jq_filter")" || {
+      echo "sf_emit: jq failed to build event JSON" >&2
+      return 1
+    }
+  else
+    event_json="$(jq -cn \
+      --arg id          "$event_id" \
+      --arg ts          "$ts" \
+      --arg run_id      "$SUPERFLOW_RUN_ID" \
+      --arg instance_id "$instance_id" \
+      --arg type        "$type" \
+      "${jq_args[@]}" \
+      "$jq_filter")" || {
+      echo "sf_emit: jq failed to build event JSON" >&2
+      return 1
+    }
+  fi
 
   # Determine output file and ensure directory exists
   local out_file="${SUPERFLOW_EVENTS_FILE:-.superflow/events.jsonl}"
