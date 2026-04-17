@@ -361,7 +361,7 @@
             },
             "verdict": {
               "type": "string",
-              "enum": ["APPROVE", "ACCEPTED", "REQUEST_CHANGES", "NEEDS_FIXES", "PASS", "BLOCK"],
+              "enum": ["APPROVE", "ACCEPTED", "REQUEST_CHANGES", "NEEDS_FIXES", "PASS", "FAIL"],
               "description": "Reviewer verdict"
             },
             "findings": {
