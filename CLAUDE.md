@@ -55,12 +55,13 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 **Key v4.0 artifacts:**
 - **Autonomy Charter** (`docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`): generated at end of Phase 1, injected into every sprint prompt and reviewer. Contains goal, non-negotiables, success criteria, governance mode.
 - **completion-data.json** (`.superflow/completion-data.json`): structured completion data for Phase 3 merge context.
+- **Heartbeat block** (optional field in `.superflow-state.json`): compaction-recovery snapshot written at sprint start and each stage transition. 9 fields: `updated_at`, `current_sprint`, `sprint_goal`, `merge_method`, `active_worktree`, `active_branch`, `must_reread`, `last_review_verdict`, `phase2_step`. Enforced by Rule 12; PreCompact hook surfaces it in the dump.
 
 ## Key Files
 | File | Purpose |
 |------|---------|
 | `SKILL.md` | Entry point — startup checklist, provider detection, state management, phase routing |
-| `superflow-enforcement.md` | 10 hard rules, specialized 2-agent reviews, rationalization prevention, phase gates |
+| `superflow-enforcement.md` | 12 hard rules, specialized 2-agent reviews, rationalization prevention, phase gates |
 | `references/phase0-onboarding.md` | Router — detection, recovery matrix, stage loading |
 | `references/phase0/stage1-detect.md` | Parallel preflight, auto-detection, confirmation |
 | `references/phase0/stage2-analysis.md` | 5 parallel agents, tiered model usage |
@@ -84,7 +85,7 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 - Both `<!-- updated-by-superflow:` and `<!-- superflow:onboarded` are valid markers (backwards compat)
 - Breakage scenario required for every review finding — no scenario = not a finding
 - All phases use stage/todo structure with TaskCreate for progress tracking
-- `.superflow-state.json` persists phase/stage for crash recovery (gitignored); extended with `brief_file`, `charter_file`, `completion_data_file`, `governance_mode`
+- `.superflow-state.json` persists phase/stage for crash recovery (gitignored); extended with `brief_file`, `charter_file`, `completion_data_file`, `governance_mode`, and optional `heartbeat` block for compaction drift defense
 - **Governance modes** (light/standard/critical): auto-suggested at Phase 1 start, stored in state and charter. Controls review depth, holistic review threshold, and plan complexity
 - **Autonomy Charter**: durable intent artifact generated at end of Phase 1. Injected into sprint prompts and reviewers as single source of truth for autonomous execution boundaries
 
@@ -92,8 +93,8 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 - TDD cycle duplicated in `implementer.md:23-31` and `testing-guidelines.md:13-21` (agent sees it twice since implementer includes testing-guidelines)
 - Permissions JSON: single-sourced in `references/phase0/stage4-setup.md` (Branch B); `README.md` has a short example with a link to the canonical source
 - Greenfield templates (nextjs.md, python.md) provide config files but not source file contents — LLM generates those
-- **Phase 3 post-compaction merge regression**: context compaction during Phase 3 merge loop can cause agent to fall back to local `git merge` instead of `gh pr merge --rebase --delete-branch`, leaving GitHub PRs open and creating non-linear history. Mitigated by adding merge method rule to `superflow-enforcement.md` (survives compaction). Full fix: re-read `phase3-merge.md` before each PR merge, not just at stage start.
+- **Phase 3 post-compaction merge regression**: context compaction during Phase 3 merge loop can cause agent to fall back to local `git merge` instead of `gh pr merge --rebase --delete-branch`, leaving GitHub PRs open and creating non-linear history. Mitigated by adding merge method rule to `superflow-enforcement.md` (survives compaction). Second defense layer: heartbeat `must_reread` includes `phase3-merge.md` and enforcement rules, and PreCompact hook dumps heartbeat snapshot. Full fix: re-read `phase3-merge.md` before each PR merge, not just at stage start.
 - **Codex `max_depth=1`**: subagents cannot spawn sub-subagents — prevents sprint-level delegation in Phase 2. Sprints execute sequentially in Codex runtime. Wave-based parallelism only available in Claude runtime.
 - **Codex no PreCompact/PostCompact**: compaction recovery relies on Stop hook dumps + SessionStart re-injection + self-referential rule in AGENTS.md. Less reliable than Claude's hook-based recovery.
 - **Codex context ~258K**: 4x smaller than Claude's 1M. Long Phase 2 runs (4+ sprints) require session-per-sprint strategy or aggressive /compact usage.
-<!-- updated-by-superflow:2026-03-27 -->
+<!-- updated-by-superflow:2026-04-17 -->
