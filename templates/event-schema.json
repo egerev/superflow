@@ -1,0 +1,499 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Superflow Event",
+  "description": "Additive-only evolution. New event types MAY be added without major-version bump. New optional fields in existing `data` MAY be added. Removing types or fields, renaming, or adding required fields = breaking change; requires schema version bump in filename (event-schema.v2.json).",
+  "type": "object",
+  "required": ["id", "ts", "run_id", "type", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique event identifier (UUID v4)"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of event emission"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Superflow run UUID — set at session start, stable across compactions within a run"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "run.start",
+        "run.end",
+        "phase.start",
+        "phase.end",
+        "stage.start",
+        "stage.end",
+        "sprint.start",
+        "sprint.end",
+        "agent.dispatch",
+        "agent.complete",
+        "agent.fail",
+        "review.start",
+        "review.verdict",
+        "test.run",
+        "test.result",
+        "pr.create",
+        "pr.merge",
+        "compact.pre",
+        "compact.post",
+        "heartbeat"
+      ],
+      "description": "Event type discriminator"
+    },
+    "data": {
+      "type": "object",
+      "description": "Type-specific payload; structure defined by oneOf branches keyed on parent type"
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "type": { "const": "run.start" },
+        "data": {
+          "type": "object",
+          "required": ["runtime", "phase"],
+          "additionalProperties": false,
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "enum": ["claude", "codex"],
+              "description": "Detected orchestrator runtime"
+            },
+            "phase": {
+              "type": "integer",
+              "description": "Phase number at run start"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "run.end" },
+        "data": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["completed", "blocked", "failed"],
+              "description": "Terminal status of the run"
+            },
+            "merged_prs": {
+              "type": "array",
+              "items": { "type": "integer" },
+              "description": "PR numbers merged during this run (optional)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "phase.start" },
+        "data": {
+          "type": "object",
+          "required": ["phase", "label"],
+          "additionalProperties": false,
+          "properties": {
+            "phase": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3,
+              "description": "Phase number (0-3)"
+            },
+            "label": {
+              "type": "string",
+              "description": "Human-readable phase label"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "phase.end" },
+        "data": {
+          "type": "object",
+          "required": ["phase", "label"],
+          "additionalProperties": false,
+          "properties": {
+            "phase": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3,
+              "description": "Phase number (0-3)"
+            },
+            "label": {
+              "type": "string",
+              "description": "Human-readable phase label"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "stage.start" },
+        "data": {
+          "type": "object",
+          "required": ["phase", "stage"],
+          "additionalProperties": false,
+          "properties": {
+            "phase": {
+              "type": "integer",
+              "description": "Phase number containing this stage"
+            },
+            "stage": {
+              "type": "string",
+              "description": "Stage identifier string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "stage.end" },
+        "data": {
+          "type": "object",
+          "required": ["phase", "stage"],
+          "additionalProperties": false,
+          "properties": {
+            "phase": {
+              "type": "integer",
+              "description": "Phase number containing this stage"
+            },
+            "stage": {
+              "type": "string",
+              "description": "Stage identifier string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "sprint.start" },
+        "data": {
+          "type": "object",
+          "required": ["sprint", "total_sprints", "goal", "complexity"],
+          "additionalProperties": false,
+          "properties": {
+            "sprint": {
+              "type": "integer",
+              "description": "Sprint number (1-based)"
+            },
+            "total_sprints": {
+              "type": "integer",
+              "description": "Total number of sprints planned"
+            },
+            "goal": {
+              "type": "string",
+              "description": "Short description of this sprint's goal"
+            },
+            "complexity": {
+              "type": "string",
+              "enum": ["simple", "medium", "complex"],
+              "description": "Estimated complexity of the sprint"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "sprint.end" },
+        "data": {
+          "type": "object",
+          "required": ["sprint", "total_sprints", "goal", "complexity"],
+          "additionalProperties": false,
+          "properties": {
+            "sprint": {
+              "type": "integer",
+              "description": "Sprint number (1-based)"
+            },
+            "total_sprints": {
+              "type": "integer",
+              "description": "Total number of sprints planned"
+            },
+            "goal": {
+              "type": "string",
+              "description": "Short description of this sprint's goal"
+            },
+            "complexity": {
+              "type": "string",
+              "enum": ["simple", "medium", "complex"],
+              "description": "Estimated complexity of the sprint"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "agent.dispatch" },
+        "data": {
+          "type": "object",
+          "required": ["role", "task"],
+          "additionalProperties": false,
+          "properties": {
+            "role": {
+              "type": "string",
+              "description": "Agent role identifier (e.g. deep-implementer)"
+            },
+            "task": {
+              "type": "string",
+              "description": "Short description of the task dispatched to the agent"
+            },
+            "model": {
+              "type": "string",
+              "description": "Model name/identifier used by the agent (optional)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "agent.complete" },
+        "data": {
+          "type": "object",
+          "required": ["role"],
+          "additionalProperties": false,
+          "properties": {
+            "role": {
+              "type": "string",
+              "description": "Agent role identifier"
+            },
+            "agent_id": {
+              "type": "string",
+              "description": "Unique agent invocation ID (optional)"
+            },
+            "summary": {
+              "type": "string",
+              "description": "Short summary of agent output (optional)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "agent.fail" },
+        "data": {
+          "type": "object",
+          "required": ["role"],
+          "additionalProperties": false,
+          "properties": {
+            "role": {
+              "type": "string",
+              "description": "Agent role identifier"
+            },
+            "agent_id": {
+              "type": "string",
+              "description": "Unique agent invocation ID (optional)"
+            },
+            "summary": {
+              "type": "string",
+              "description": "Short summary of failure reason (optional)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "review.start" },
+        "data": {
+          "type": "object",
+          "required": ["reviewer", "target"],
+          "additionalProperties": false,
+          "properties": {
+            "reviewer": {
+              "type": "string",
+              "description": "Reviewer identifier (e.g. standard-product-reviewer)"
+            },
+            "target": {
+              "type": "string",
+              "description": "What is being reviewed (e.g. PR branch, sprint N)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "review.verdict" },
+        "data": {
+          "type": "object",
+          "required": ["reviewer", "verdict"],
+          "additionalProperties": false,
+          "properties": {
+            "reviewer": {
+              "type": "string",
+              "description": "Reviewer identifier"
+            },
+            "verdict": {
+              "type": "string",
+              "enum": ["APPROVE", "ACCEPTED", "REQUEST_CHANGES", "NEEDS_FIXES", "PASS", "BLOCK"],
+              "description": "Reviewer verdict"
+            },
+            "findings": {
+              "type": "integer",
+              "description": "Number of findings reported (optional)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "test.run" },
+        "data": {
+          "type": "object",
+          "required": ["command"],
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "Test command executed"
+            },
+            "cwd": {
+              "type": "string",
+              "description": "Working directory for the test run (optional)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "test.result" },
+        "data": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["pass", "fail"],
+              "description": "Overall test status"
+            },
+            "passed": {
+              "type": "integer",
+              "description": "Number of tests passed (optional)"
+            },
+            "failed": {
+              "type": "integer",
+              "description": "Number of tests failed (optional)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "pr.create" },
+        "data": {
+          "type": "object",
+          "required": ["number", "title", "branch"],
+          "additionalProperties": false,
+          "properties": {
+            "number": {
+              "type": "integer",
+              "description": "GitHub PR number"
+            },
+            "title": {
+              "type": "string",
+              "description": "PR title"
+            },
+            "branch": {
+              "type": "string",
+              "description": "Feature branch name"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "pr.merge" },
+        "data": {
+          "type": "object",
+          "required": ["number", "method"],
+          "additionalProperties": false,
+          "properties": {
+            "number": {
+              "type": "integer",
+              "description": "GitHub PR number"
+            },
+            "method": {
+              "type": "string",
+              "enum": ["rebase", "squash", "merge"],
+              "description": "Git merge method used"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "compact.pre" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dump_path": {
+              "type": "string",
+              "description": "Path to pre-compaction state dump file (optional)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "compact.post" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dump_path": {
+              "type": "string",
+              "description": "Path to post-compaction state dump file (optional)"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "heartbeat" },
+        "data": {
+          "type": "object",
+          "required": ["phase2_step"],
+          "additionalProperties": false,
+          "properties": {
+            "phase2_step": {
+              "type": "string",
+              "description": "Current Phase 2 step identifier (e.g. setup, implementation, review)"
+            },
+            "sprint": {
+              "type": "integer",
+              "description": "Current sprint number (optional)"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
