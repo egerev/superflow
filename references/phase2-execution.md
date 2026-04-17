@@ -55,13 +55,6 @@ cat > .superflow-state.json << STATEEOF
 STATEEOF
 ```
 
-Then update at each stage transition:
-
-```bash
-python3 -c "import json,datetime,sys; s=json.load(open('.superflow-state.json')); s['stage']='implementation'; s['stage_index']=1; s['sprint']=int(sys.argv[1]); s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)" "$SPRINT_NUM"
-# Replace $SPRINT_NUM with the actual sprint number (e.g., 1, 2, 3)
-```
-
 ### Heartbeat Writes
 
 **At sprint start** (immediately after Step 1 re-read of phase docs, before any other work):
@@ -102,26 +95,36 @@ os.replace(tmp, state_file)
 # Plan file is NOT in must_reread — it can be unbounded in size. Read only the specific sprint section via Step 1.
 ```
 
-**At each stage transition** (right after updating `state.stage`), merge the heartbeat field — do NOT overwrite the whole state:
+**At each stage transition** — single atomic write that updates `state.stage`, `state.stage_index`, `state.last_updated`, AND `heartbeat.phase2_step` in one `json.dump` + `os.replace`. Do NOT use the old two-step pattern (separate stage update then heartbeat update) — a crash between those two writes leaves state inconsistent:
 
 ```bash
 python3 -c "
 import json, datetime, sys, os, tempfile
+# stage_name  stage_index  sprint_num (sys.argv[1..3])
+STAGE_INDEXES = {'setup':0,'implementation':1,'review':2,'par':3,'docs':4,'ship':5}
 state_file = '.superflow-state.json'
 s = json.load(open(state_file))
+stage = sys.argv[1]
+s['stage'] = stage
+s['stage_index'] = STAGE_INDEXES.get(stage, s.get('stage_index', 0))
+s['sprint'] = int(sys.argv[2]) if len(sys.argv) > 2 else s.get('sprint', 1)
+s['last_updated'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 hb = s.get('heartbeat', {})
-hb['updated_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-hb['phase2_step'] = sys.argv[1]
+hb['updated_at'] = s['last_updated']
+hb['phase2_step'] = stage
 s['heartbeat'] = hb
 fd, tmp = tempfile.mkstemp(dir=os.path.dirname(state_file) or '.', prefix='.superflow-state.', suffix='.tmp')
 with os.fdopen(fd, 'w') as f:
     json.dump(s, f, indent=2)
 os.replace(tmp, state_file)
-" \"\$NEXT_STAGE\"
+" \"\$NEXT_STAGE\" \"\$SPRINT_NUM\"
 # NEXT_STAGE: one of setup | implementation | review | par | docs | ship
+# SPRINT_NUM: current sprint number (e.g., 1, 2, 3)
+# On resume: heartbeat.phase2_step is the authoritative source of current stage.
+# state.stage is kept in sync for backward compat with v4.8 readers.
 ```
 
-**Backward compatibility:** Both snippets use `.get('heartbeat', {})` — if `.superflow-state.json` was written by v4.8 and has no `heartbeat` key, the field is created fresh. The rest of the state is untouched.
+**Backward compatibility:** All snippets use `.get('heartbeat', {})` — if `.superflow-state.json` was written by v4.8 and has no `heartbeat` key, the field is created fresh. The rest of the state is untouched.
 
 **Resume semantics:** Heartbeat `phase2_step` marks stage START — it is written as the orchestrator enters a stage, not when it exits. On post-compaction resume, read `phase2_step` and re-enter that stage from its first todo. Idempotency: each stage's todos are safe to re-run — worktree re-check is a no-op if it already exists, re-running tests is harmless. The one exception is PR creation in the Ship stage: always run `gh pr view` before `gh pr create` to avoid duplicate PRs.
 
@@ -300,14 +303,14 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
 2. <!-- Stage 1: Setup, Todo 2 --> **Telegram update** (if MCP connected): "Starting sprint N: [title]"
 3. <!-- Stage 1: Setup, Todo 3 --> **Worktree**: verify `.worktrees/` is gitignored (`git check-ignore -q .worktrees || echo '.worktrees/' >> .gitignore`), then `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`
 4. <!-- Stage 1: Setup, Todo 4 --> **Baseline tests** in worktree: run full test suite, record output. If tests fail on baseline, stop and report — do not build on a broken base.
-5. <!-- Stage 2: Implementation, Todos 1-2 --> **Update state stage to "implementation"** then emit heartbeat stage transition (`$NEXT_STAGE=implementation`). **Dispatch implementers** — model from plan's sprint complexity tag (see Adaptive Implementation Model below), wave analysis for parallelism (see Parallel Dispatch above).
+5. <!-- Stage 2: Implementation, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=implementation`, `$SPRINT_NUM=N`). **Dispatch implementers** — model from plan's sprint complexity tag (see Adaptive Implementation Model below), wave analysis for parallelism (see Parallel Dispatch above).
    - 5a. Analyze task list — identify independent tasks
    - 5b. Group into waves
    - 5c. For Wave 1: dispatch each as `Agent(run_in_background: true)` with appropriate implementer tier
    - 5d. For subsequent waves: same pattern
    - 5e. After all waves: verify no file conflicts with `git status`
    Include `llms.txt` content in agent context (if exists).
-6. <!-- Stage 3: Review, Todos 1-3 --> **Update state stage to "review"** then emit heartbeat stage transition (`$NEXT_STAGE=review`). **Unified Review** (2 specialized agents parallel, Reasoning: Standard tier):
+6. <!-- Stage 3: Review, Todos 1-3 --> **Emit unified stage transition** (`$NEXT_STAGE=review`, `$SPRINT_NUM=N`). **Unified Review** (2 specialized agents parallel, Reasoning: Standard tier):
    Both agents receive: the SPEC, the product brief, and the relevant git diff.
    Principle: **specialize, don't duplicate** — Claude = Product lens, secondary = Technical lens.
 
@@ -326,7 +329,7 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
    - CRITICAL/REQUEST_CHANGES from either agent = fix required
    - Fix confirmed issues. Re-run only the agent that flagged issues.
    - If a finding is incorrect (reviewer lacked context), record disagreement with reasoning and skip.
-7. <!-- Stage 4: PAR, Todos 1-4 --> **Update state stage to "par"** then emit heartbeat stage transition (`$NEXT_STAGE=par`). **Post-review test verification + PAR evidence**:
+7. <!-- Stage 4: PAR, Todos 1-4 --> **Emit unified stage transition** (`$NEXT_STAGE=par`, `$SPRINT_NUM=N`). **Post-review test verification + PAR evidence**:
    Run full test suite after all review fixes. Paste actual output as evidence (enforcement rule 4).
    Write `.par-evidence.json` in worktree root:
    ```json
@@ -339,7 +342,7 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
    }
    ```
    Both verdicts must be APPROVE/ACCEPTED/PASS. If either agent returned issues, they must be fixed and the agent re-run before evidence is written.
-8. <!-- Stage 5: Docs, Todos 1-2 --> **Update state stage to "docs"** then emit heartbeat stage transition (`$NEXT_STAGE=docs`). **Documentation update** — dispatch `standard-doc-writer` to update CLAUDE.md and llms.txt based on sprint changes:
+8. <!-- Stage 5: Docs, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=docs`, `$SPRINT_NUM=N`). **Documentation update** — dispatch `standard-doc-writer` to update CLAUDE.md and llms.txt based on sprint changes:
    ```
    Agent(
      subagent_type: "standard-doc-writer",
@@ -374,7 +377,7 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
    )
    ```
    After agent completes, commit doc changes: `git add CLAUDE.md llms.txt && git commit -m "docs: update project documentation for sprint N" || true` (the `|| true` handles the case where nothing changed).
-9. <!-- Stage 6: Ship, Todos 1-2 --> **Update state stage to "ship"** then emit heartbeat stage transition (`$NEXT_STAGE=ship`). **Push + PR**: verify `.par-evidence.json` exists with both verdicts passing. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
+9. <!-- Stage 6: Ship, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=ship`, `$SPRINT_NUM=N`). **Push + PR**: verify `.par-evidence.json` exists with both verdicts passing. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
 10. <!-- Stage 6: Ship, Todo 3 --> **Cleanup**: verify PR was created successfully (`gh pr view` returns data), then `git worktree remove .worktrees/sprint-N`
 11. <!-- Stage 6: Ship, Todo 4 --> **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." Then next sprint.
 
