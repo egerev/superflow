@@ -16,7 +16,7 @@ Version: v4.2.0 (2026-03-27). MIT License.
 ## File Structure
 
 - [SKILL.md](SKILL.md): Entry point — startup checklist (6 steps), provider detection, phase routing (~120 lines)
-- [superflow-enforcement.md](superflow-enforcement.md): 10 hard rules that survive context compaction — deployed to ~/.claude/rules/ (77 lines)
+- [superflow-enforcement.md](superflow-enforcement.md): 12 hard rules that survive context compaction — deployed to ~/.claude/rules/ (98 lines)
 - [CLAUDE.md](CLAUDE.md): Project instructions for Claude — architecture, key files table, conventions (~90 lines)
 - [README.md](README.md): Installation, usage, v4.1 features, permissions setup
 
@@ -30,7 +30,7 @@ Version: v4.2.0 (2026-03-27). MIT License.
 - [references/phase0/stage5-completion.md](references/phase0/stage5-completion.md): Markers, tech debt persistence, restart (~163 lines)
 - [references/phase0/greenfield.md](references/phase0/greenfield.md): Greenfield path G1-G6 (~350 lines)
 - [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — expert panel brainstorming (Board Memo pattern), governance mode selection, spec/plan review, Autonomy Charter generation (~330 lines)
-- [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — wave-based parallel dispatch, governance-aware review tiering, charter compliance, holistic review (~280 lines)
+- [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — wave-based parallel dispatch, governance-aware review tiering, charter compliance, holistic review, heartbeat writes at each stage transition (544 lines)
 - [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, CI handling, structured completion-data.json, post-merge report (184 lines)
 
 ## Agent Prompts
@@ -63,8 +63,9 @@ Version: v4.2.0 (2026-03-27). MIT License.
 - **Review gate:** Mandatory gate before every PR push — all reviewers must return ACCEPTED, evidence written to `.par-evidence.json`
 - **Final Holistic Review:** After all sprints complete (conditional on governance mode and sprint count), two reviewers review ALL code together to catch cross-module issues
 - **Breakage Scenario:** Every review finding must include a concrete scenario where the issue causes a real problem — no scenario = not a finding
-- **Compaction resilience:** Enforcement rules live in `~/.claude/rules/` (auto-loaded by Claude Code), phase docs are re-read from disk at boundaries
+- **Compaction resilience:** Enforcement rules live in `~/.claude/rules/` (auto-loaded by Claude Code), phase docs are re-read from disk at boundaries. Heartbeat block in `.superflow-state.json` adds a second layer — Rule 12 requires re-reading all `must_reread` paths each orchestrator turn; PreCompact hook dumps heartbeat snapshot before context is truncated
+- **Heartbeat protocol:** Optional `heartbeat` object in `.superflow-state.json` (9 fields: `updated_at`, `current_sprint`, `sprint_goal`, `merge_method`, `active_worktree`, `active_branch`, `must_reread`, `last_review_verdict`, `phase2_step`). Written atomically via `tempfile + os.replace` at sprint start and each stage transition. Enforced by Rule 12 (superflow-enforcement.md). Schema defined in `templates/superflow-state-schema.json`
 - **Markers:** `<!-- updated-by-superflow:YYYY-MM-DD -->` in generated files — used to detect whether Phase 0 has run
 - **Sprint plan:** Implementation plan defines sprints with dependencies and complexity tags, used for autonomous execution
 
-<!-- updated-by-superflow:2026-03-27 -->
+<!-- updated-by-superflow:2026-04-17 -->
