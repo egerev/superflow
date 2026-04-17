@@ -185,6 +185,10 @@
           ],
           "default": "claude",
           "description": "Detected runtime environment \u2014 persisted for compaction recovery"
+        },
+        "run_id": {
+          "type": "string",
+          "description": "UUID generated at session start, persisted across compaction/resume. Corresponds to run_id field in event-schema.json envelope."
         }
       }
     },
