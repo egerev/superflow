@@ -68,49 +68,59 @@ python3 -c "import json,datetime,sys; s=json.load(open('.superflow-state.json'))
 
 ```bash
 python3 -c "
-import json, datetime, sys
+import json, datetime, sys, os, tempfile
 state_file = '.superflow-state.json'
 s = json.load(open(state_file))
 hb = s.get('heartbeat', {})
 hb['updated_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-hb['current_sprint'] = s.get('sprint', 1)
+hb['current_sprint'] = int(s.get('sprint') or 1)
 hb['sprint_goal'] = sys.argv[1]
 hb['merge_method'] = 'rebase'
 hb['active_worktree'] = sys.argv[2]
 hb['active_branch'] = sys.argv[3]
-hb['must_reread'] = [
-    '~/.claude/rules/superflow-enforcement.md',
+must_reread = [p for p in [
+    os.path.expanduser('~/.claude/rules/superflow-enforcement.md'),
     'references/phase2-execution.md',
-    sys.argv[4]
-]
+    s.get('context', {}).get('charter_file') or None,
+    s.get('context', {}).get('plan_file') or None,
+] if p]
+hb['must_reread'] = must_reread
 hb['last_review_verdict'] = hb.get('last_review_verdict', None)
 hb['phase2_step'] = 'setup'
 s['heartbeat'] = hb
-json.dump(s, open(state_file, 'w'), indent=2)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(state_file) or '.', prefix='.superflow-state.', suffix='.tmp')
+with os.fdopen(fd, 'w') as f:
+    json.dump(s, f, indent=2)
+os.replace(tmp, state_file)
 " \"\$SPRINT_GOAL\" \"\$WORKTREE_PATH\" \"\$BRANCH_NAME\" \"\$CHARTER_FILE\"
 # SPRINT_GOAL: one-line sprint description from plan
 # WORKTREE_PATH: e.g. .worktrees/sprint-1
 # BRANCH_NAME: e.g. feat/feature-sprint-1
-# CHARTER_FILE: value of context.charter_file from state
+# CHARTER_FILE: kept for backward compat; actual paths come from state context.charter_file and context.plan_file
 ```
 
 **At each stage transition** (right after updating `state.stage`), merge the heartbeat field — do NOT overwrite the whole state:
 
 ```bash
 python3 -c "
-import json, datetime, sys
+import json, datetime, sys, os, tempfile
 state_file = '.superflow-state.json'
 s = json.load(open(state_file))
 hb = s.get('heartbeat', {})
 hb['updated_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 hb['phase2_step'] = sys.argv[1]
 s['heartbeat'] = hb
-json.dump(s, open(state_file, 'w'), indent=2)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(state_file) or '.', prefix='.superflow-state.', suffix='.tmp')
+with os.fdopen(fd, 'w') as f:
+    json.dump(s, f, indent=2)
+os.replace(tmp, state_file)
 " \"\$NEXT_STAGE\"
 # NEXT_STAGE: one of setup | implementation | review | par | docs | ship
 ```
 
 **Backward compatibility:** Both snippets use `.get('heartbeat', {})` — if `.superflow-state.json` was written by v4.8 and has no `heartbeat` key, the field is created fresh. The rest of the state is untouched.
+
+**Resume semantics:** Heartbeat `phase2_step` marks stage START — it is written as the orchestrator enters a stage, not when it exits. On post-compaction resume, read `phase2_step` and re-enter that stage from its first todo. Idempotency: each stage's todos are safe to re-run — worktree re-check is a no-op if it already exists, re-running tests is harmless. The one exception is PR creation in the Ship stage: always run `gh pr view` before `gh pr create` to avoid duplicate PRs.
 
 ### TaskCreate/TaskUpdate Pattern
 
