@@ -27,6 +27,10 @@ Stage 3: "Post-merge"
   - "Send Telegram report"
 ```
 
+### Phase 3 Entry After Compaction
+
+On Phase 3 entry, check for a heartbeat block in `.superflow-state.json`. If `heartbeat.phase2_step == 'ship'`, the previous Phase 2 run ended cleanly and all sprint PRs were created. Re-read this file (`references/phase3-merge.md`) before every PR merge — it is already included in `heartbeat.must_reread` via the Phase 2 heartbeat writer, so compaction-triggered rehydration will pull the exact merge procedure into context automatically.
+
 ### State Management
 
 At the start of Phase 3, merge-update `.superflow-state.json` (preserves `context.*`):
