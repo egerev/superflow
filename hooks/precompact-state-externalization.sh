@@ -49,6 +49,14 @@ DUMP_FILE="$DUMP_DIR/precompact-${TS}.md"
     cat "$CWD/.superflow-state.json"
     echo '```'
     echo ""
+    if command -v jq >/dev/null 2>&1 && jq -e '.heartbeat' "$CWD/.superflow-state.json" >/dev/null 2>&1; then
+      echo "## Heartbeat (at compaction time)"
+      echo ""
+      echo '```json'
+      jq '.heartbeat' "$CWD/.superflow-state.json"
+      echo '```'
+      echo ""
+    fi
   fi
   # Transcript tail: prefer explicit path from hook payload; fall back to the
   # Claude Code encoded project dir. Encoding maps both `/` and `.` to `-`,
