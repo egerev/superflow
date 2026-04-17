@@ -1,14 +1,19 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Superflow Event",
-  "description": "Additive-only evolution. New event types MAY be added without major-version bump. New optional fields in existing `data` MAY be added. Removing types or fields, renaming, or adding required fields = breaking change; requires schema version bump in filename (event-schema.v2.json).",
+  "description": "Additive-only evolution. New event types MAY be added without major-version bump. New optional fields in existing `data` MAY be added. Removing types or fields, renaming, or adding required fields = breaking change; requires schema version bump in filename (event-schema.v2.json). Consumers MUST tolerate unknown top-level fields (v > their known max).",
   "type": "object",
-  "required": ["id", "ts", "run_id", "type", "data"],
-  "additionalProperties": false,
+  "required": ["v", "id", "ts", "run_id", "type", "data"],
+  "additionalProperties": true,
   "properties": {
+    "v": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version — const 1 in this file; increment filename to v2 for breaking changes"
+    },
     "id": {
       "type": "string",
-      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
       "description": "Unique event identifier (UUID v4)"
     },
     "ts": {
@@ -18,8 +23,16 @@
     },
     "run_id": {
       "type": "string",
-      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
       "description": "Superflow run UUID — set at session start, stable across compactions within a run"
+    },
+    "instance_id": {
+      "type": "string",
+      "description": "Superflow instance identifier — reserved for Run 7 multi-instance support (default: \"default\")"
+    },
+    "parent_id": {
+      "type": "string",
+      "description": "Optional parent event ID for correlation (e.g. agent.dispatch → sprint.start)"
     },
     "type": {
       "type": "string",
