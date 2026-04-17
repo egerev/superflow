@@ -91,12 +91,17 @@ superflow/
       fi
       export SUPERFLOW_RUN_ID
     fi
-    # Persist run_id into state so /clear + resume restores it (atomic write)
+    # Persist run_id into state — always, even on first run (creates minimal state if absent)
+    mkdir -p .superflow
     if [ -f .superflow-state.json ]; then
       tmp=$(mktemp .superflow-state.XXXXXX)
-      jq --arg rid "$SUPERFLOW_RUN_ID" '.context.run_id = $rid' .superflow-state.json > "$tmp" && mv "$tmp" .superflow-state.json
+      jq --arg rid "$SUPERFLOW_RUN_ID" '.context = (.context // {}) | .context.run_id = $rid' .superflow-state.json > "$tmp" && mv "$tmp" .superflow-state.json
+    else
+      jq -n --arg rid "$SUPERFLOW_RUN_ID" '{"context":{"run_id":$rid}}' > .superflow-state.json
     fi
-    mkdir -p .superflow
+    # Derive current phase from persisted state (0 = onboarding/first-time, which is correct)
+    CURRENT_PHASE=$(jq -r '.phase // 0' .superflow-state.json 2>/dev/null || echo 0)
+    export CURRENT_PHASE
     # Runtime-aware path discovery — try Claude, Codex, agents, then repo-local
     _SF_EMIT_FOUND=""
     for p in \
@@ -109,7 +114,7 @@ superflow/
     if [ -z "${_SF_EMIT_FOUND:-}" ]; then
       echo "⚠️  sf-emit.sh not found — event telemetry disabled (see superflow v5 Run 2)" >&2
     fi
-    sf_emit run.start runtime="${RUNTIME:-claude}" phase:int="${CURRENT_PHASE:-0}" || true
+    sf_emit run.start runtime="${RUNTIME:-claude}" phase:int="$CURRENT_PHASE" || true
     ```
     Persist `SUPERFLOW_RUN_ID` into `.superflow-state.json` under `context.run_id` for recovery after `/clear`.
 

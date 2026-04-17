@@ -102,4 +102,6 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 - **Codex no PreCompact/PostCompact**: compaction recovery relies on Stop hook dumps + SessionStart re-injection + self-referential rule in AGENTS.md. Less reliable than Claude's hook-based recovery.
 - **Codex context ~258K**: 4x smaller than Claude's 1M. Long Phase 2 runs (4+ sprints) require session-per-sprint strategy or aggressive /compact usage.
 - **Per-event-type key allowlist deferred to Sprint 2**: `sf_emit` validates key names against an identifier regex and the event type against a global allowlist, but does not yet validate which keys are legal per event type. Practical injection is blocked in Sprint 1; semantic key validation ships in Sprint 2.
+- **Sprint 2 hardening — flock/size cap for sf-emit.sh**: `O_APPEND` is atomic only up to `PIPE_BUF` (~4KB on Linux). Large events or concurrent writes could corrupt `.superflow/events.jsonl`. Fix: add `flock` or enforce a per-event size cap in `sf-emit.sh`.
+- **Sprint 2 hardening — per-event-type key allowlist**: validate which keys are legal per event type (not just identifier regex); blocks semantic drift in telemetry payloads.
 <!-- updated-by-superflow:2026-04-17 -->
