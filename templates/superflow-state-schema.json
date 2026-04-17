@@ -188,6 +188,53 @@
         }
       }
     },
+    "heartbeat": {
+      "type": "object",
+      "description": "Compaction-recovery snapshot written by the orchestrator at sprint start and each stage transition. Optional — v4.8 states without this field remain valid.",
+      "additionalProperties": false,
+      "properties": {
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of the last heartbeat write"
+        },
+        "current_sprint": {
+          "type": "integer",
+          "description": "Sprint number currently in progress"
+        },
+        "sprint_goal": {
+          "type": "string",
+          "description": "Short one-line description of the current sprint goal"
+        },
+        "merge_method": {
+          "type": "string",
+          "description": "Merge strategy in use, e.g. 'rebase'"
+        },
+        "active_worktree": {
+          "type": "string",
+          "description": "Filesystem path of the active git worktree"
+        },
+        "active_branch": {
+          "type": "string",
+          "description": "Name of the active feature branch"
+        },
+        "must_reread": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "File paths the orchestrator MUST have in context this turn before advancing work"
+        },
+        "last_review_verdict": {
+          "type": ["string", "null"],
+          "description": "Most recent unified review verdict, e.g. 'APPROVE'. Null if no review has run yet."
+        },
+        "phase2_step": {
+          "type": "string",
+          "description": "Current Phase 2 stage label: setup | implementation | review | par | docs | ship"
+        }
+      }
+    },
     "history": {
       "type": "array",
       "items": {
