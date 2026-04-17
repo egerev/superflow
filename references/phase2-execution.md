@@ -82,7 +82,9 @@ must_reread = [p for p in [
     os.path.expanduser('~/.claude/rules/superflow-enforcement.md'),
     'references/phase2-execution.md',
     s.get('context', {}).get('charter_file') or None,
-    s.get('context', {}).get('plan_file') or None,
+    'references/phase3-merge.md',
+    # must_reread: only short (<300 line) orchestration files. Plan file excluded
+    # (read per-sprint section only, via Step 1 re-read).
 ] if p]
 hb['must_reread'] = must_reread
 hb['last_review_verdict'] = hb.get('last_review_verdict', None)
@@ -96,7 +98,8 @@ os.replace(tmp, state_file)
 # SPRINT_GOAL: one-line sprint description from plan
 # WORKTREE_PATH: e.g. .worktrees/sprint-1
 # BRANCH_NAME: e.g. feat/feature-sprint-1
-# CHARTER_FILE: kept for backward compat; actual paths come from state context.charter_file and context.plan_file
+# CHARTER_FILE: kept for backward compat; charter path comes from state context.charter_file
+# Plan file is NOT in must_reread — it can be unbounded in size. Read only the specific sprint section via Step 1.
 ```
 
 **At each stage transition** (right after updating `state.stage`), merge the heartbeat field — do NOT overwrite the whole state:
