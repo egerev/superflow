@@ -2,6 +2,22 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [5.0.0] - 2026-04-16
+
+### Added — Codex CLI Compatibility (Dual-Runtime Support)
+- **Runtime auto-detection**: SKILL.md step 1 probes `$CLAUDE_CODE_SESSION_ID` to distinguish Claude Code vs Codex CLI; all subsequent phases branch on the detected runtime. Existing Claude Code behavior is unchanged
+- **New Codex overlay (21 files)**: `codex/agents/*.toml` (12 agent definitions mirroring Claude's `.md` set), `codex/AGENTS.md` (durable rules equivalent of `superflow-enforcement.md`), `codex/hooks.json` (SessionStart + Stop — no PreCompact/PostCompact on Codex), `codex/config-fragment.toml`, `prompts/claude/*.md` (3 Claude-invocation prompts for when Claude is the secondary), `references/codex/*.md` (5 phase-routing docs), `references/codex-dispatch-patterns.md`, `references/codex-context-strategy.md`
+- **Dispatch differences**: Codex uses `spawn_agent` with agent names from `.toml` definitions in `~/.codex/agents/`. Parallelism is implicit (max_threads=6), no `run_in_background` needed — but `max_depth=1` means no nested spawning, so sprint execution is sequential only on Codex
+- **Secondary provider detection**: reversed based on runtime — Codex-as-orchestrator probes Claude CLI; Claude-as-orchestrator probes Codex/Gemini/Aider in that order
+- **State schema**: `context.runtime` field added to `.superflow-state.json` to persist the detected runtime across SessionStart hook restores
+- **Context discipline**: on Codex the orchestrator uses `/compact` between sprints and session-per-sprint for 4+ sprints, because Codex's ~258K budget is tighter than Claude's 1M
+- **Skill discovery**: symlink `~/.agents/skills/superflow → ~/.claude/skills/superflow` for Codex skill discovery alongside Claude's
+
+### Fixed — Version String Sync
+- SKILL.md startup banner updated to `v5.0.0` (was `v4.2.0` — never bumped alongside 4.3.0–5.0.0 releases)
+- README.md header updated to `v5.0.0` (was `v4.4.0`)
+- CHANGELOG.md now records the 5.0.0 release (was stuck at 4.8.0)
+
 ## [4.8.0] - 2026-04-15
 
 ### Added — Orchestrator Tool Budget (Rule 11)
