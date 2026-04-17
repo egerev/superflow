@@ -7,7 +7,7 @@
 #
 # Examples:
 #   sf_emit run.start runtime=claude phase=2
-#   sf_emit agent.dispatch role=implementer task="Sprint 1" model=sonnet
+#   sf_emit agent.dispatch agent_type=implementer task="Sprint 1" model=sonnet
 #   sf_emit sprint.end sprint=1 total_sprints=3 goal="Event log contract" complexity=medium
 #
 # SUPERFLOW_RUN_ID must be set before calling sf_emit (UUID string).

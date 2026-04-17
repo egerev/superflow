@@ -82,6 +82,10 @@
             "phase": {
               "type": "integer",
               "description": "Phase number at run start"
+            },
+            "charter": {
+              "type": "string",
+              "description": "Path to the Autonomy Charter file (optional)"
             }
           }
         }
@@ -256,12 +260,12 @@
         "type": { "const": "agent.dispatch" },
         "data": {
           "type": "object",
-          "required": ["role", "task"],
+          "required": ["agent_type", "task"],
           "additionalProperties": false,
           "properties": {
-            "role": {
+            "agent_type": {
               "type": "string",
-              "description": "Agent role identifier (e.g. deep-implementer)"
+              "description": "Agent type identifier (e.g. deep-implementer)"
             },
             "task": {
               "type": "string",
@@ -418,20 +422,28 @@
         "type": { "const": "pr.create" },
         "data": {
           "type": "object",
-          "required": ["number", "title", "branch"],
+          "required": ["pr_number"],
           "additionalProperties": false,
           "properties": {
-            "number": {
+            "pr_number": {
               "type": "integer",
               "description": "GitHub PR number"
             },
+            "sprint": {
+              "type": "integer",
+              "description": "Sprint number this PR was created for (optional)"
+            },
+            "url": {
+              "type": "string",
+              "description": "GitHub PR URL (optional)"
+            },
             "title": {
               "type": "string",
-              "description": "PR title"
+              "description": "PR title (optional)"
             },
             "branch": {
               "type": "string",
-              "description": "Feature branch name"
+              "description": "Feature branch name (optional)"
             }
           }
         }
