@@ -56,6 +56,7 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 - **Autonomy Charter** (`docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`): generated at end of Phase 1, injected into every sprint prompt and reviewer. Contains goal, non-negotiables, success criteria, governance mode.
 - **completion-data.json** (`.superflow/completion-data.json`): structured completion data for Phase 3 merge context.
 - **Heartbeat block** (optional field in `.superflow-state.json`): compaction-recovery snapshot written at sprint start and each stage transition. 9 fields: `updated_at`, `current_sprint`, `sprint_goal`, `merge_method`, `active_worktree`, `active_branch`, `must_reread`, `last_review_verdict`, `phase2_step`. Enforced by Rule 12; PreCompact hook surfaces it in the dump.
+- **Event log** (`.superflow/events.jsonl`): append-only JSONL telemetry stream. Each line is a compact JSON object conforming to `templates/event-schema.json` (JSON Schema 2020-12, 524 lines, 20 event types). Emitted via `tools/sf-emit.sh`. `SUPERFLOW_RUN_ID` (UUID) groups all events for a run; persisted to `.superflow-state.json` under `context.run_id` for recovery after `/clear`.
 
 ## Key Files
 | File | Purpose |
@@ -76,6 +77,8 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 | `prompts/expert-panel.md` | Expert persona prompt — proposals, challenge, recommendation |
 | `prompts/llms-txt-writer.md` | llmstxt.org standard, no hard size limit |
 | `prompts/claude-md-writer.md` | Verified paths/commands, <200 lines target |
+| `tools/sf-emit.sh` | Source-safe bash library for emitting JSONL events; usage: `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true` (207 lines) |
+| `templates/event-schema.json` | JSON Schema 2020-12 for all event types — envelope fields + 20 per-type data schemas, additive evolution policy (524 lines) |
 
 ## Conventions
 - Pure Markdown skill (no Python, no pip dependencies)
@@ -88,6 +91,7 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 - `.superflow-state.json` persists phase/stage for crash recovery (gitignored); extended with `brief_file`, `charter_file`, `completion_data_file`, `governance_mode`, and optional `heartbeat` block for compaction drift defense
 - **Governance modes** (light/standard/critical): auto-suggested at Phase 1 start, stored in state and charter. Controls review depth, holistic review threshold, and plan complexity
 - **Autonomy Charter**: durable intent artifact generated at end of Phase 1. Injected into sprint prompts and reviewers as single source of truth for autonomous execution boundaries
+- **Event emission**: `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true key:json='{"x":1}'`. Typed key syntax: bare `=` → string, `:int=` → number, `:bool=` → boolean, `:json=` → raw JSON. jq-only construction; validates type against allowlist and key names against identifier regex before emitting one compact JSONL line.
 
 ## Known Issues & Tech Debt
 - TDD cycle duplicated in `implementer.md:23-31` and `testing-guidelines.md:13-21` (agent sees it twice since implementer includes testing-guidelines)
@@ -97,4 +101,5 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 - **Codex `max_depth=1`**: subagents cannot spawn sub-subagents — prevents sprint-level delegation in Phase 2. Sprints execute sequentially in Codex runtime. Wave-based parallelism only available in Claude runtime.
 - **Codex no PreCompact/PostCompact**: compaction recovery relies on Stop hook dumps + SessionStart re-injection + self-referential rule in AGENTS.md. Less reliable than Claude's hook-based recovery.
 - **Codex context ~258K**: 4x smaller than Claude's 1M. Long Phase 2 runs (4+ sprints) require session-per-sprint strategy or aggressive /compact usage.
+- **Per-event-type key allowlist deferred to Sprint 2**: `sf_emit` validates key names against an identifier regex and the event type against a global allowlist, but does not yet validate which keys are legal per event type. Practical injection is blocked in Sprint 1; semantic key validation ships in Sprint 2.
 <!-- updated-by-superflow:2026-04-17 -->

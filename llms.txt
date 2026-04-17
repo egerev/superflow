@@ -54,8 +54,15 @@ Version: v4.2.0 (2026-03-27). MIT License.
 - Standard tier (Sonnet, medium effort): standard-implementer, standard-code-reviewer, standard-product-reviewer, standard-spec-reviewer, standard-doc-writer
 - Fast tier (Sonnet, low effort): fast-implementer
 
+## Tools & Schemas
+
+- [tools/sf-emit.sh](tools/sf-emit.sh): Source-safe bash library for JSONL event emission — `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true key:json='...'`; validates type allowlist and key identifier regex (207 lines)
+- [templates/event-schema.json](templates/event-schema.json): JSON Schema 2020-12 defining the event envelope (`v`, `id`, `ts`, `run_id`, `type`, `data`, `instance_id`, `parent_id`) and 20 per-type data schemas; additive evolution policy (524 lines)
+- [templates/superflow-state-schema.json](templates/superflow-state-schema.json): JSON Schema for `.superflow-state.json` state file including the `context.run_id` field added in Run 2 Sprint 1
+
 ## Key Concepts
 
+- **Event log telemetry:** Append-only `.superflow/events.jsonl` stream grouping all events for a run under a `SUPERFLOW_RUN_ID` (UUID). Emitted via `tools/sf-emit.sh`. `run_id` is persisted to `.superflow-state.json` under `context.run_id` so `/clear` + resume restores the same run identity. Event log is telemetry — not required for execution; missing `sf-emit.sh` logs a warning and continues.
 - **Autonomy Charter:** Durable intent artifact generated at end of Phase 1. Contains goal, non-negotiables, success criteria, and governance mode. Injected into every sprint prompt and reviewer context — single source of truth for autonomous execution boundaries
 - **Adaptive governance:** Three modes (light/standard/critical) auto-suggested based on task dimensions. Controls review depth, holistic review threshold, and plan structure. Light mode uses inline sprint plans in the charter
 - **Expert panel brainstorming:** Phase 1 dispatches 3-4 parallel expert persona agents (Product GM, Staff Engineer, UX/Workflow, Domain Expert). Outputs synthesized into Board Memo with consensus, disagreements, risks, and decisions needed
