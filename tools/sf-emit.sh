@@ -71,7 +71,7 @@ _sf_uuid() {
 
 # sf_emit <type> [key=value ...]
 # Constructs a JSON event object and appends it to the events file.
-# All JSON construction done via jq -n with --arg/--argjson — no shell interpolation.
+# All JSON construction done via jq -cn (compact, null-input) with --arg/--argjson — no shell interpolation.
 sf_emit() {
   local type="${1:-}"
   if [ -z "$type" ]; then
