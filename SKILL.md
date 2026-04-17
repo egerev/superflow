@@ -83,11 +83,28 @@ superflow/
    **Codex runtime:** also persist runtime to state: `context.runtime = "codex"` when writing `.superflow-state.json`.
 4b. **Event log setup** — initialize the run's event log:
     ```bash
-    export SUPERFLOW_RUN_ID="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)"
+    # Restore or generate SUPERFLOW_RUN_ID — preserve across resumes
+    if [ -z "${SUPERFLOW_RUN_ID:-}" ]; then
+      SUPERFLOW_RUN_ID=$(jq -r '.context.run_id // empty' .superflow-state.json 2>/dev/null || true)
+      if [ -z "$SUPERFLOW_RUN_ID" ]; then
+        SUPERFLOW_RUN_ID="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)"
+      fi
+      export SUPERFLOW_RUN_ID
+    fi
     mkdir -p .superflow
-    # Source the emit helper (no-op if already sourced)
-    source ~/.claude/skills/superflow/tools/sf-emit.sh 2>/dev/null || true
-    sf_emit run.start runtime="$RUNTIME" phase="$CURRENT_PHASE" 2>/dev/null || true
+    # Runtime-aware path discovery — try Claude, Codex, agents, then repo-local
+    _SF_EMIT_FOUND=""
+    for p in \
+        "$HOME/.claude/skills/superflow/tools/sf-emit.sh" \
+        "$HOME/.codex/skills/superflow/tools/sf-emit.sh" \
+        "$HOME/.agents/skills/superflow/tools/sf-emit.sh" \
+        "./tools/sf-emit.sh"; do
+      if [ -f "$p" ]; then source "$p"; _SF_EMIT_FOUND=1; break; fi
+    done
+    if [ -z "${_SF_EMIT_FOUND:-}" ]; then
+      echo "⚠️  sf-emit.sh not found — event telemetry disabled (see superflow v5 Run 2)" >&2
+    fi
+    sf_emit run.start runtime="${RUNTIME:-claude}" phase:int="${CURRENT_PHASE:-0}" 2>/dev/null || true
     ```
     Persist `SUPERFLOW_RUN_ID` into `.superflow-state.json` under `context.run_id` for recovery after `/clear`.
 

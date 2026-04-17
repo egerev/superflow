@@ -1,14 +1,22 @@
 # sf-emit.sh — Superflow event emission library
+# Source-safe: shell options are scoped to sf_emit() only; sourcing this file does not alter caller shell state.
 # Log rotation: see tools/sf-emit.sh Sprint 3 hardening (not yet implemented).
 #
 # Usage:
 #   source tools/sf-emit.sh        # once per session
 #   sf_emit <type> [key=value ...]  # emit an event
 #
+# Key/value typed syntax:
+#   key=value        → always string (--arg)
+#   key:int=123      → integer (--argjson)
+#   key:bool=true    → boolean (--argjson)
+#   key:json={"a":1} → raw JSON (--argjson)
+# Key names must match ^[a-zA-Z_][a-zA-Z0-9_]*$
+#
 # Examples:
-#   sf_emit run.start runtime=claude phase=2
+#   sf_emit run.start runtime=claude phase:int=2
 #   sf_emit agent.dispatch agent_type=implementer task="Sprint 1" model=sonnet
-#   sf_emit sprint.end sprint=1 total_sprints=3 goal="Event log contract" complexity=medium
+#   sf_emit sprint.end sprint:int=1 total_sprints:int=3 goal="Event log contract" complexity=medium
 #
 # SUPERFLOW_RUN_ID must be set before calling sf_emit (UUID string).
 # Output file: ${SUPERFLOW_EVENTS_FILE:-.superflow/events.jsonl} (one JSON line per event).
@@ -24,13 +32,6 @@
 #   pr.create, pr.merge,
 #   compact.pre, compact.post,
 #   heartbeat
-
-# Guard: apply strict mode only when this file is being sourced directly
-# (avoids overriding the caller's own error handling in interactive shells)
-if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
-  # Being sourced — enable strict mode safely
-  set -euo pipefail 2>/dev/null || true
-fi
 
 # Allowlist of known event types — must stay in sync with templates/event-schema.json
 _SF_KNOWN_TYPES=(
