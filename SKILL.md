@@ -89,7 +89,7 @@ superflow/
    - If `phase >= 2` AND on `feat/*` branch → valid resume, proceed with session recovery
    - If `phase = 1` → resume Phase 1 from saved stage
    - **Do NOT read old briefs, plans, or sprint queues from previous runs**
-4a. **Heartbeat validation** — if `.superflow-state.json` has a `heartbeat` block, Read every file listed in `heartbeat.must_reread`. If any is missing from context, Read it immediately. This rehydrates pre-compaction context even when PostCompact hooks fail or additionalContext is summarized away. (See also enforcement Rule 12 — the durable, compaction-surviving version of this check.)
+4a. **Heartbeat validation** — if `.superflow-state.json` has a `heartbeat` block, check `heartbeat.must_reread`. For each path: if already read in this session → skip. If not in context → Read it (only short orchestration files belong here; Rule 12 guarantees they are <300 lines). If a listed file does not exist on disk, skip silently and emit a one-line warning. See enforcement Rule 12 for the full, compaction-surviving version of this check.
 5. **Phase 0 gate** (inline — do NOT read phase0-onboarding.md unless needed):
    - If `.superflow-state.json` exists AND `phase > 0` → skip Phase 0
    - If `.superflow-state.json` exists AND `phase = 0` → read `references/phase0-onboarding.md` for crash recovery
