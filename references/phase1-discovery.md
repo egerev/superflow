@@ -17,6 +17,7 @@ Stage 2: "Brainstorming"
   Todos:
   - "Dispatch expert panel, synthesize Board Memo"
   - "User reaction + direction lock"
+  - "Design-tree grilling (critical by default, standard opt-in, light skip)"
 
 Stage 3: "Product Approval"
   Todos:
@@ -120,6 +121,7 @@ Replace `MODE` with `light`, `standard`, or `critical`.
 |--------|-------|----------|----------|
 | **Research agents** | Skip (Step 3) | Full (2 parallel agents) | Full + security research agent |
 | **Brainstorming** | 1 round-trip max | 3-5 questions | 3-5 questions + extended debate round |
+| **Design-tree grilling** (Step 6a) | Skip | Opt-in (user says yes) | On by default |
 | **Spec** | Inline in charter (brief + spec + plan in one doc) | Separate spec file | Separate spec + threat model section |
 | **Spec review** | Skip | Dual-model (Product + Technical) | Dual-model (Product + Technical) |
 | **Plan review** | Single Claude reviewer | Dual-model (Product + Technical) | Deep-tier dual-model review |
@@ -127,9 +129,9 @@ Replace `MODE` with `light`, `standard`, or `critical`.
 
 ### Conditional Flow by Mode
 
-- **Light mode**: Skip Step 3 (research) → 1 round-trip brainstorm (Step 5) → Product Approval (Step 7) → Write inline charter with brief+spec+plan (Step 13) → Skip spec review (Step 9) → Single Claude plan reviewer (Step 11) → User Approval (Step 12) → Generate queue via `charter_to_queue()` from charter body
-- **Standard mode**: Full flow as documented (no changes)
-- **Critical mode**: Full flow + dispatch security research agent in Step 3 + add threat model section to spec in Step 8 + use deep-tier reviewers in Steps 9 and 11
+- **Light mode**: Skip Step 3 (research) → 1 round-trip brainstorm (Step 5) → Skip Step 6a (grilling) → Product Approval (Step 7) → Write inline charter with brief+spec+plan (Step 13) → Skip spec review (Step 9) → Single Claude plan reviewer (Step 11) → User Approval (Step 12) → Generate queue via `charter_to_queue()` from charter body
+- **Standard mode**: Full flow as documented. Step 6a (design-tree grilling) offered as opt-in after direction lock.
+- **Critical mode**: Full flow + dispatch security research agent in Step 3 + run Step 6a (design-tree grilling) by default + add threat model section to spec in Step 8 + use deep-tier reviewers in Steps 9 and 11
 
 ### Light Mode Sprint Breakdown
 
@@ -242,7 +244,7 @@ After user reacts to the Board Memo:
 - **User has questions** → answer, re-present the relevant Board Memo section, confirm direction.
 - **User has their own ideas** → integrate into the proposal, update Recommended Direction, confirm.
 
-Target: 2-3 round-trips total. Do not extend into a 7-question interview.
+Target: 2-3 round-trips for direction lock. Deep design-tree resolution happens in Step 6a, not here — don't extend Step 6 into a 7-question interview.
 
 **Approaches presentation:**
 
@@ -255,6 +257,42 @@ Target: 2-3 round-trips total. Do not extend into a 7-question interview.
 > (b) Approach B: [name] — [1-line tradeoff]
 > (c) Approach C: [name] — [1-line tradeoff]
 > Which direction? Reply a/b/c or 'details' for more on each."
+
+## Step 6a: Design-Tree Grilling (AskUserQuestion)
+<!-- Stage 2: Brainstorming, Todo 3 -->
+
+After direction is locked, walk down the design tree and resolve contested decisions one-by-one using `AskUserQuestion`. Each answer unlocks the next branch — don't batch unrelated questions into one Board-Memo-style message.
+
+### When to run
+
+| Mode | Behavior |
+|----------|----------|
+| **light** | Skip entirely — proceed to Step 7. |
+| **standard** | Offer: *"Want me to grill you on the open design decisions? (yes/skip)"* — run only on yes. Mirrors the Devil's Advocate opt-in pattern. |
+| **critical** | Run by default. Announce: *"Running design-tree grilling — I'll ask one decision at a time until the tree is resolved."* User can interrupt with "skip" / "хватит" at any point. |
+
+### How to run
+
+1. Enumerate open decisions from the Board Memo's **Disagreements** + **Risks** sections. List them as a dependency tree: prerequisite decisions first (e.g. storage before schema, transport before auth).
+2. Walk the tree depth-first. For each decision, fire a single `AskUserQuestion` with 2-4 concrete options + short tradeoff per option. Never ask more than one decision per turn.
+3. After each answer: update the in-memory decision log, prune downstream branches that became moot, pick the next unresolved node.
+4. Stop when: the tree is fully resolved, or user says "enough" / "skip rest" / "хватит". Record unresolved nodes as open questions carried into the spec.
+
+### Output
+
+Before proceeding to Step 7, summarize resolved decisions inline:
+
+```
+### Design decisions locked
+- [Decision]: [chosen option] — [one-line rationale]
+- ...
+### Carried to spec as open questions
+- [Unresolved node, if any]
+```
+
+This summary is merged into the Product Summary in Step 7, so the user sees every locked decision before the Product Approval gate.
+
+> **Reasoning:** Board Memo gives the panoramic view; grilling gives the depth. Running it by default in critical mode reduces spec-review churn because contested technical decisions are already resolved with user input before the spec writer starts.
 
 ## Step 7: Product Approval (MERGED GATE)
 <!-- Stage 3: Product Approval, Todos 1-2 -->
