@@ -1,6 +1,6 @@
 name = "deep-doc-writer"
 description = "Documentation generation agent for llms.txt and CLAUDE.md (Phase 0 first-time creation)"
-model = "gpt-5.4"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 developer_instructions = """
 <role>

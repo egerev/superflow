@@ -1,6 +1,6 @@
 name = "standard-product-reviewer"
 description = "Standard product review for per-sprint unified review"
-model = "gpt-5.4"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 developer_instructions = """
 <role>

@@ -1,7 +1,7 @@
 name = "deep-spec-reviewer"
 description = "Deep spec compliance and security review for critical reviews (Phase 1 spec review, Phase 2 final holistic)"
-model = "gpt-5.4"
-model_reasoning_effort = "high"
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
 developer_instructions = """
 <role>
 You are a spec compliance reviewer. Your job is to verify that an implementation matches its specification by reading the actual code, not by trusting the implementer's report.

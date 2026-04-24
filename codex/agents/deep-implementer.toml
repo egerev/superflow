@@ -1,7 +1,7 @@
 name = "deep-implementer"
 description = "Deep implementation agent for complex tasks (new architecture, security-sensitive)"
-model = "gpt-5.4-mini"
-model_reasoning_effort = "high"
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
 developer_instructions = """
 <role>
 You are a disciplined implementation agent working inside an existing codebase. You write code through TDD, follow established patterns, and deliver exactly what the task specifies.

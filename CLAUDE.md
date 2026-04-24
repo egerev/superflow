@@ -71,7 +71,7 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 | `references/phase0/stage5-completion.md` | Markers, tech debt persistence, restart |
 | `references/phase0/greenfield.md` | Greenfield path G1-G6 |
 | `references/phase1-discovery.md` | Expert panel brainstorming, Board Memo, governance mode, charter generation |
-| `references/phase2-execution.md` | Governance-aware review tiering, holistic review, subagent execution |
+| `references/phase2-execution.md` | Governance-aware review tiering, holistic review, per-PR docs update/review gate, subagent execution |
 | `references/phase3-merge.md` | 3 stages, sequential rebase merge with CI gate |
 | `prompts/implementer.md` | Red-Green-Refactor TDD cycle for code agents |
 | `prompts/expert-panel.md` | Expert persona prompt — proposals, challenge, recommendation |
@@ -92,6 +92,8 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 - **Governance modes** (light/standard/critical): auto-suggested at Phase 1 start, stored in state and charter. Controls review depth, holistic review threshold, and plan complexity
 - **Autonomy Charter**: durable intent artifact generated at end of Phase 1. Injected into sprint prompts and reviewers as single source of truth for autonomous execution boundaries
 - **Event emission**: `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true key:json='{"x":1}'`. Typed key syntax: bare `=` → string, `:int=` → number, `:bool=` → boolean, `:json=` → raw JSON. jq-only construction; validates type against allowlist and key names against identifier regex before emitting one compact JSONL line.
+- **Codex runtime model policy**: Codex subagents use `gpt-5.5`; deep analyst/implementer/reviewer roles use `xhigh`, standard roles use `high`, and fast implementer uses `medium`. Claude product/research secondary calls use exact model `claude-opus-4-7` with `--effort xhigh`.
+- **Per-PR docs gate**: every sprint PR must run documentation update and separate documentation review before `gh pr create`. `.par-evidence.json` must include `docs_update` (`UPDATED` or `UNCHANGED`) and `docs_review: PASS`; `llms.txt` is explicitly audited every sprint.
 
 ## Known Issues & Tech Debt
 - TDD cycle duplicated in `implementer.md:23-31` and `testing-guidelines.md:13-21` (agent sees it twice since implementer includes testing-guidelines)
@@ -104,4 +106,4 @@ SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
 - **Per-event-type key allowlist deferred to Sprint 2**: `sf_emit` validates key names against an identifier regex and the event type against a global allowlist, but does not yet validate which keys are legal per event type. Practical injection is blocked in Sprint 1; semantic key validation ships in Sprint 2.
 - **Sprint 2 hardening — flock/size cap for sf-emit.sh**: `O_APPEND` is atomic only up to `PIPE_BUF` (~4KB on Linux). Large events or concurrent writes could corrupt `.superflow/events.jsonl`. Fix: add `flock` or enforce a per-event size cap in `sf-emit.sh`.
 - **Sprint 2 hardening — per-event-type key allowlist**: validate which keys are legal per event type (not just identifier regex); blocks semantic drift in telemetry payloads.
-<!-- updated-by-superflow:2026-04-17 -->
+<!-- updated-by-superflow:2026-04-24 -->

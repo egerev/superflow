@@ -10,9 +10,11 @@ Survives context compaction. SKILL.md does not.
    1. Dispatch Claude product reviewer (subagent_type: standard-product-reviewer). `run_in_background: true`
    2. Dispatch secondary technical reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=high --ephemeral` (or Claude code-quality if no secondary)
    3. Wait for both. Fix confirmed issues (NEEDS_FIXES, REQUEST_CHANGES, or FAIL). Re-review only flagging agent.
-   4. Write `.par-evidence.json`: `{"sprint":N,"claude_product":"ACCEPTED","technical_review":"APPROVE","provider":"codex|split-focus","ts":"..."}`
-   5. GATE: `git push` / `gh pr create` blocked until `.par-evidence.json` exists with both verdicts passing.
-   6. Pass verdicts: APPROVE, ACCEPTED, PASS. Fail verdicts: REQUEST_CHANGES, NEEDS_FIXES, FAIL.
+   4. Run mandatory sprint documentation update (`CLAUDE.md` + `llms.txt`) before PR creation. `llms.txt` must be explicitly checked on every sprint, even if unchanged.
+   5. Run documentation review after the update/unchanged decision. It must verify `llms.txt` and `CLAUDE.md` reflect the sprint diff and contain no stale paths/commands.
+   6. Write `.par-evidence.json`: `{"sprint":N,"claude_product":"ACCEPTED","technical_review":"APPROVE","docs_update":"UPDATED|UNCHANGED","docs_review":"PASS","provider":"codex|split-focus","ts":"..."}`
+   7. GATE: `git push` / `gh pr create` blocked until `.par-evidence.json` exists with review verdicts passing, `docs_update` set, and `docs_review` = `PASS`.
+   8. Pass verdicts: APPROVE, ACCEPTED, PASS. Fail verdicts: REQUEST_CHANGES, NEEDS_FIXES, FAIL.
 4. **Tests with evidence.** Paste actual output before claiming done.
 5. **Re-read phase docs** at each sprint boundary via Read tool.
 6. **Dual-model reviews: specialize, don't duplicate.** Claude = Product lens (spec fit, user scenarios, data integrity). Secondary = Technical lens (correctness, security, architecture). No overlapping roles.
