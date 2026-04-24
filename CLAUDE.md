@@ -79,7 +79,8 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 | `prompts/expert-panel.md` | Expert persona prompt — proposals, challenge, recommendation |
 | `prompts/llms-txt-writer.md` | llmstxt.org standard, no hard size limit |
 | `prompts/claude-md-writer.md` | Verified paths/commands, <200 lines target |
-| `tools/sf-emit.sh` | Source-safe bash library for emitting JSONL events; usage: `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true` (207 lines) |
+| `tools/sf-emit.sh` | Source-safe bash library for emitting JSONL events; usage: `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true` (356 lines) |
+| `hooks/precompact-state-externalization.sh` | PreCompact hook — sources sf-emit, emits `compact.pre`/`compact.post` events with absolute path to the dump file |
 | `templates/event-schema.json` | JSON Schema 2020-12 for all event types — envelope fields + 20 per-type data schemas, additive evolution policy (524 lines) |
 
 ## Conventions
@@ -107,5 +108,5 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 - **Codex no PreCompact/PostCompact**: compaction recovery relies on Stop hook dumps + SessionStart re-injection + self-referential rule in AGENTS.md. Less reliable than Claude's hook-based recovery.
 - **Codex context ~258K**: 4x smaller than Claude's 1M. Long Phase 2 runs (4+ sprints) require session-per-wave/session-per-sprint strategy or aggressive /compact usage.
 - **Per-event-type key allowlist**: `sf_emit` validates key names against an identifier regex and the event type against a global allowlist, but does not yet validate which keys are legal per event type. Practical injection is blocked; semantic key validation deferred to a future sprint.
-- **flock/size cap for sf-emit.sh**: `O_APPEND` is atomic only up to `PIPE_BUF` (~4KB on Linux). Large events or concurrent writes could corrupt `.superflow/events.jsonl`. Fix: add `flock` or enforce a per-event size cap in `sf-emit.sh`.
+- **Per-event-type key allowlist expanded**: `sf_emit` validates key names and event type against allowlists, but does not yet validate which keys are legal per event type. Semantic key validation deferred to a future sprint.
 <!-- updated-by-superflow:2026-04-20 -->

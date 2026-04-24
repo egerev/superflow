@@ -57,7 +57,7 @@ Version: v5.2.0 (2026-04-24). MIT License.
 
 ## Tools & Schemas
 
-- [tools/sf-emit.sh](tools/sf-emit.sh): Source-safe bash library for JSONL event emission — `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true key:json='...'`; validates type allowlist and key identifier regex (207 lines)
+- [tools/sf-emit.sh](tools/sf-emit.sh): Source-safe bash library for JSONL event emission — `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true key:json='...'`; validates type allowlist and key identifier regex; concurrent-safe via flock, with threshold-based log rotation to archive/ (356 lines)
 - [templates/event-schema.json](templates/event-schema.json): JSON Schema 2020-12 defining the event envelope (`v`, `id`, `ts`, `run_id`, `type`, `data`, `instance_id`, `parent_id`) and 20 per-type data schemas; additive evolution policy (524 lines)
 - [templates/superflow-state-schema.json](templates/superflow-state-schema.json): JSON Schema for `.superflow-state.json` state file including the `context.run_id` field added in Run 2 Sprint 1
 
