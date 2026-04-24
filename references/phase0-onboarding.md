@@ -1,5 +1,11 @@
 # Phase 0: Onboarding (FIRST RUN — INTERACTIVE)
 
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
+
 Runs once per project. Detects project state, routes to the correct stage file, and loads it via the Read tool.
 This phase is **conversational** — talk to the user, don't just execute silently.
 

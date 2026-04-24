@@ -1,5 +1,11 @@
 # Phase 3: Merge (USER-INITIATED)
 
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
+
 Triggered when user says "merge", "мёрдж", "мерж", or gives clear affirmative response (e.g., "go ahead", "do it", "yes") after the Completion Report.
 
 ## Stage Structure

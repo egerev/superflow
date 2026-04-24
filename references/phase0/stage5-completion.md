@@ -1,6 +1,12 @@
 # Phase 0 — Stage 5: Completion
 <!-- Stage 5, Todos: write markers, persist tech debt, update state, show summary -->
 
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
+
 This file is re-read after context compaction. Re-read it if you lose context.
 
 **State at entry:** phase=0, stage="completion", stage_index=4
