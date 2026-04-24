@@ -1,6 +1,12 @@
 # Phase 0 — Stage 1: Detect & Confirm
 <!-- Stage 1, Todos: parallel preflight, present confirmation, handle response -->
 
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
+
 Runs at Phase 0 entry. Detects project state automatically, presents a one-line summary for user confirmation, and routes to the correct path (existing project, greenfield, or skip).
 
 **All documentation output in English.** Communicate with the user in their language.

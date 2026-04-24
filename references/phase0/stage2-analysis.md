@@ -1,6 +1,12 @@
 # Phase 0 — Stage 2: Analysis
 <!-- Stage 2, Todos: dispatch 5 agents, wait, cross-check synthesis -->
 
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
+
 Runs after Stage 1 confirms `$PREFLIGHT`. Dispatches 5 parallel specialized agents to audit the codebase, then cross-checks findings for consistency. Output is an internal evidence bundle saved to state for Stage 3.
 
 **All documentation output in English.** Communicate with the user in their language.

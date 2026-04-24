@@ -1,5 +1,11 @@
 # Phase 0 — Greenfield Path
 
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
+
 Loaded by Stage 1 when an empty or near-empty project is detected.
 After completing G6, rejoin at Stage 4 (skip Branch A — docs already created in G5).
 Run Branch B (permissions/hooks) and Branch C (scaffolding) only.
