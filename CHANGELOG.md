@@ -13,6 +13,14 @@ MEDIUM/LOW event-log gaps identified in Sprint 3 coverage audit; not in scope fo
 - **LOW:** Normalize shell var quoting for typed args (`sprint:int="$VAR"`) — some phase docs use unquoted `$VAR` in typed-arg position; safe in practice but inconsistent; a style pass would standardize to `sprint:int=$VAR` (no quotes needed for numeric vars) uniformly
 - **LOW:** `run.start` charter field population on Phase 1→2 boundary — `run.start` schema allows an optional `charter` field (path to Autonomy Charter); currently emitted without it since the charter is generated at end of Phase 1 after `run.start` fires; fix requires either a `run.update` event type or re-emitting `run.start` at Phase 2 entry with charter path
 
+## [5.2.1] - 2026-04-25
+
+### Changed — Product Vision Alignment Replaces Grilling
+- **Removed Phase 1 design-tree grilling behavior**: Step 6a no longer uses `AskUserQuestion`, no longer asks one decision per turn, and no longer runs an exhausting default interrogation in critical mode
+- **Added Product Vision alignment**: after direction lock, Superflow now presents one recommendation-led decision brief with options, tradeoffs, reversibility, "when to override" guidance, safe defaults, and assumptions
+- **Audio-friendly answers**: the user can answer all open decisions in one message, a numbered list, or a pasted transcript from an audio answer. Superflow extracts decisions, states assumptions, and asks only about genuinely blocking gaps
+- **Mode behavior updated**: light mode uses compact defaults; standard mode presents a full decision brief; critical mode adds explicit risks and reversibility while still keeping questions batched
+
 ## [5.2.0] - 2026-04-24
 
 ### Added — Git Workflow Modes + Codex Sprint Parallelism

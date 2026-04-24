@@ -41,7 +41,7 @@ Stage 2: "Brainstorming"
   Todos:
   - "Dispatch expert panel, synthesize Board Memo"
   - "User reaction + direction lock"
-  - "Design-tree grilling (critical by default, standard opt-in, light skip)"
+  - "Product Vision alignment"
 
 Stage 3: "Product Approval"
   Todos:
@@ -149,8 +149,8 @@ Replace `MODE` with `light`, `standard`, or `critical`.
 | Aspect | Light | Standard | Critical |
 |--------|-------|----------|----------|
 | **Research agents** | Skip (Step 3) | Full (2 parallel agents) | Full + security research agent |
-| **Brainstorming** | 1 round-trip max | 3-5 questions | 3-5 questions + extended debate round |
-| **Design-tree grilling** (Step 6a) | Skip | Opt-in (user says yes) | On by default |
+| **Brainstorming** | 1 round-trip max | Board Memo + Product Vision alignment | Board Memo + deeper Product Vision alignment |
+| **Product Vision alignment** (Step 6a) | Compact defaults; user can correct | Present decision brief with recommendations/tradeoffs | Present deeper decision brief with explicit risks and reversibility |
 | **Spec** | Inline in charter (brief + spec + plan in one doc) | Separate spec file | Separate spec + threat model section |
 | **Spec review** | Skip | Dual-model (Product + Technical) | Dual-model (Product + Technical) |
 | **Plan review** | Single Claude reviewer | Dual-model (Product + Technical) | Deep-tier dual-model review |
@@ -179,9 +179,9 @@ Replace `MODE` with the selected git workflow mode.
 
 ### Conditional Flow by Mode
 
-- **Light mode**: Skip Step 3 (research) → 1 round-trip brainstorm (Step 5) → Skip Step 6a (grilling) → Product Approval (Step 7) → Write inline charter with brief+spec+plan (Step 13) → Skip spec review (Step 9) → Single Claude plan reviewer (Step 11) → User Approval (Step 12) → Generate queue via `charter_to_queue()` from charter body
-- **Standard mode**: Full flow as documented. Step 6a (design-tree grilling) offered as opt-in after direction lock.
-- **Critical mode**: Full flow + dispatch security research agent in Step 3 + run Step 6a (design-tree grilling) by default + add threat model section to spec in Step 8 + use deep-tier reviewers in Steps 9 and 11
+- **Light mode**: Skip Step 3 (research) → 1 round-trip brainstorm (Step 5) → compact Product Vision alignment (Step 6a) → Product Approval (Step 7) → Write inline charter with brief+spec+plan (Step 13) → Skip spec review (Step 9) → Single Claude plan reviewer (Step 11) → User Approval (Step 12) → Generate queue via `charter_to_queue()` from charter body
+- **Standard mode**: Full flow as documented. Step 6a presents a recommendation-led Product Vision decision brief; user can answer all open questions in one reply.
+- **Critical mode**: Full flow + dispatch security research agent in Step 3 + run deeper Step 6a Product Vision alignment by default + add threat model section to spec in Step 8 + use deep-tier reviewers in Steps 9 and 11
 
 ### Light Mode Sprint Breakdown
 
@@ -319,7 +319,7 @@ After user reacts to the Board Memo:
 - **User has questions** → answer, re-present the relevant Board Memo section, confirm direction.
 - **User has their own ideas** → integrate into the proposal, update Recommended Direction, confirm.
 
-Target: 2-3 round-trips for direction lock. Deep design-tree resolution happens in Step 6a, not here — don't extend Step 6 into a 7-question interview.
+Target: 2-3 round-trips for direction lock. Detailed product/architecture tradeoffs are consolidated in Step 6a — don't turn Step 6 into a 7-question interview.
 
 **Approaches presentation:**
 
@@ -333,41 +333,51 @@ Target: 2-3 round-trips for direction lock. Deep design-tree resolution happens 
 > (c) Approach C: [name] — [1-line tradeoff]
 > Which direction? Reply a/b/c or 'details' for more on each."
 
-## Step 6a: Design-Tree Grilling (AskUserQuestion)
+## Step 6a: Product Vision Alignment
 <!-- Stage 2: Brainstorming, Todo 3 -->
 
-After direction is locked, walk down the design tree and resolve contested decisions one-by-one using `AskUserQuestion`. Each answer unlocks the next branch — don't batch unrelated questions into one Board-Memo-style message.
+After direction is locked, consolidate the remaining important product decisions into a single recommendation-led decision brief. Do not use `AskUserQuestion` here. Do not "grill" the user one decision at a time. The goal is to make the user's decision fast and informed, not to exhaustively interrogate them.
 
 ### When to run
 
 | Mode | Behavior |
 |----------|----------|
-| **light** | Skip entirely — proceed to Step 7. |
-| **standard** | Offer: *"Want me to grill you on the open design decisions? (yes/skip)"* — run only on yes. Mirrors the Devil's Advocate opt-in pattern. |
-| **critical** | Run by default. Announce: *"Running design-tree grilling — I'll ask one decision at a time until the tree is resolved."* User can interrupt with "skip" / "хватит" at any point. |
+| **light** | Present only defaults and 1-2 highest-impact decisions. If defaults are safe, proceed after user confirms/corrects. |
+| **standard** | Present the full decision brief with recommendations, tradeoffs, and all open questions in one message. |
+| **critical** | Present a deeper decision brief: include risks, reversibility, and what could break if the recommendation is wrong. Still ask in one batch. |
 
 ### How to run
 
-1. Enumerate open decisions from the Board Memo's **Disagreements** + **Risks** sections. List them as a dependency tree: prerequisite decisions first (e.g. storage before schema, transport before auth).
-2. Walk the tree depth-first. For each decision, fire a single `AskUserQuestion` with 2-4 concrete options + short tradeoff per option. Never ask more than one decision per turn.
-3. After each answer: update the in-memory decision log, prune downstream branches that became moot, pick the next unresolved node.
-4. Stop when: the tree is fully resolved, or user says "enough" / "skip rest" / "хватит". Record unresolved nodes as open questions carried into the spec.
+1. Enumerate open decisions from the Board Memo's **Disagreements**, **Risks**, and user reaction. Group related decisions so the user can answer naturally.
+2. For each decision, provide:
+   - **Recommendation**: the default you would choose and why.
+   - **Options**: 2-3 realistic alternatives, not a forced multiple-choice UI.
+   - **Tradeoff**: what improves, what gets worse, and how reversible the choice is.
+   - **When to override**: a short condition where the recommendation would be wrong.
+3. Ask the user to respond in any convenient format:
+   - one short message with only corrections,
+   - a numbered list matching the decisions,
+   - or a pasted transcript from an audio answer covering everything at once.
+4. If the user gives a broad/audio-style answer, extract decisions from it, state assumptions, and ask only about genuinely blocking gaps. If a gap is non-blocking, choose the recommended default and mark it as an assumption.
+5. Stop after one follow-up round unless the user asks to keep discussing. Carry non-blocking unresolved items into the spec as assumptions or open questions.
 
 ### Output
 
 Before proceeding to Step 7, summarize resolved decisions inline:
 
 ```
-### Design decisions locked
-- [Decision]: [chosen option] — [one-line rationale]
+### Product Vision decisions locked
+- [Decision]: [chosen option/default] — [one-line rationale + tradeoff]
 - ...
-### Carried to spec as open questions
-- [Unresolved node, if any]
+### Defaults assumed
+- [Decision]: [default] — [why safe enough]
+### Carried to spec as open questions / assumptions
+- [Unresolved or non-blocking item, if any]
 ```
 
 This summary is merged into the Product Summary in Step 7, so the user sees every locked decision before the Product Approval gate.
 
-> **Reasoning:** Board Memo gives the panoramic view; grilling gives the depth. Running it by default in critical mode reduces spec-review churn because contested technical decisions are already resolved with user input before the spec writer starts.
+> **Reasoning:** Board Memo gives the panoramic view; Product Vision alignment gives the user a high-signal decision packet. One well-structured batch with recommendations and tradeoffs is faster and less error-prone than a long chain of dry clarification questions.
 
 ```bash
 sf_emit stage.end stage=brainstorming phase:int=1
@@ -385,7 +395,8 @@ Write the Product Summary + Product Brief, then **output it in full as a chat me
 - What we're building (feature list)
 - Problems solved
 - NOT in scope
-- Key decisions + rationale
+- Key decisions + rationale/tradeoffs
+- Defaults assumed and any open assumptions carried from Product Vision alignment
 
 ### Product Brief
 - **Problem statement**: What user pain are we solving? (1-2 sentences)
