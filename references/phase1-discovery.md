@@ -355,11 +355,17 @@ After direction is locked, consolidate the remaining important product decisions
    - **Tradeoff**: what improves, what gets worse, and how reversible the choice is.
    - **When to override**: a short condition where the recommendation would be wrong.
 3. Ask the user to respond in any convenient format:
+   - `"do what you recommend"`, `"делай как рекомендуешь"`, `"да, по твоей рекомендации"` — accept all recommended defaults and proceed,
    - one short message with only corrections,
    - a numbered list matching the decisions,
    - or a pasted transcript from an audio answer covering everything at once.
-4. If the user gives a broad/audio-style answer, extract decisions from it, state assumptions, and ask only about genuinely blocking gaps. If a gap is non-blocking, choose the recommended default and mark it as an assumption.
-5. Stop after one follow-up round unless the user asks to keep discussing. Carry non-blocking unresolved items into the spec as assumptions or open questions.
+4. If the user accepts the recommendations wholesale, lock every recommended default, summarize them, and proceed to Step 7 without follow-up questions unless a decision is genuinely unsafe to default.
+5. If the user gives a broad/audio-style answer, extract decisions from it, state assumptions, and ask only about genuinely blocking gaps. If a gap is non-blocking, choose the recommended default and mark it as an assumption.
+6. Stop after one follow-up round unless the user asks to keep discussing. Carry non-blocking unresolved items into the spec as assumptions or open questions.
+
+Use this approval prompt after the decision brief:
+
+> "You can say **'do what you recommend'** / **'делай как рекомендуешь'** to accept all recommended defaults, or reply with only the corrections. A long message or audio transcript covering multiple points is fine."
 
 ### Output
 

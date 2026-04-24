@@ -11,7 +11,7 @@ Superflow is a 4-phase development workflow skill for Claude Code:
 - **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — selected git workflow mode, git worktrees, TDD, wave-based parallel dispatch, governance-aware review tiering, charter compliance checks, mandatory per-PR `llms.txt`/`CLAUDE.md` update + review gate
 - **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification, structured completion data (`completion-data.json`), and documentation update
 
-Version: v5.2.1 (2026-04-25). MIT License.
+Version: v5.2.2 (2026-04-25). MIT License.
 
 ## File Structure
 
@@ -69,7 +69,7 @@ Version: v5.2.1 (2026-04-25). MIT License.
 - **Adaptive governance:** Three modes (light/standard/critical) auto-suggested based on task dimensions. Controls review depth, holistic review threshold, and plan structure. Light mode uses inline sprint plans in the charter
 - **Git workflow modes:** Phase 1 selects `solo_single_pr`, `sprint_pr_queue`, `stacked_prs`, `parallel_wave_prs`, or `trunk_based`. The mode is stored in `.superflow-state.json` and the charter, and controls branch bases, PR count, sprint parallelism, docs gate timing, and Phase 3 merge order
 - **Expert panel brainstorming:** Phase 1 dispatches 3-4 parallel expert persona agents (Product GM, Staff Engineer, UX/Workflow, Domain Expert). Outputs synthesized into Board Memo with consensus, disagreements, risks, and decisions needed
-- **Product Vision alignment:** Replaces design-tree grilling. After direction lock, Superflow presents one recommendation-led decision brief with options, tradeoffs, reversibility, and safe defaults. The user can answer in one message, a numbered list, or a pasted audio transcript; non-blocking gaps become assumptions instead of a long question chain
+- **Product Vision alignment:** Replaces design-tree grilling. After direction lock, Superflow presents one recommendation-led decision brief with options, tradeoffs, reversibility, and safe defaults. The user can say "do what you recommend" / "делай как рекомендуешь" to accept all recommendations, answer with corrections only, use a numbered list, or paste an audio transcript; non-blocking gaps become assumptions instead of a long question chain
 - **2-agent specialized review:** Every PR is reviewed by 2 agents in parallel — Claude (Product lens: spec fit, user scenarios, charter compliance) + Codex/secondary (Technical lens: correctness, security, charter compliance). Governance mode controls whether single or dual review
 - **Codex model policy:** Codex subagents and Claude-runtime `codex exec` secondary calls use `gpt-5.5`; deep analyst/implementer/reviewer roles use `xhigh`, standard roles use `high`, and fast implementer uses `medium`. Codex-runtime Claude product/research secondary calls use exact model `claude-opus-4-7` with `--effort xhigh`
 - **Codex sprint-level parallelism:** Recommended config is `[agents] max_threads=6, max_depth=2`. With `max_depth>=2`, Codex can spawn parallel sprint supervisors that spawn per-sprint implement/review/doc agents. Old `max_depth=1` configs fall back to sequential sprints

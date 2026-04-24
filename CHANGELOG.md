@@ -13,6 +13,13 @@ MEDIUM/LOW event-log gaps identified in Sprint 3 coverage audit; not in scope fo
 - **LOW:** Normalize shell var quoting for typed args (`sprint:int="$VAR"`) — some phase docs use unquoted `$VAR` in typed-arg position; safe in practice but inconsistent; a style pass would standardize to `sprint:int=$VAR` (no quotes needed for numeric vars) uniformly
 - **LOW:** `run.start` charter field population on Phase 1→2 boundary — `run.start` schema allows an optional `charter` field (path to Autonomy Charter); currently emitted without it since the charter is generated at end of Phase 1 after `run.start` fires; fix requires either a `run.update` event type or re-emitting `run.start` at Phase 2 entry with charter path
 
+## [5.2.2] - 2026-04-25
+
+### Changed — Recommendation Shortcut in Product Vision Alignment
+- **Added explicit accept-all shortcut**: the user can say "do what you recommend", "делай как рекомендуешь", or similar to accept all recommended defaults and proceed without answering each decision
+- **Updated Step 6a prompt**: Product Vision alignment now tells the user they can answer with only corrections, a numbered list, a long message/audio transcript, or accept all recommendations wholesale
+- **Follow-up discipline**: accepting recommendations skips follow-up questions unless a decision is genuinely unsafe to default
+
 ## [5.2.1] - 2026-04-25
 
 ### Changed — Product Vision Alignment Replaces Grilling
