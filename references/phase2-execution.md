@@ -56,6 +56,7 @@ Initialize state at the start of Phase 2:
 cat > .superflow-state.json << STATEEOF
 {"version":1,"phase":2,"phase_label":"Autonomous Execution","stage":"setup","stage_index":0,"sprint":1,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 STATEEOF
+sf_emit phase.start phase:int=2 label="Autonomous Execution"
 ```
 
 ### Heartbeat Writes
@@ -91,6 +92,7 @@ with os.fdopen(fd, 'w') as f:
     json.dump(s, f, indent=2)
 os.replace(tmp, state_file)
 " \"\$SPRINT_GOAL\" \"\$WORKTREE_PATH\" \"\$BRANCH_NAME\" \"\$CHARTER_FILE\"
+sf_emit heartbeat phase2_step="setup" sprint:int=$SPRINT_NUM
 # SPRINT_GOAL: one-line sprint description from plan
 # WORKTREE_PATH: e.g. .worktrees/sprint-1
 # BRANCH_NAME: e.g. feat/feature-sprint-1
@@ -121,6 +123,7 @@ with os.fdopen(fd, 'w') as f:
     json.dump(s, f, indent=2)
 os.replace(tmp, state_file)
 " \"\$NEXT_STAGE\" \"\$SPRINT_NUM\"
+sf_emit heartbeat phase2_step="$NEXT_STAGE" sprint:int=$SPRINT_NUM
 # NEXT_STAGE: one of setup | implementation | review | par | docs | ship
 # SPRINT_NUM: current sprint number (e.g., 1, 2, 3)
 # On resume: heartbeat.phase2_step is the authoritative source of current stage.
@@ -321,7 +324,11 @@ Never silently switch modes during Phase 2. If the selected mode becomes unsafe 
 
 ## Per-Sprint Flow
 
-> **Backward-compat guard:** All `sf_emit ...` snippets below assume `tools/sf-emit.sh` is sourced at session start (see SKILL.md Startup Checklist §4b). If sf_emit is not in scope, skip the emission silently — state writes remain authoritative.
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
 
 1. <!-- Stage 1: Setup, Todo 1 --> **Re-read** this file (`references/phase2-execution.md`), the **charter** (from `context.charter_file` in `.superflow-state.json`), AND the **specific sprint section** from the plan. Extract and paste the exact task list for this sprint into the implementer prompt — do NOT rely on LLM memory of the plan. The implementer must see every task, every file path, every expected behavior verbatim.
    **Immediately after re-reading:** emit `sprint.start` and `stage.start`, then emit heartbeat (see "Heartbeat Writes → At sprint start" above). Use the charter path from `context.charter_file` in state as `$CHARTER_FILE`.
@@ -623,7 +630,7 @@ To hydrate cleanly after compaction:
 
 If `.superflow/compact-log/` does not exist, the PreCompact hook isn't installed — continue without hydration and note it for the next onboarding cycle.
 
-**Event log note:** `compact.pre` and `compact.post` events are emitted automatically by `hooks/precompact-state-externalization.sh` — no `sf_emit` call needed here. The compact log dump already serves as the event evidence.
+**Event log note:** `compact.pre` is emitted by `hooks/precompact-state-externalization.sh` immediately before writing the dump file; `compact.post` is emitted immediately after the dump write succeeds. Both carry `dump_path` so consumers can locate the state snapshot.
 
 ## Failure & Debugging
 
@@ -692,6 +699,10 @@ For each feature group:
 - Known limitations or follow-ups
 
 **4. What's Next** — suggested next action: "Ready to merge — say 'merge' to start Phase 3"
+
+```bash
+sf_emit phase.end phase:int=2 label="Autonomous Execution"
+```
 
 ### Tone
 - Write for someone who will USE the product, not someone who reviewed the PRs
