@@ -108,5 +108,4 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 - **Codex no PreCompact/PostCompact**: compaction recovery relies on Stop hook dumps + SessionStart re-injection + self-referential rule in AGENTS.md. Less reliable than Claude's hook-based recovery.
 - **Codex context ~258K**: 4x smaller than Claude's 1M. Long Phase 2 runs (4+ sprints) require session-per-wave/session-per-sprint strategy or aggressive /compact usage.
 - **Per-event-type key allowlist**: `sf_emit` validates key names against an identifier regex and the event type against a global allowlist, but does not yet validate which keys are legal per event type. Practical injection is blocked; semantic key validation deferred to a future sprint.
-- **Per-event-type key allowlist expanded**: `sf_emit` validates key names and event type against allowlists, but does not yet validate which keys are legal per event type. Semantic key validation deferred to a future sprint.
 <!-- updated-by-superflow:2026-04-20 -->
