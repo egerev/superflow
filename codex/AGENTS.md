@@ -34,7 +34,7 @@ Only then resume work.
 10. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution, `git_workflow_mode` is `parallel_wave_prs` or `stacked_prs`, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode.
 11. **Governance mode fixed for the run.**
 12. **Orchestrator delegates investigation to subagents.** In Phase 2, orchestrator does NOT read source files >50 lines directly. Dispatch "deep-analyst" via spawn_agent and require a <2k-token summary. Exceptions: files <50 lines, state files, single-line status outputs.
-13. **Event emission on state transition.** Call `sf_emit <event> [key=value...]` at every meaningful state change: `phase.start`, `stage.start`, `stage.complete`, `sprint.start`, `sprint.complete`, `compact.pre`, `compact.post`. Run the preloader block at the top of every phase doc bash usage before calling `sf_emit`. If `sf_emit` is unavailable after the preloader, events are silently dropped (no-op fallback) — this is intentional and must never cause a script error.
+13. **Event emission on state transition.** Call `sf_emit <event> [key=value...]` at every meaningful state change: `phase.start`, `stage.start`, `stage.end`, `sprint.start`, `sprint.end`, `compact.pre`, `compact.post`. Run the preloader block at the top of every phase doc bash usage before calling `sf_emit`. If `sf_emit` is unavailable after the preloader, events are silently dropped (no-op fallback) — this is intentional and must never cause a script error.
 
 ## Claude Product Reviewer Invocation
 
