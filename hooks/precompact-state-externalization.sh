@@ -54,6 +54,9 @@ else
   export SUPERFLOW_RUN_ID
 fi
 
+# Set absolute events file path so sf_emit writes to the project dir regardless of hook PWD.
+export SUPERFLOW_EVENTS_FILE="$CWD/.superflow/events.jsonl"
+
 # Project-local dump for SuperFlow runs; home fallback otherwise.
 if [ -f "$CWD/.superflow-state.json" ]; then
   DUMP_DIR="$CWD/.superflow/compact-log"
