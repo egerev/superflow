@@ -50,7 +50,7 @@ s = json.load(open(p)) if os.path.exists(p) else {}
 s.update({'version':1,'phase':1,'phase_label':'Product Discovery','stage':'research','stage_index':0,'last_updated':datetime.datetime.now(datetime.timezone.utc).isoformat()})
 json.dump(s, open(p,'w'), indent=2)
 "
-sf_emit phase.start phase:int=1
+sf_emit phase.start phase:int=1 label="Discovery"
 ```
 
 After each stage transition, update via python3:
@@ -547,7 +547,7 @@ After displaying the charter and confirming with the user, transition to Phase 2
    > Run `/clear` then `/superflow` — it will pick up from Phase 2 automatically."
 ```bash
 sf_emit stage.end stage=charter phase:int=1
-sf_emit phase.end phase:int=1 status=completed
+sf_emit phase.end phase:int=1 label="Discovery"
 ```
 
 3. Do NOT proceed to Phase 2 in the same session

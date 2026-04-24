@@ -82,7 +82,7 @@ At Phase 0 start, write `.superflow-state.json` and emit phase start:
 cat > .superflow-state.json << STATEEOF
 {"version":1,"phase":0,"phase_label":"Onboarding","stage":"detect","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 STATEEOF
-sf_emit phase.start phase:int=0
+sf_emit phase.start phase:int=0 label="Onboarding"
 ```
 
 Update after each stage transition:
