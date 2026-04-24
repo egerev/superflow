@@ -65,6 +65,8 @@ out/
 .env.local
 *.tsbuildinfo
 .worktrees/
+.superflow/events.jsonl
+.superflow/archive/
 .superflow-state.json
 CLAUDE.local.md
 ```

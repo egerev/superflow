@@ -1,5 +1,7 @@
 .worktrees/
 .superflow/
+.superflow/events.jsonl
+.superflow/archive/
 .superflow-state.json
 .par-evidence.json
 .DS_Store

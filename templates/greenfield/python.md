@@ -44,6 +44,8 @@ __pycache__/
 dist/
 *.egg-info/
 .worktrees/
+.superflow/events.jsonl
+.superflow/archive/
 .superflow-state.json
 CLAUDE.local.md
 ```
