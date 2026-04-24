@@ -35,7 +35,7 @@ Use spawn_agent to dispatch "deep-analyst" with task: code quality analysis (sam
 
 **Claude as secondary (optional, for cross-validation):**
 ```bash
-$TIMEOUT_CMD 600 claude -p "$(cat prompts/claude/audit.md)" 2>&1
+$TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "$(cat prompts/claude/audit.md)" 2>&1
 ```
 
 ### Agent 4 — DevOps

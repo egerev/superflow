@@ -30,12 +30,15 @@ Stage 4: "PAR"
   - "Dispatch Claude reviewer"
   - "Dispatch secondary provider reviewer"
   - "Fix NEEDS_FIXES (if any)"
+  - "Run mandatory docs audit"
   - "Write .par-evidence.json"
 
 Stage 5: "Docs"
   Todos:
   - "Dispatch doc-update agent"
   - "Commit doc changes"
+  - "Dispatch doc-review agent"
+  - "Fix doc review findings"
 
 Stage 6: "Ship"
   Todos:
@@ -337,18 +340,20 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
      "sprint": N,
      "claude_product": "ACCEPTED",
      "technical_review": "APPROVE",
-     "provider": "codex",
+    "docs_update": "PENDING",
+    "docs_review": "PENDING",
+    "provider": "codex",
      "ts": "ISO-8601"
    }
    ```
    Both verdicts must be APPROVE/ACCEPTED/PASS. If either agent returned issues, they must be fixed and the agent re-run before evidence is written.
-8. <!-- Stage 5: Docs, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=docs`, `$SPRINT_NUM=N`). **Documentation update** — dispatch `standard-doc-writer` to update CLAUDE.md and llms.txt based on sprint changes:
+8. <!-- Stage 5: Docs, Todos 1-4 --> **Emit unified stage transition** (`$NEXT_STAGE=docs`, `$SPRINT_NUM=N`). **Mandatory documentation update + documentation review before PR** — first dispatch `standard-doc-writer` to audit/update CLAUDE.md and llms.txt based on sprint changes, then dispatch a review-only doc pass. This is a PR gate for every sprint, including one-sprint Superflow runs. `llms.txt` is always checked; it may be committed as unchanged only after the doc update agent explicitly confirms no material update is needed:
    ```
    Agent(
      subagent_type: "standard-doc-writer",
      model: "sonnet",  # explicit — frontmatter not reliably inherited
      prompt: "
-   Update project documentation to reflect changes from Sprint N.
+   Audit and update project documentation for Sprint N before PR creation.
 
    **Read first:**
    - `git diff main...HEAD` to see what this sprint changed
@@ -360,24 +365,52 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
    - New conventions introduced → add to Conventions
    - New commands or workflows → add to relevant section
    - Architecture changed → update Architecture section
-   If nothing materially changed, skip CLAUDE.md.
+   If nothing materially changed, report `CLAUDE.md: UNCHANGED` with the reason.
 
-   **llms.txt — update if any of these changed:**
+   **llms.txt — ALWAYS AUDIT, update if any of these changed:**
    - New API endpoints or features → add to relevant section
    - New dependencies or integrations → document
    - Removed functionality → remove from docs
-   If nothing materially changed, skip llms.txt.
+   - Public commands, setup, architecture, key modules, or workflows changed → update
+   If nothing materially changed, report `llms.txt: UNCHANGED` with the reason.
 
    **Rules:**
    - Minimal edits only — update what changed, don't rewrite
    - Verify every path/command you document actually exists
    - Keep CLAUDE.md under 200 lines
    - Preserve existing markers (<!-- updated-by-superflow:... -->)
+
+   **Required output:** `docs_update: UPDATED` if either file changed, otherwise `docs_update: UNCHANGED`, plus a short reason for each file.
    "
    )
    ```
    After agent completes, commit doc changes: `git add CLAUDE.md llms.txt && git commit -m "docs: update project documentation for sprint N" || true` (the `|| true` handles the case where nothing changed).
-9. <!-- Stage 6: Ship, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=ship`, `$SPRINT_NUM=N`). **Push + PR**: verify `.par-evidence.json` exists with both verdicts passing. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
+   Update `.par-evidence.json` with `"docs_update":"UPDATED"` or `"docs_update":"UNCHANGED"`.
+
+   **Documentation review (mandatory, review-only):** dispatch `standard-doc-writer` with a review-only prompt:
+   ```
+   Agent(
+     subagent_type: "standard-doc-writer",
+     model: "sonnet",
+     prompt: "
+   Review Sprint N documentation changes before PR creation. Do not edit files.
+
+   **Read first:**
+   - `git diff main...HEAD`
+   - Current `CLAUDE.md` and `llms.txt`
+
+   **Verify:**
+   - `llms.txt` was explicitly audited and is accurate for current project structure
+   - `CLAUDE.md` and `llms.txt` reflect user-facing features, commands, architecture, and changed key modules from this sprint
+   - No stale paths, deleted modules, nonexistent commands, or overbroad claims were introduced
+   - If docs_update is UNCHANGED, that decision is justified by the sprint diff
+
+   Output exactly: `docs_review: PASS` or `docs_review: NEEDS_FIXES`, with findings if fixes are needed.
+   "
+   )
+   ```
+   Fix any `NEEDS_FIXES`, commit doc fixes if any, then re-run the documentation review. Update `.par-evidence.json` with `"docs_review":"PASS"`.
+9. <!-- Stage 6: Ship, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=ship`, `$SPRINT_NUM=N`). **Push + PR**: verify `.par-evidence.json` exists with both verdicts passing, `docs_update` set to `UPDATED` or `UNCHANGED`, and `docs_review` = `PASS`. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
 10. <!-- Stage 6: Ship, Todo 3 --> **Cleanup**: verify PR was created successfully (`gh pr view` returns data), then `git worktree remove .worktrees/sprint-N`
 11. <!-- Stage 6: Ship, Todo 4 --> **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." Then next sprint.
 
@@ -388,8 +421,9 @@ Before creating the PR, verify ALL:
 - [ ] Implementation dispatched to subagents (not written by orchestrator)
 - [ ] Unified review completed: 2 agents (Product + Technical), both APPROVE/ACCEPTED
 - [ ] Full test suite passes with pasted evidence
-- [ ] `.par-evidence.json` written with both verdicts passing
-- [ ] Documentation updated (CLAUDE.md, llms.txt) or confirmed unchanged
+- [ ] `.par-evidence.json` written with review verdicts passing, `docs_update` set, and `docs_review` = `PASS`
+- [ ] Documentation update completed before PR; `llms.txt` explicitly updated or confirmed unchanged
+- [ ] Documentation review completed before PR and passed
 - [ ] PR created with `--base main`
 - [ ] Worktree cleaned up
 
@@ -421,7 +455,7 @@ Reviewer count depends on governance mode and sprint complexity:
 - Medium (2-5 files): reviewers check changed files + integration points with unchanged code
 - Complex (5+ files): reviewers check changed files + cross-module impact + architectural fit
 
-For light-mode sprints, record PAR as: `{"claude_product":"SKIPPED","technical_review":"APPROVE","provider":"...","governance":"light"}`
+For light-mode sprints, record PAR as: `{"claude_product":"SKIPPED","technical_review":"APPROVE","docs_update":"UPDATED|UNCHANGED","docs_review":"PASS","provider":"...","governance":"light"}`
 
 ## No Secondary Provider
 
@@ -429,7 +463,7 @@ When Codex/secondary is unavailable, dispatch 2 Claude agents with split focus:
 - Agent A (Product): `subagent_type: "standard-product-reviewer"` — spec fit, user scenarios, data integrity
 - Agent B (Technical): `subagent_type: "standard-code-reviewer"` — correctness, security, architecture, performance
 
-Record: `{"provider":"split-focus","claude_product":"ACCEPTED","technical_review":"APPROVE","ts":"..."}`
+Record: `{"provider":"split-focus","claude_product":"ACCEPTED","technical_review":"APPROVE","docs_update":"UPDATED|UNCHANGED","docs_review":"PASS","ts":"..."}`
 
 ## Test Execution Discipline
 

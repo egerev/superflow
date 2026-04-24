@@ -1,6 +1,6 @@
 name = "fast-implementer"
 description = "Fast implementation agent for simple/mechanical tasks (CRUD, config, file moves)"
-model = "gpt-5.4-mini"
+model = "gpt-5.5"
 model_reasoning_effort = "medium"
 developer_instructions = """
 <role>

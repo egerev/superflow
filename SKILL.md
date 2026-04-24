@@ -52,9 +52,23 @@ superflow/
    [ -n "$CLAUDE_CODE_SESSION_ID" ] && echo "RUNTIME:claude" || echo "RUNTIME:codex"
    ```
    Store the result. All subsequent steps branch on `RUNTIME`.
-2. **Read durable rules:**
-   - `RUNTIME:claude` → Read `.claude/rules/superflow-enforcement.md`
-   - `RUNTIME:codex` → Read `codex/AGENTS.md`
+2. **Locate skill root + read durable rules:**
+   ```bash
+   SUPERFLOW_SKILL_ROOT=""
+   for d in \
+       "$HOME/.codex/skills/superflow" \
+       "$HOME/.claude/skills/superflow" \
+       "$HOME/.agents/skills/superflow" \
+       "./"; do
+     if [ -f "$d/SKILL.md" ] && [ -f "$d/superflow-enforcement.md" ]; then
+       SUPERFLOW_SKILL_ROOT="$(cd "$d" && pwd)"
+       break
+     fi
+   done
+   export SUPERFLOW_SKILL_ROOT
+   ```
+   - `RUNTIME:claude` → Read `.claude/rules/superflow-enforcement.md` (or `$SUPERFLOW_SKILL_ROOT/superflow-enforcement.md` during setup)
+   - `RUNTIME:codex` → Read `$SUPERFLOW_SKILL_ROOT/codex/AGENTS.md`
 3. **Session recovery check** (only on `feat/*` branches): `git status --short`. If uncommitted changes exist from a crashed previous session:
    a. `git stash` → run tests on clean HEAD → note results
    b. `git stash pop` → run tests again → compare
@@ -74,7 +88,8 @@ superflow/
    test -e .git && echo "MODE:enhancement" || echo "MODE:greenfield"
    # Deploy agent definitions for the detected runtime
    if [ "$RUNTIME" = "codex" ]; then
-     test -f ~/.codex/agents/deep-analyst.toml || cp ~/.claude/skills/superflow/codex/agents/*.toml ~/.codex/agents/ 2>/dev/null
+     mkdir -p ~/.codex/agents
+     test -f ~/.codex/agents/deep-analyst.toml || cp "$SUPERFLOW_SKILL_ROOT"/codex/agents/*.toml ~/.codex/agents/ 2>/dev/null
    else
      test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null
    fi
@@ -105,14 +120,16 @@ superflow/
     # Runtime-aware path discovery — try Claude, Codex, agents, then repo-local
     _SF_EMIT_FOUND=""
     for p in \
-        "$HOME/.claude/skills/superflow/tools/sf-emit.sh" \
+        "$SUPERFLOW_SKILL_ROOT/tools/sf-emit.sh" \
         "$HOME/.codex/skills/superflow/tools/sf-emit.sh" \
+        "$HOME/.claude/skills/superflow/tools/sf-emit.sh" \
         "$HOME/.agents/skills/superflow/tools/sf-emit.sh" \
         "./tools/sf-emit.sh"; do
       if [ -f "$p" ]; then source "$p"; _SF_EMIT_FOUND=1; break; fi
     done
     if [ -z "${_SF_EMIT_FOUND:-}" ]; then
       echo "⚠️  sf-emit.sh not found — event telemetry disabled (see superflow v5 Run 2)" >&2
+      sf_emit() { return 0; }
     fi
     sf_emit run.start runtime="${RUNTIME:-claude}" phase:int="$CURRENT_PHASE" || true
     ```
@@ -178,14 +195,14 @@ When RUNTIME=codex, the following differences apply throughout all phases:
 
 - **Dispatch**: use spawn_agent tool with agent name from .toml definitions in `~/.codex/agents/`
 - **Parallelism**: implicit (max_threads=6), no run_in_background needed. But max_depth=1 — no nested spawning
-- **Secondary**: Claude CLI — `$TIMEOUT_CMD 600 claude -p "PROMPT" 2>&1`
+- **Claude product/research secondary**: Claude CLI — `$TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "PROMPT" 2>&1`
 - **Durable rules**: `codex/AGENTS.md` — re-read after ANY `/compact`
 - **Progress tracking**: printf (no TaskCreate/TaskUpdate available)
 - **Hooks**: `~/.codex/hooks.json` (SessionStart + Stop), no PreCompact/PostCompact
 - **Context budget**: ~258K — use `/compact` between sprints, session-per-sprint for 4+ sprints
 - **Phase docs routing**: read `references/codex/<phase>.md` for dispatch, main `references/<phase>.md` for logic
 - **Sprint execution**: sequential only (max_depth=1 prevents sprint-level delegation)
-- **Skill discovery**: symlink `~/.agents/skills/superflow → ~/.claude/skills/superflow` for Codex discovery
+- **Skill discovery**: install/symlink the skill at `~/.codex/skills/superflow`; optionally mirror to `~/.agents/skills/superflow` for older launchers
 
 ## State Management
 

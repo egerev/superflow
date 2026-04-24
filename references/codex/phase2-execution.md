@@ -39,14 +39,15 @@ Include in every implementer prompt:
 Check Claude availability: `claude --version 2>/dev/null`
 
 **If Claude available:**
-1. Codex product reviewer: spawn_agent("standard-product-reviewer") with prompt containing SPEC + brief + diff
-2. Claude technical reviewer:
+1. Claude Opus 4.7 product reviewer:
    ```bash
-   $TIMEOUT_CMD 600 claude -p "Review the following diff for correctness, security, performance. $(cat prompts/claude/code-reviewer.md)
+   $TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "Review the following sprint for product fit, user scenarios, data integrity, and charter compliance. $(cat prompts/claude/product-reviewer.md)
 
    SPEC: [spec text]
+   PRODUCT BRIEF: [brief text]
    DIFF: $(git diff main...HEAD)" 2>&1
    ```
+2. Codex technical reviewer: spawn_agent("standard-code-reviewer") with prompt containing SPEC + brief + diff
 
 **If Claude NOT available (split-focus):**
 1. spawn_agent("standard-product-reviewer") — spec fit, user scenarios, data integrity
@@ -61,37 +62,48 @@ Same format as main doc:
 ```json
 {
   "sprint": N,
-  "codex_product": "ACCEPTED",
+  "claude_product": "ACCEPTED",
   "technical_review": "APPROVE",
-  "provider": "claude|split-focus",
+  "docs_update": "UPDATED|UNCHANGED",
+  "docs_review": "PASS",
+  "provider": "claude-opus-4-7|split-focus",
   "ts": "ISO-8601"
 }
 ```
 
-### Stage 5: Documentation Update
+### Stage 5: Documentation Update + Review
 
 Use spawn_agent to dispatch "standard-doc-writer" with prompt:
 ```
-Update project documentation to reflect changes from Sprint N.
+Audit and update project documentation for Sprint N before PR creation.
 [Same prompt body as main doc Stage 5 section]
 ```
 
+Then dispatch a second review-only "standard-doc-writer":
+```
+Review Sprint N documentation changes before PR creation. Do not edit files.
+Verify llms.txt was explicitly audited, CLAUDE.md/llms.txt match the sprint diff, and no stale paths or commands were introduced.
+Return docs_review: PASS or docs_review: NEEDS_FIXES.
+```
+
+Fix any NEEDS_FIXES and re-run the doc review. Before shipping, `.par-evidence.json` must include `docs_update` (`UPDATED` or `UNCHANGED`) and `docs_review` (`PASS`).
+
 ### Stage 6: Ship
 
-Same as main doc (push, PR, cleanup, Telegram). No dispatch changes.
+Same as main doc (push, PR, cleanup, Telegram). PR creation is blocked until docs update and docs review gates pass.
 
 ## Holistic Review (after all sprints, conditional)
 
 **Required when:** ≥4 sprints, or governance_mode="critical".
 Note: parallel execution trigger doesn't apply — Codex runs sprints sequentially.
 
-1. Codex product: spawn_agent("deep-product-reviewer") with:
-   "Review ALL sprint changes. Focus: end-to-end user flows, data integrity across sprints, spec compliance."
-
-2. Claude technical:
+1. Claude Opus 4.7 product reviewer:
    ```bash
-   $TIMEOUT_CMD 900 claude -p "Holistic review of all sprint changes. Check cross-module issues, architecture, security. $(cat prompts/claude/code-reviewer.md)" 2>&1
+   $TIMEOUT_CMD 900 claude --model claude-opus-4-7 --effort xhigh -p "Holistic product review of all sprint changes. Focus: end-to-end user flows, data integrity across sprints, spec compliance, and charter compliance. $(cat prompts/claude/product-reviewer.md)" 2>&1
    ```
+
+2. Codex technical: spawn_agent("deep-code-reviewer") with:
+   "Holistic review of all sprint changes. Check cross-module issues, architecture, security, performance, tests, and codebase hygiene."
 
 No Claude → split-focus: spawn_agent("deep-product-reviewer") + spawn_agent("deep-code-reviewer").
 

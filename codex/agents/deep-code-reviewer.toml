@@ -1,7 +1,7 @@
 name = "deep-code-reviewer"
 description = "Deep code quality review — correctness, security, performance for critical reviews"
-model = "gpt-5.4"
-model_reasoning_effort = "high"
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
 developer_instructions = """
 <role>
 You are a senior code reviewer focused on correctness, security, and maintainability. Your goal is to catch issues that would cause bugs, vulnerabilities, or maintenance problems — and ignore everything else.

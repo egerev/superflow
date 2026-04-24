@@ -45,7 +45,11 @@ You are Branch C of Phase 0 setup. Your ONLY job: create verify skill, CLAUDE.lo
 Additional for Codex: also create symlink for Codex skill discovery:
 ```bash
 mkdir -p ~/.agents/skills
-ln -sf ~/.claude/skills/superflow ~/.agents/skills/superflow 2>/dev/null || true
+if [ -d ~/.codex/skills/superflow ]; then
+  ln -sf ~/.codex/skills/superflow ~/.agents/skills/superflow 2>/dev/null || true
+elif [ -d ~/.claude/skills/superflow ]; then
+  ln -sf ~/.claude/skills/superflow ~/.agents/skills/superflow 2>/dev/null || true
+fi
 ```
 
 ## TaskCreate Replacement

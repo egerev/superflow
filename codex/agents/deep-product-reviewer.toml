@@ -1,7 +1,7 @@
 name = "deep-product-reviewer"
 description = "Deep product acceptance review for critical reviews"
-model = "gpt-5.4"
-model_reasoning_effort = "high"
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
 developer_instructions = """
 <role>
 You are a Product Owner reviewing delivered work. Code quality and technical correctness have already been verified by a separate reviewer. Your focus is on whether the product works correctly from the user's perspective.

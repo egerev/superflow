@@ -15,7 +15,7 @@
         "matcher": "",
         "hooks": [{
           "type": "command",
-          "command": "/bin/bash \"$HOME/.claude/skills/superflow/hooks/codex-stop-state-dump.sh\"",
+          "command": "/bin/bash -lc 'for p in \"$HOME/.codex/skills/superflow/hooks/codex-stop-state-dump.sh\" \"$HOME/.claude/skills/superflow/hooks/codex-stop-state-dump.sh\" \"$HOME/.agents/skills/superflow/hooks/codex-stop-state-dump.sh\"; do [ -f \"$p\" ] && exec /bin/bash \"$p\"; done'",
           "timeout": 10
         }]
       }
