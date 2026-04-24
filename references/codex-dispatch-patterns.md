@@ -41,11 +41,11 @@ Lookup table mapping every Agent() dispatch in Superflow to its Codex spawn_agen
 
 | Context | Claude orchestrator (Codex secondary) | Codex orchestrator (Claude secondary) |
 |---------|---------------------------------------|---------------------------------------|
-| Security audit | `codex exec --full-auto` + `prompts/codex/audit.md` | `claude --model claude-opus-4-7 --effort xhigh -p` + `prompts/claude/audit.md` |
-| Code review | `codex exec review --base main --ephemeral` | spawn_agent technical reviewer |
-| Product review | `codex exec` + `prompts/codex/product-reviewer.md` | `claude --model claude-opus-4-7 --effort xhigh -p` + `prompts/claude/product-reviewer.md` |
-| Spec review | `codex exec --full-auto --ephemeral` | Claude product + spawn_agent technical |
-| Plan review | `codex exec --full-auto --ephemeral` | Claude product + spawn_agent technical |
+| Security audit | `codex exec --full-auto -m gpt-5.5` + `prompts/codex/audit.md` | `claude --model claude-opus-4-7 --effort xhigh -p` + `prompts/claude/audit.md` |
+| Code review | `codex exec review --base main -m gpt-5.5 --ephemeral` | spawn_agent technical reviewer |
+| Product review | `codex exec -m gpt-5.5` + `prompts/codex/product-reviewer.md` | `claude --model claude-opus-4-7 --effort xhigh -p` + `prompts/claude/product-reviewer.md` |
+| Spec review | `codex exec --full-auto -m gpt-5.5 --ephemeral` | Claude product + spawn_agent technical |
+| Plan review | `codex exec --full-auto -m gpt-5.5 --ephemeral` | Claude product + spawn_agent technical |
 
 ## Split-Focus Fallback (no secondary provider)
 
