@@ -2,6 +2,16 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [5.2.0] - 2026-04-24
+
+### Added — Git Workflow Modes + Codex Sprint Parallelism
+- **Phase 1 git workflow selection**: Superflow now selects and stores `context.git_workflow_mode` alongside governance mode. Supported modes: `solo_single_pr`, `sprint_pr_queue`, `stacked_prs`, `parallel_wave_prs`, and `trunk_based`
+- **New reference**: `references/git-workflow-modes.md` documents selection heuristics, branch base policy, PR count, and Phase 2 merge boundaries. Classic Git Flow remains opt-in only for projects that already use release trains
+- **Mode-aware Phase 2/3**: branch creation, PR creation, docs gate timing, holistic review requirements, and merge order now follow the selected git workflow mode instead of hardcoding "one PR per sprint"
+- **Codex sprint-level parallelism**: recommended Codex config is now `[agents] max_threads=6, max_depth=2`. With `max_depth>=2`, Codex can run independent sprint supervisors in parallel; each supervisor can spawn per-sprint implement/review/doc agents. Older `max_depth=1` configs fall back to sequential sprints with an explicit warning
+- **Codex model policy**: Codex agents and Claude-runtime `codex exec` calls are pinned to `gpt-5.5` with tiered reasoning (`xhigh` deep, `high` standard, `medium` fast). Codex-runtime product/research reviews use exact Claude model `claude-opus-4-7 --effort xhigh`
+- **Per-PR docs gate**: every PR path now requires a docs update decision and separate docs review before PR creation, with `llms.txt` explicitly audited. In `solo_single_pr`, this applies to the final PR; in per-sprint modes, it applies to every sprint PR
+
 ## [5.1.0] - 2026-04-17
 
 ### Removed — Phase 0 Anti-Regression Settings Check (reverts 4.6.0)
