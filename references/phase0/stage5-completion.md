@@ -206,5 +206,5 @@ All items checked → Phase 0 is complete.
 
 ```bash
 sf_emit stage.end stage=completion phase:int=0
-sf_emit phase.end phase:int=0 status=completed
+sf_emit phase.end phase:int=0 label="Onboarding"
 ```

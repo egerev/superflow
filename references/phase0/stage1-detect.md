@@ -222,9 +222,10 @@ s['context'] = {'preflight': {'skipped': True}, 'skip_phase0': True}
 s['last_updated'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 json.dump(s, open('.superflow-state.json', 'w'), indent=2)
 "
-```
+```bash
 sf_emit stage.end stage=detect phase:int=0
-sf_emit phase.end phase:int=0 status=skipped
+sf_emit phase.end phase:int=0 label="Onboarding"
+```
 
 Tell user Phase 0 was skipped, then re-read `references/phase1-discovery.md` and begin Phase 1.
 
@@ -233,10 +234,6 @@ Tell user Phase 0 was skipped, then re-read `references/phase1-discovery.md` and
 ## Completion
 
 Mark stage done. State now has `context.preflight` populated. Stage 2 reads from there.
-
-```bash
-sf_emit stage.end stage=detect phase:int=0
-```
 
 ```
 TaskUpdate(id: <task_id>, status: "completed")

@@ -19,6 +19,8 @@ For stacks without a specific template, create a minimal structure.
 ```
 .env
 .worktrees/
+.superflow/
+# Explicit entries for event log artifacts (redundant with .superflow/ above, kept for self-documentation).
 .superflow/events.jsonl
 .superflow/archive/
 .superflow-state.json

@@ -42,7 +42,7 @@ s = json.load(open(p)) if os.path.exists(p) else {}
 s.update({'version':1,'phase':3,'phase_label':'Merge','stage':'pre-merge','stage_index':0,'last_updated':datetime.datetime.now(datetime.timezone.utc).isoformat()})
 json.dump(s, open(p,'w'), indent=2)
 "
-sf_emit phase.start phase:int=3
+sf_emit phase.start phase:int=3 label="Merge"
 ```
 
 After each stage transition, update via python3:
@@ -169,9 +169,9 @@ for each PR in sprint order:
   1. gh pr checks <number> — verify CI green
      - If CI failing, send Telegram (if MCP available):
        mcp__plugin_telegram_telegram__reply(chat_id: <chat_id>, text: "PR #N CI failed, investigating...")
-     - sf_emit pr.merge pr:int=NNN method=rebase status=failed error="CI checks failed"  # on CI failure
+     - sf_emit pr.merge number:int=NNN method=rebase  # emitted before abandoning this PR due to CI failure
   2. gh pr merge <number> --rebase --delete-branch
-     sf_emit pr.merge pr:int=NNN method=rebase status=success  # replace NNN with actual PR number
+     sf_emit pr.merge number:int=NNN method=rebase  # replace NNN with actual PR number
   3. If merge fails due to conflict:
      a. git fetch origin main
      b. git checkout <branch>
@@ -254,7 +254,8 @@ Include merged PR numbers, CI status, test results, and branch cleanup status in
 
 ```bash
 sf_emit stage.end stage=post-merge phase:int=3
-sf_emit phase.end phase:int=3
+sf_emit phase.end phase:int=3 label="Merge"
+sf_emit run.end status=completed
 ```
 
 ## Known Issues
