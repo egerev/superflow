@@ -174,7 +174,17 @@ In light mode, the charter body contains the sprint breakdown directly. Charter 
 
 **Skip this step in light mode** — proceed directly to Step 5 (Brainstorming).
 
-Dispatch **parallel background research** using the Agent tool (`run_in_background: true` for each):
+Dispatch **parallel background research** using the Agent tool (`run_in_background: true` for each).
+Emit dispatch/complete pairs around each agent (repeat per agent, substituting role/task/model):
+
+```bash
+# Pattern for research agents (repeat per agent):
+AGENT_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+SF_PARENT_ID="$AGENT_ID" sf_emit agent.dispatch agent_type=research-agent task="Phase 1: domain best practices research" model=opus
+# Agent() call here (run_in_background: true)
+# After agent returns:
+sf_emit agent.complete role=research-agent agent_id="$AGENT_ID"
+```
 
 ```
 Agent(model: opus, description: "Domain best practices research", run_in_background: true)
@@ -217,7 +227,17 @@ Dispatch 3-4 parallel background agents, each with a distinct expert persona. Us
 | UX/Workflow Expert | "How does this feel to use?" | Interaction flow, remote UX, cognitive load |
 | Domain Expert | "What does the industry do?" | Best practices, standards, prior art |
 
-Dispatch all in parallel:
+Dispatch all in parallel. Emit dispatch/complete pairs around each agent (repeat per agent, substituting persona/focus):
+
+```bash
+# Pattern for expert panel agents (repeat per agent):
+AGENT_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+SF_PARENT_ID="$AGENT_ID" sf_emit agent.dispatch agent_type=expert-panel task="Phase 1: Product GM brainstorm" model=opus
+# Agent() call here (run_in_background: true)
+# After agent returns:
+sf_emit agent.complete role=expert-panel agent_id="$AGENT_ID"
+```
+
 ```
 Agent(model: opus, effort: high, description: "Product GM expert panel", run_in_background: true)
   → use prompts/expert-panel.md with persona="Product GM", focus="User pain, adoption, competitive edge"
@@ -383,6 +403,10 @@ mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Pro
 - "go" / "approve" → proceed to Step 8 (Spec)
 - "fix ..." / "changes" → ask what to change, update, re-present
 - "restart" → go back to Step 5 (brainstorming)
+- User abandons / explicitly cancels Phase 1:
+  ```bash
+  sf_emit run.end status=blocked
+  ```
 
 ```bash
 sf_emit stage.end stage=product-approval phase:int=1
@@ -414,6 +438,11 @@ Create `docs/superflow/specs/` if it doesn't exist.
 
 Run two reviewers in parallel. Both reviewers receive the product brief AND the spec.
 
+```bash
+sf_emit review.start reviewer=product target="spec"
+sf_emit review.start reviewer=technical target="spec"
+```
+
 1. **Claude reviewer (PRODUCT lens)**: `Agent(subagent_type: "deep-product-reviewer", run_in_background: true, prompt: "Review this spec for product completeness, scope alignment, user story coverage. Spec: [SPEC TEXT]")`. Focus: product completeness, scope alignment, user story coverage.
 2. **Secondary provider (TECHNICAL lens)**: `$TIMEOUT_CMD 600 codex exec --full-auto -m gpt-5.5 -c model_reasoning_effort=high --ephemeral "Spec review. Check completeness, security, architecture against: [SPEC TEXT]" 2>&1` via Bash (`run_in_background: true`).
    No secondary provider = split-focus Claude: Product (`deep-product-reviewer`) + Technical (`deep-spec-reviewer`).
@@ -422,6 +451,12 @@ Run two reviewers in parallel. Both reviewers receive the product brief AND the 
 
 Wait for both. If either returns NEEDS_REVISION: fix issues, re-run both reviews.
 Both must return PASS to proceed.
+
+```bash
+# VERDICT: one of APPROVE, ACCEPTED, PASS, FAIL, NEEDS_FIXES, REQUEST_CHANGES
+sf_emit review.verdict reviewer=product verdict="$VERDICT"
+sf_emit review.verdict reviewer=technical verdict="$VERDICT"
+```
 
 ```bash
 sf_emit stage.end stage=spec phase:int=1
@@ -470,6 +505,11 @@ The orchestrator uses this to build a sprint dependency graph and dispatch indep
 
 Run two reviewers in parallel (same mechanism as Step 8):
 
+```bash
+sf_emit review.start reviewer=product target="plan"
+sf_emit review.start reviewer=technical target="plan"
+```
+
 1. **Claude reviewer (PRODUCT lens)**: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "Review this plan for product feasibility, scope correctness, user value alignment. Plan: [PLAN TEXT]")`. Does the plan deliver user value? Is scope correct? Are priorities aligned with the brief?
 2. **Secondary provider (TECHNICAL lens)**: `$TIMEOUT_CMD 600 codex exec --full-auto -m gpt-5.5 -c model_reasoning_effort=high --ephemeral "Plan review. Check achievability, scoping, dependencies against: [PLAN TEXT]" 2>&1` via Bash (`run_in_background: true`). Are there missing tasks? Over-engineering? Does sprint ordering make sense?
    No secondary provider = split-focus Claude: Product (`standard-product-reviewer`) + Technical (`standard-spec-reviewer`).
@@ -477,6 +517,12 @@ Run two reviewers in parallel (same mechanism as Step 8):
 > **Reasoning:** Standard tier — plan review checks structure and feasibility, not deep architectural decisions.
 
 Both must APPROVE. If either returns NEEDS_REVISION: fix, re-review.
+
+```bash
+# VERDICT: one of APPROVE, ACCEPTED, PASS, FAIL, NEEDS_FIXES, REQUEST_CHANGES
+sf_emit review.verdict reviewer=product verdict="$VERDICT"
+sf_emit review.verdict reviewer=technical verdict="$VERDICT"
+```
 
 ```bash
 sf_emit stage.end stage=plan phase:int=1
