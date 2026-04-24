@@ -175,6 +175,8 @@ Check ~/.claude/rules/superflow-enforcement.md exists. If missing, copy from ski
 Ensure these entries exist (append if missing, never remove existing lines):
   .worktrees/
   .superflow/
+  .superflow/events.jsonl
+  .superflow/archive/
   .superflow-state.json
   CLAUDE.local.md
 
