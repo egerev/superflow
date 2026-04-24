@@ -86,6 +86,18 @@ sf_emit stage.start stage=analysis phase:int=0
 
 All five agents launch simultaneously with `run_in_background: true`. Include `$PREFLIGHT` in every prompt so agents adjust depth to the project's stack and team context.
 
+Before dispatching each agent, emit a dispatch event and capture its ID for correlation. After each agent returns, emit a complete event. Repeat this pair for all 5 agents:
+
+```bash
+# Pattern for each agent (repeat per agent, substituting agent_type, task, model):
+AGENT_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+SF_PARENT_ID="$AGENT_ID" sf_emit agent.dispatch agent_type=deep-analyst task="Phase 0: architecture analysis" model=opus
+# Agent() call here (run_in_background: true)
+# After agent returns:
+sf_emit agent.complete role=architecture-analyst agent_id="$AGENT_ID"
+# On failure instead: sf_emit agent.fail role=architecture-analyst agent_id="$AGENT_ID"
+```
+
 ### Agent 1 — Architecture (deep-analyst)
 
 ```

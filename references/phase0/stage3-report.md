@@ -182,6 +182,11 @@ Ask: "Which items would you like to include/exclude?" Then build `items` list fr
 
 ---
 
+If the user explicitly declines the proposal (no setup wanted, abandon onboarding):
+```bash
+sf_emit run.end status=blocked
+```
+
 ## Step 3.5 — Persist Approval to State
 
 ```bash

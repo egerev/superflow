@@ -638,6 +638,9 @@ If `.superflow/compact-log/` does not exist, the PreCompact hook isn't installed
 2. Form a hypothesis before touching code.
 3. Targeted fix, then verify with the specific test, then the full suite.
 4. 3+ failed attempts on the same issue: likely architectural problem. Report BLOCKED with evidence, suggest rethinking approach.
+   ```bash
+   sf_emit run.end status=blocked
+   ```
 5. Agent blocked: re-dispatch with more context. 2 fails on same agent task = implement manually.
 6. Never stop to ask the user. Accumulate issues, report at end.
 
