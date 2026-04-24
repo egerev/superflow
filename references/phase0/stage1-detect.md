@@ -2,9 +2,23 @@
 <!-- Stage 1, Todos: parallel preflight, present confirmation, handle response -->
 
 ```bash
-# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
-# This ensures sessions without events.jsonl still work (charter non-negotiable).
-command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+# Event emission preloader — idempotent, runs at top of every phase doc bash usage.
+# Tries (in order): already-sourced sf_emit → local tools/sf-emit.sh → runtime-aware paths → no-op.
+# Also restores SUPERFLOW_RUN_ID from state if unset.
+if ! command -v sf_emit >/dev/null 2>&1; then
+  for _sf_path in \
+      "./tools/sf-emit.sh" \
+      "$HOME/.claude/skills/superflow/tools/sf-emit.sh" \
+      "$HOME/.codex/skills/superflow/tools/sf-emit.sh" \
+      "$HOME/.agents/skills/superflow/tools/sf-emit.sh"; do
+    if [ -f "$_sf_path" ]; then source "$_sf_path"; break; fi
+  done
+  command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+fi
+if [ -z "${SUPERFLOW_RUN_ID:-}" ] && [ -f .superflow-state.json ]; then
+  SUPERFLOW_RUN_ID=$(python3 -c 'import json; print(json.load(open(".superflow-state.json")).get("context",{}).get("run_id",""))' 2>/dev/null)
+  [ -n "$SUPERFLOW_RUN_ID" ] && export SUPERFLOW_RUN_ID
+fi
 ```
 
 Runs at Phase 0 entry. Detects project state automatically, presents a one-line summary for user confirmation, and routes to the correct path (existing project, greenfield, or skip).
