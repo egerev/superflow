@@ -175,7 +175,8 @@ for each PR in sprint order:
   1. gh pr checks <number> — verify CI green
      - If CI failing, send Telegram (if MCP available):
        mcp__plugin_telegram_telegram__reply(chat_id: <chat_id>, text: "PR #N CI failed, investigating...")
-     - sf_emit pr.merge number:int=NNN method=rebase  # emitted before abandoning this PR due to CI failure
+     # NOTE: no event emitted on CI failure/abandon — pr.merge is reserved for successful merges.
+     # Failed-merge telemetry is TBD (see CHANGELOG deferred).
   2. gh pr merge <number> --rebase --delete-branch
      sf_emit pr.merge number:int=NNN method=rebase  # replace NNN with actual PR number
   3. If merge fails due to conflict:
