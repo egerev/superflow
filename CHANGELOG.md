@@ -2,6 +2,17 @@
 
 All notable changes to superflow will be documented in this file.
 
+## Deferred (Sprint 3 → future)
+
+MEDIUM/LOW event-log gaps identified in Sprint 3 coverage audit; not in scope for this sprint:
+
+- **MEDIUM:** `agent_id` correlation for parallel waves — H5 adds the dispatch/complete pair pattern with `SF_PARENT_ID`, but systematic propagation of agent IDs across wave boundaries (parent→child agent chains) is not yet implemented
+- **MEDIUM:** Phase 3 CI-abandon `pr.merge` semantics bug — when a PR is abandoned due to persistent CI failure, `pr.merge` is emitted before the merge attempt fails, which misreports a non-merged PR as merged; correct fix requires a separate `pr.abandon` event type or conditional emission
+- **MEDIUM:** Phase 3 post-merge `test.run`/`test.result` emissions — the post-merge integration test run on `main` (after all PRs merged) lacks `sf_emit test.run` / `sf_emit test.result` instrumentation
+- **LOW:** Enforce complexity/verdict enums at emitter layer — `sf_emit` currently accepts any string value for `complexity` and `verdict`; validation is deferred to consumers; adding allowlist checks inside `sf_emit` would catch typos at source
+- **LOW:** Normalize shell var quoting for typed args (`sprint:int="$VAR"`) — some phase docs use unquoted `$VAR` in typed-arg position; safe in practice but inconsistent; a style pass would standardize to `sprint:int=$VAR` (no quotes needed for numeric vars) uniformly
+- **LOW:** `run.start` charter field population on Phase 1→2 boundary — `run.start` schema allows an optional `charter` field (path to Autonomy Charter); currently emitted without it since the charter is generated at end of Phase 1 after `run.start` fires; fix requires either a `run.update` event type or re-emitting `run.start` at Phase 2 entry with charter path
+
 ## [5.2.0] - 2026-04-24
 
 ### Added — Git Workflow Modes + Codex Sprint Parallelism
