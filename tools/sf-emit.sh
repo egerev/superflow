@@ -286,7 +286,7 @@ sf_emit() {
   mkdir -p "$(dirname "$out_file")"
 
   # Append event as a single line
-  printf '%s\n' "$event_json" >> "$out_file"
+  printf '%s\n' "$event_json" >> "$out_file" || return 1
 
   # Rotation check: every _SF_ROTATION_CHECK_INTERVAL calls (default 100)
   _SF_EMIT_CALL_COUNT=$(( _SF_EMIT_CALL_COUNT + 1 ))
