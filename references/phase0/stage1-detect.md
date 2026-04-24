@@ -228,6 +228,8 @@ s['context'] = {'preflight': {'skipped': True}, 'skip_phase0': True}
 s['last_updated'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 json.dump(s, open('.superflow-state.json', 'w'), indent=2)
 "
+```
+
 ```bash
 sf_emit stage.end stage=detect phase:int=0
 sf_emit phase.end phase:int=0 label="Onboarding"
