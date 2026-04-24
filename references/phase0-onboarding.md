@@ -76,12 +76,13 @@ If markers exist on main but not locally → the current branch was created befo
 
 ## State Management
 
-At Phase 0 start, write `.superflow-state.json`:
+At Phase 0 start, write `.superflow-state.json` and emit phase start:
 
 ```bash
 cat > .superflow-state.json << STATEEOF
 {"version":1,"phase":0,"phase_label":"Onboarding","stage":"detect","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 STATEEOF
+sf_emit phase.start phase:int=0
 ```
 
 Update after each stage transition:

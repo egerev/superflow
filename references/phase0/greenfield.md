@@ -263,6 +263,10 @@ After greenfield scaffolding is complete:
 
 5. **After Stage 4 Branch B+C:** proceed to Stage 5 (references/phase0/stage5-completion.md).
 
+```bash
+sf_emit stage.end stage=greenfield phase:int=0
+```
+
 Phase 1 proceeds normally — the user describes what they want to build against the freshly
 scaffolded project.
 
@@ -280,6 +284,10 @@ On entry to greenfield path, update state:
     "greenfield": true
   }
 }
+```
+
+```bash
+sf_emit stage.start stage=greenfield phase:int=0
 ```
 
 After each step, update `stage_index` to reflect progress (G1=0, G2=1, G2.5=2, G3=3, G4=4,

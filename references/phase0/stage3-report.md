@@ -23,6 +23,7 @@ s['stage']='report'; s['stage_index']=2
 s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat()
 json.dump(s,open('.superflow-state.json','w'),indent=2)
 "
+sf_emit stage.start stage=report phase:int=0
 ```
 
 TaskCreate:
@@ -194,5 +195,9 @@ json.dump(s,open('.superflow-state.json','w'),indent=2)
 ```
 
 Stage 4 reads `context.approval` from the state file — not from LLM context.
+
+```bash
+sf_emit stage.end stage=report phase:int=0
+```
 
 TaskUpdate: mark all todos complete, status="completed". Proceed to Stage 4.

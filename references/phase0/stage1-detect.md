@@ -43,6 +43,7 @@ Before any detection, write `.superflow-state.json`:
 cat > .superflow-state.json << STATEEOF
 {"version":1,"phase":0,"phase_label":"Onboarding","stage":"detect","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 STATEEOF
+sf_emit stage.start stage=detect phase:int=0
 ```
 
 ---
@@ -222,6 +223,8 @@ s['last_updated'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 json.dump(s, open('.superflow-state.json', 'w'), indent=2)
 "
 ```
+sf_emit stage.end stage=detect phase:int=0
+sf_emit phase.end phase:int=0 status=skipped
 
 Tell user Phase 0 was skipped, then re-read `references/phase1-discovery.md` and begin Phase 1.
 
@@ -230,6 +233,10 @@ Tell user Phase 0 was skipped, then re-read `references/phase1-discovery.md` and
 ## Completion
 
 Mark stage done. State now has `context.preflight` populated. Stage 2 reads from there.
+
+```bash
+sf_emit stage.end stage=detect phase:int=0
+```
 
 ```
 TaskUpdate(id: <task_id>, status: "completed")
