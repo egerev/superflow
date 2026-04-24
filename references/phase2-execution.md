@@ -420,6 +420,7 @@ Never silently switch modes during Phase 2. If the selected mode becomes unsafe 
    b. Codex technical reviewer:
       ```bash
       sf_emit review.start reviewer=technical target="Sprint $SPRINT_NUM diff"
+      sf_emit agent.dispatch agent_type=codex-technical-reviewer task="Sprint $SPRINT_NUM technical review" model=gpt-5.5
       ```
       `$TIMEOUT_CMD 600 codex exec review --base main -m gpt-5.5 -c model_reasoning_effort=high --ephemeral - < <(echo "SPEC_CONTEXT" | cat - prompts/codex/code-reviewer.md) 2>&1` (run_in_background)
 
@@ -561,8 +562,11 @@ Never silently switch modes during Phase 2. If the selected mode becomes unsafe 
 9. <!-- Stage 6: Ship, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=ship`, `$SPRINT_NUM=N`). **Push + PR/checkpoint**: verify `.par-evidence.json` exists with review verdicts passing. If this sprint creates a PR under the selected git workflow mode, `docs_update` must be `UPDATED` or `UNCHANGED` and `docs_review` must be `PASS`; push the mode-specific branch and create the mode-specific PR. In `solo_single_pr`, non-final sprints push checkpoint commits to the shared feature branch without creating a PR; the final sprint creates one PR after docs gates pass.
    ```bash
    sf_emit stage.start stage=ship phase:int=2
-   # After gh pr create succeeds:
-   sf_emit pr.create pr_number:int=$PR_NUM title="$PR_TITLE" branch=$BRANCH_NAME sprint:int=$SPRINT_NUM
+   # Gate pr.create on PR creation (solo_single_pr non-final sprints skip this)
+   if [ -n "${PR_NUM:-}" ]; then
+     sf_emit pr.create pr_number:int=$PR_NUM title="$PR_TITLE" branch=$BRANCH_NAME sprint:int=$SPRINT_NUM
+   fi
+   # Always emit sprint.end / stage.end regardless of PR creation
    sf_emit sprint.end sprint:int=$SPRINT_NUM total_sprints:int=$TOTAL_SPRINTS goal="$SPRINT_GOAL" complexity="$COMPLEXITY"
    sf_emit stage.end stage=ship phase:int=2
    ```

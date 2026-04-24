@@ -64,9 +64,23 @@ TaskCreate(
 Before any detection, write `.superflow-state.json`:
 
 ```bash
-cat > .superflow-state.json << STATEEOF
-{"version":1,"phase":0,"phase_label":"Onboarding","stage":"detect","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
-STATEEOF
+python3 -c "
+import json, datetime, os, tempfile
+p='.superflow-state.json'
+s = json.load(open(p)) if os.path.exists(p) else {}
+s.update({
+    'version': 1,
+    'phase': 0,
+    'phase_label': 'Onboarding',
+    'stage': 'detect',
+    'stage_index': 0,
+    'last_updated': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+})
+s.setdefault('context', {})
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p) or '.', prefix='.superflow-state.', suffix='.tmp')
+with os.fdopen(fd, 'w') as f: json.dump(s, f, indent=2)
+os.replace(tmp, p)
+"
 sf_emit stage.start stage=detect phase:int=0
 ```
 
