@@ -15,9 +15,9 @@ Version: v5.2.0 (2026-04-24). MIT License.
 
 ## File Structure
 
-- [SKILL.md](SKILL.md): Entry point — startup checklist (6 steps), provider detection, phase routing (~120 lines)
+- [SKILL.md](SKILL.md): Entry point — startup checklist (6 steps), provider detection, phase routing (~240 lines)
 - [superflow-enforcement.md](superflow-enforcement.md): 13 hard rules that survive context compaction — deployed to ~/.claude/rules/ (103 lines)
-- [CLAUDE.md](CLAUDE.md): Project instructions for Claude — architecture, key files table, conventions (~90 lines)
+- [CLAUDE.md](CLAUDE.md): Project instructions for Claude — architecture, key files table, conventions (~110 lines)
 - [README.md](README.md): Installation, usage, v4.1 features, permissions setup
 
 ## Phase References

@@ -12,7 +12,7 @@ Superflow is a pure Markdown skill that orchestrates a 4-phase dev workflow: onb
 
 ## Architecture
 ```
-SKILL.md (entry point, ~180 lines, auto-detects Claude/Codex runtime)
+SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
   ├── superflow-enforcement.md (durable rules → ~/.claude/rules/)
   ├── codex/
   │   ├── AGENTS.md (durable rules for Codex → ~/.codex/AGENTS.md)
