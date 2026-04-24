@@ -1,6 +1,6 @@
 # sf-emit.sh — Superflow event emission library
 # Source-safe: shell options are scoped to sf_emit() only; sourcing this file does not alter caller shell state.
-# Log rotation: see tools/sf-emit.sh Sprint 3 hardening (not yet implemented).
+# Log rotation: threshold-based, triggered every _SF_ROTATION_CHECK_INTERVAL calls inside sf_emit.
 #
 # Usage:
 #   source tools/sf-emit.sh        # once per session
@@ -56,6 +56,89 @@ _SF_KNOWN_TYPES=(
   compact.post
   heartbeat
 )
+
+# ---------------------------------------------------------------------------
+# Log rotation configuration
+# ---------------------------------------------------------------------------
+# Maximum number of lines in events.jsonl before rotation triggers.
+# Default 5000. Set to 0 or negative to disable rotation entirely.
+: "${SUPERFLOW_EVENT_LOG_MAX_LINES:=5000}"
+
+# How often (in sf_emit calls) to check the line count.
+# 1 = check every call (useful for testing); 100 = production default.
+: "${_SF_ROTATION_CHECK_INTERVAL:=100}"
+
+# Per-shell call counter — not exported, not shared across processes.
+_SF_EMIT_CALL_COUNT=0
+
+# _sf_rotate_log <out_file>
+# Rotates out_file to archive/events-<YYYYMMDD-HHMMSS>-<PID>-<N>.jsonl.
+# Uses flock(1) non-blocking advisory lock to prevent concurrent rotation.
+# If flock is unavailable, falls back to a best-effort mv (safe because
+# POSIX append is atomic up to PIPE_BUF; two shells rotating simultaneously
+# is harmless — the later one will see a file below threshold and skip).
+_sf_rotate_log() {
+  local out_file="$1"
+  local archive_dir
+  archive_dir="$(dirname "$out_file")/archive"
+  local stamp
+  stamp="$(date -u +%Y%m%d-%H%M%S)"
+  # Include PID and call count to guarantee uniqueness within the same second
+  local archive_file="${archive_dir}/events-${stamp}-${$}-${_SF_EMIT_CALL_COUNT}.jsonl"
+
+  # Ensure archive directory exists
+  mkdir -p "$archive_dir" || {
+    echo "sf_emit: log rotation failed: cannot create archive dir '$archive_dir'" >&2
+    return 0  # non-fatal
+  }
+
+  # Acquire non-blocking advisory lock to prevent concurrent rotation.
+  # Pattern: redirect fd 9 to lock file, flock -n on it. If flock is not
+  # available or lock is held, skip rotation (another shell is handling it).
+  local lock_file="${out_file}.lock"
+
+  _sf_do_rotate() {
+    mv "$out_file" "$archive_file" || {
+      echo "sf_emit: log rotation failed: mv '$out_file' → '$archive_file'" >&2
+      return 0  # non-fatal; do not block emissions
+    }
+    # out_file is now absent; next sf_emit will re-create it via mkdir+printf
+  }
+
+  # Try flock (Linux, macOS with /usr/bin/flock or Homebrew)
+  if command -v flock &>/dev/null; then
+    (
+      exec 9>"$lock_file"
+      if flock -n 9; then
+        _sf_do_rotate
+      fi
+      # lock released on subshell exit
+    )
+  else
+    # No flock available: best-effort (rotation may race, but append is safe)
+    _sf_do_rotate
+  fi
+}
+
+# _sf_check_rotation <out_file>
+# Called after append. Checks line count and triggers _sf_rotate_log if needed.
+_sf_check_rotation() {
+  local out_file="$1"
+
+  # Rotation disabled when threshold is 0 or negative
+  if [ "${SUPERFLOW_EVENT_LOG_MAX_LINES:-5000}" -le 0 ] 2>/dev/null; then
+    return 0
+  fi
+
+  local line_count
+  line_count="$(wc -l < "$out_file" 2>/dev/null)" || return 0
+
+  if [ "$line_count" -ge "${SUPERFLOW_EVENT_LOG_MAX_LINES}" ]; then
+    _sf_rotate_log "$out_file"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 
 # _sf_uuid — emit a UUID using platform-appropriate method
 _sf_uuid() {
@@ -204,4 +287,65 @@ sf_emit() {
 
   # Append event as a single line
   printf '%s\n' "$event_json" >> "$out_file"
+
+  # Rotation check: every _SF_ROTATION_CHECK_INTERVAL calls (default 100)
+  _SF_EMIT_CALL_COUNT=$(( _SF_EMIT_CALL_COUNT + 1 ))
+  if [ $(( _SF_EMIT_CALL_COUNT % _SF_ROTATION_CHECK_INTERVAL )) -eq 0 ]; then
+    _sf_check_rotation "$out_file"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# _sf_rotation_self_test
+# Manual smoke test for log rotation. Invoke as:
+#   source tools/sf-emit.sh && _sf_rotation_self_test
+# Writes 5500 lines at threshold 5000, checks archive, reports line counts.
+# ---------------------------------------------------------------------------
+_sf_rotation_self_test() {
+  local test_dir
+  test_dir="$(mktemp -d)"
+  echo "sf_rotation_self_test: using temp dir $test_dir"
+
+  local old_events_file="${SUPERFLOW_EVENTS_FILE:-}"
+  local old_run_id="${SUPERFLOW_RUN_ID:-}"
+  local old_max="${SUPERFLOW_EVENT_LOG_MAX_LINES:-5000}"
+  local old_interval="${_SF_ROTATION_CHECK_INTERVAL:-100}"
+
+  export SUPERFLOW_EVENTS_FILE="$test_dir/events.jsonl"
+  export SUPERFLOW_RUN_ID="00000000-0000-4000-8000-000000000099"
+  export SUPERFLOW_EVENT_LOG_MAX_LINES=5000
+  _SF_ROTATION_CHECK_INTERVAL=100
+  _SF_EMIT_CALL_COUNT=0
+
+  echo "sf_rotation_self_test: emitting 5500 heartbeats (threshold=5000, check every 100)..."
+  local i=1
+  while [ $i -le 5500 ]; do
+    sf_emit heartbeat phase2_step=self_test
+    i=$(( i + 1 ))
+  done
+
+  echo ""
+  echo "sf_rotation_self_test: results:"
+  echo "  archive dir contents:"
+  ls -la "$test_dir/archive/" 2>/dev/null || echo "  (archive dir not found)"
+  echo "  line counts:"
+  wc -l "$test_dir/events.jsonl" "$test_dir/archive/"*.jsonl 2>/dev/null || true
+
+  # Restore state
+  if [ -n "$old_events_file" ]; then
+    export SUPERFLOW_EVENTS_FILE="$old_events_file"
+  else
+    unset SUPERFLOW_EVENTS_FILE
+  fi
+  if [ -n "$old_run_id" ]; then
+    export SUPERFLOW_RUN_ID="$old_run_id"
+  else
+    unset SUPERFLOW_RUN_ID
+  fi
+  export SUPERFLOW_EVENT_LOG_MAX_LINES="$old_max"
+  _SF_ROTATION_CHECK_INTERVAL="$old_interval"
+  _SF_EMIT_CALL_COUNT=0
+
+  rm -rf "$test_dir"
+  echo "sf_rotation_self_test: done."
 }
