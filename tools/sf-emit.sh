@@ -83,8 +83,15 @@ _sf_rotate_log() {
   archive_dir="$(dirname "$out_file")/archive"
   local stamp
   stamp="$(date -u +%Y%m%d-%H%M%S)"
-  # Include PID and call count to guarantee uniqueness within the same second
-  local archive_file="${archive_dir}/events-${stamp}-${$}-${_SF_EMIT_CALL_COUNT}.jsonl"
+  # Base name: timestamp + PID for human readability
+  local archive_base="events-${stamp}-${$}"
+  local archive_file="${archive_dir}/${archive_base}.jsonl"
+  # Collision-proof: if file already exists (same second, same PID), append -N suffix
+  local _n=0
+  while [ -e "$archive_file" ]; do
+    _n=$((_n + 1))
+    archive_file="${archive_dir}/${archive_base}-${_n}.jsonl"
+  done
 
   # Ensure archive directory exists
   mkdir -p "$archive_dir" || {
