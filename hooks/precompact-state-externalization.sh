@@ -6,6 +6,23 @@
 
 set -e
 
+# Source sf-emit.sh for event emission (runtime-aware discovery).
+# Try known install locations in order; fall back to no-op if not found.
+_SF_EMIT_SOURCED=0
+for _SF_EMIT_PATH in \
+  "$HOME/.claude/skills/superflow/tools/sf-emit.sh" \
+  "$HOME/.codex/skills/superflow/tools/sf-emit.sh" \
+  "$HOME/.agents/skills/superflow/tools/sf-emit.sh" \
+  "./tools/sf-emit.sh"; do
+  if [ -f "$_SF_EMIT_PATH" ]; then
+    # shellcheck source=/dev/null
+    . "$_SF_EMIT_PATH" && _SF_EMIT_SOURCED=1 && break
+  fi
+done
+if [ "$_SF_EMIT_SOURCED" -eq 0 ]; then
+  sf_emit() { return 0; }
+fi
+
 # Claude Code sends hook payload as JSON on stdin; env vars are a fallback
 # for older versions or manual invocation.
 INPUT=""
@@ -25,6 +42,12 @@ SESSION_ID="${SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-unknown}}"
 CWD="${CWD:-${CLAUDE_PROJECT_DIR:-${CLAUDE_CODE_CWD:-$PWD}}}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 
+# Read SUPERFLOW_RUN_ID from state file if env unset; fall back to "unknown".
+if [ -z "${SUPERFLOW_RUN_ID:-}" ] && [ -f "$CWD/.superflow-state.json" ] && command -v jq >/dev/null 2>&1; then
+  SUPERFLOW_RUN_ID="$(jq -r '.context.run_id // "unknown"' "$CWD/.superflow-state.json" 2>/dev/null || echo "unknown")"
+fi
+export SUPERFLOW_RUN_ID="${SUPERFLOW_RUN_ID:-unknown}"
+
 # Project-local dump for SuperFlow runs; home fallback otherwise.
 if [ -f "$CWD/.superflow-state.json" ]; then
   DUMP_DIR="$CWD/.superflow/compact-log"
@@ -34,6 +57,8 @@ fi
 mkdir -p "$DUMP_DIR"
 
 DUMP_FILE="$DUMP_DIR/precompact-${TS}.md"
+
+sf_emit compact.pre dump_path="$DUMP_FILE" 2>/dev/null || true
 
 {
   echo "# Pre-Compact State Dump"
@@ -75,6 +100,8 @@ DUMP_FILE="$DUMP_DIR/precompact-${TS}.md"
     echo '```'
   fi
 } > "$DUMP_FILE"
+
+sf_emit compact.post dump_path="$DUMP_FILE" 2>/dev/null || true
 
 # Emit hookSpecificOutput so the orchestrator can find the dump after compaction.
 if command -v jq >/dev/null 2>&1; then
