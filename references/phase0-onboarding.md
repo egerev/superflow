@@ -18,6 +18,10 @@ if [ -z "${SUPERFLOW_RUN_ID:-}" ] && [ -f .superflow-state.json ]; then
   SUPERFLOW_RUN_ID=$(python3 -c 'import json; print(json.load(open(".superflow-state.json")).get("context",{}).get("run_id",""))' 2>/dev/null)
   [ -n "$SUPERFLOW_RUN_ID" ] && export SUPERFLOW_RUN_ID
 fi
+# If run_id still unavailable after best-effort restore, install no-op to avoid set -e aborts
+if [ -z "${SUPERFLOW_RUN_ID:-}" ]; then
+  sf_emit() { return 0; }
+fi
 ```
 
 Runs once per project. Detects project state, routes to the correct stage file, and loads it via the Read tool.
