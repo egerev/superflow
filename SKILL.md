@@ -1,6 +1,6 @@
 ---
 name: superflow
-description: "Use when user says 'superflow', 'суперфлоу', or asks for full dev workflow. Four phases: (0) project onboarding & CLAUDE.md bootstrap, (1) collaborative Product Discovery with multi-expert brainstorming, (2) fully autonomous execution with PR-per-sprint, git worktrees, dual-model reviews, max parallelism, and verification discipline, (3) merge with documentation update."
+description: "Use when user says 'superflow', 'суперфлоу', or asks for full dev workflow. Four phases: (0) project onboarding & CLAUDE.md bootstrap, (1) collaborative Product Discovery with multi-expert brainstorming and git workflow selection, (2) fully autonomous execution with selected PR/branch strategy, git worktrees, dual-model reviews, max parallelism, and verification discipline, (3) merge with documentation update."
 ---
 
 # Superflow
@@ -8,7 +8,7 @@ description: "Use when user says 'superflow', 'суперфлоу', or asks for 
 Four phases: onboarding, discovery, execution, merge.
 
 Phase 0 (auto, first run only): Detect markers > Auto-detect + confirm > Analyze codebase (5 parallel agents) > Health report > Proposal (approval gate) > Docs + Environment (3 parallel branches) > Markers > Restart instruction
-Phase 1 (with user, 13 steps): Context > Governance Mode (light/standard/critical) > Research (parallel agents, skip in light) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Approval (MERGED GATE) > Spec > Spec Review (dual-model, skip in light) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE) > Charter
+Phase 1 (with user, 13 steps): Context > Governance Mode (light/standard/critical) + Git Workflow Mode > Research (parallel agents, skip in light) > Present findings > Brainstorm (STOP GATE) > Approaches > Product Approval (MERGED GATE) > Spec > Spec Review (dual-model, skip in light) > Plan > Plan Review (dual-model) > User Approval (FINAL GATE) > Charter
 Phase 2 (autonomous, 10 steps per sprint + wave-based parallel dispatch): Re-read > Telegram > Worktree > Baseline tests > Dispatch implementers (parallel waves) > Unified Review (2 agents) > Test verification > Push+PR > Cleanup > Telegram
 Phase 3 (user-initiated): Pre-merge checklist > Doc update > Sequential rebase merge (with CI failure handling) > Post-merge report
 
@@ -194,14 +194,14 @@ Use detected provider silently. No warnings about missing providers.
 When RUNTIME=codex, the following differences apply throughout all phases:
 
 - **Dispatch**: use spawn_agent tool with agent name from .toml definitions in `~/.codex/agents/`
-- **Parallelism**: implicit (max_threads=6), no run_in_background needed. But max_depth=1 — no nested spawning
+- **Parallelism**: implicit (max_threads=6), no run_in_background needed. Recommended `max_depth=2` enables sprint supervisors to spawn per-sprint implement/review/doc agents.
 - **Claude product/research secondary**: Claude CLI — `$TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "PROMPT" 2>&1`
 - **Durable rules**: `codex/AGENTS.md` — re-read after ANY `/compact`
 - **Progress tracking**: printf (no TaskCreate/TaskUpdate available)
 - **Hooks**: `~/.codex/hooks.json` (SessionStart + Stop), no PreCompact/PostCompact
-- **Context budget**: ~258K — use `/compact` between sprints, session-per-sprint for 4+ sprints
+- **Context budget**: ~258K — use `/compact` between sequential sprints or completed sprint waves, session-per-wave for 4+ sprints
 - **Phase docs routing**: read `references/codex/<phase>.md` for dispatch, main `references/<phase>.md` for logic
-- **Sprint execution**: sequential only (max_depth=1 prevents sprint-level delegation)
+- **Sprint execution**: sprint-level parallelism is enabled when `max_depth>=2` and `context.git_workflow_mode` permits independent waves; fall back to sequential if configured with `max_depth=1`
 - **Skill discovery**: install/symlink the skill at `~/.codex/skills/superflow`; optionally mirror to `~/.agents/skills/superflow` for older launchers
 
 ## State Management

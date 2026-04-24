@@ -5,7 +5,8 @@ Survives context compaction. SKILL.md does not.
 ## Hard Rules
 
 1. **Subagents write all code.** Orchestrator reads, plans, reviews, dispatches.
-2. **Git worktrees per sprint.** `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`. Verify `.worktrees/` is in `.gitignore` before creating (`git check-ignore -q .worktrees`).
+2. **Honor selected git workflow mode.** Read `context.git_workflow_mode` from `.superflow-state.json` before Phase 2 work. If missing, default to `sprint_pr_queue`. Valid modes: `solo_single_pr`, `sprint_pr_queue`, `stacked_prs`, `parallel_wave_prs`, `trunk_based`. See `references/git-workflow-modes.md`.
+2a. **Use isolated branches/worktrees.** For sprint-based modes, use `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`. For `solo_single_pr`, use one `feat/<feature>` branch/worktree for the run. Verify `.worktrees/` is in `.gitignore` before creating (`git check-ignore -q .worktrees`).
 3. **Unified Review before every PR** (2 agents for standard/critical sprints; single Technical reviewer for light-mode sprints):
    1. Dispatch Claude product reviewer (subagent_type: standard-product-reviewer). `run_in_background: true`
    2. Dispatch secondary technical reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -m gpt-5.5 -c model_reasoning_effort=high --ephemeral` (or Claude code-quality if no secondary)
@@ -19,9 +20,9 @@ Survives context compaction. SKILL.md does not.
 5. **Re-read phase docs** at each sprint boundary via Read tool.
 6. **Dual-model reviews: specialize, don't duplicate.** Claude = Product lens (spec fit, user scenarios, data integrity). Secondary = Technical lens (correctness, security, architecture). No overlapping roles.
 7. **No secondary provider = two Claude agents.** Product (product-reviewer) + Technical (code-quality-reviewer).
-8. **One PR per sprint.** Execute silently after plan approval.
+8. **PR policy follows git workflow mode.** `solo_single_pr` creates one final PR; `sprint_pr_queue`, `stacked_prs`, and `parallel_wave_prs` create PRs per sprint; `trunk_based` creates short-lived PRs per deployable slice. Execute silently after plan approval.
 8a. **NEVER `gh pr merge --admin`.** If CI is red, fix CI first. After every `gh pr create`, run `gh run list` and wait for CI green before merging. If CI fails, investigate with `gh run view <id> --log-failed`, fix, push, wait for green.
-9. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode. When required: two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report.
+9. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution, `git_workflow_mode` is `parallel_wave_prs` or `stacked_prs`, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode. When required: two reviewers (Claude deep-product + Codex high technical, or 2 split-focus Claude) review ALL code as a unified system. Fix CRITICAL/HIGH before Completion Report.
 10. **Governance mode fixed for the run.** Replanner adjusts sprint scope, not governance mode. Once selected in Phase 1 Step 2, the mode persists through all sprints in the run.
 11. **Orchestrator delegates investigation to subagents.** In Phase 2 the orchestrator does NOT use Read/Grep/Glob directly on source files larger than 50 lines, and does NOT use Bash for anything beyond: status checks (`git status`, `gh run list`, `gh pr view`, `ls`, `pwd`, `which`, `date`), state I/O (`.superflow-state.json`, `.par-evidence.json`, CHANGELOG appends), and short `echo`/`printf` for user-visible progress. Any code reading, codebase exploration, research, or investigation → dispatch `deep-analyst` (or `standard-implementer` for lighter work) and require a <2k-token summary in response. Raw file contents do not belong in the orchestrator's context. See `references/phase2-execution.md` § Orchestrator Tool Budget. **In Codex runtime:** `spawn_agent` replaces `Agent()`. Same budget rules apply. See `references/codex-dispatch-patterns.md`.
 12. **Heartbeat check every orchestrator turn.** If a `heartbeat` block exists in `.superflow-state.json`, check `heartbeat.must_reread` before any tool call that advances work. "In current context" means the file was Read earlier in this conversation/session and its content is visible in the current transcript. For each listed path: if already in context → skip; if missing from context → Read it immediately (short rule/charter files are always allowed under Rule 11 exceptions). If a listed file does not exist on disk, skip it silently and emit a one-line warning. If `heartbeat.updated_at` is >30 min old, emit a fresh heartbeat snapshot. Heartbeat is defense against compaction drift — skipping it defeats Rule 5 (re-read phase docs at sprint boundaries). **`must_reread` MUST contain ONLY short orchestration files** (enforcement rules, charter, the phase2 router — all <300 lines, always allowed under Rule 11). Long source files MUST NEVER appear in `must_reread` — if code understanding is needed post-compaction, dispatch `deep-analyst`, not a direct Read.
@@ -72,7 +73,7 @@ If you think any of these, STOP and do the thing:
 - "Too simple for a worktree" → create worktree
 - "One reviewer is enough" → check governance+complexity table (light/simple = 1 reviewer, others = 2)
 - "I'll ask the user during Phase 2" → Phase 2 is autonomous
-- "One big PR is easier" → one PR per sprint
+- "One big PR is easier" → follow `context.git_workflow_mode`; one big PR is allowed only in `solo_single_pr`
 - "This sprint is too small for PAR" → run PAR
 - "Per-sprint PAR is enough" → check if holistic is required (Rule 9 conditions)
 - "I'll just git merge locally" → use `gh pr merge --rebase --delete-branch`

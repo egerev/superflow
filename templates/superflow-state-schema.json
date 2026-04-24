@@ -177,6 +177,18 @@
           "default": "standard",
           "description": "Review governance level"
         },
+        "git_workflow_mode": {
+          "type": "string",
+          "enum": [
+            "solo_single_pr",
+            "sprint_pr_queue",
+            "stacked_prs",
+            "parallel_wave_prs",
+            "trunk_based"
+          ],
+          "default": "sprint_pr_queue",
+          "description": "Branch, PR, and merge workflow selected in Phase 1"
+        },
         "runtime": {
           "type": "string",
           "enum": [

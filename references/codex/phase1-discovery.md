@@ -1,8 +1,12 @@
 # Phase 1: Product Discovery — Codex Dispatch Overlay
 
-> For workflow logic (stages, gates, governance modes, charter generation), read the main file: `references/phase1-discovery.md`.
+> For workflow logic (stages, gates, governance modes, git workflow modes, charter generation), read the main file: `references/phase1-discovery.md`.
 
 ## Dispatch Points
+
+### Step 2b: Git Workflow Mode Selection
+
+No dispatch change. Read `references/git-workflow-modes.md`, recommend a mode, wait for user confirmation, and persist `context.git_workflow_mode` exactly as the main Phase 1 doc specifies.
 
 ### Step 3: Best Practices & Product Research (skip in light mode)
 
