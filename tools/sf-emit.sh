@@ -288,11 +288,9 @@ sf_emit() {
   # Append event as a single line
   printf '%s\n' "$event_json" >> "$out_file" || return 1
 
-  # Rotation check: every _SF_ROTATION_CHECK_INTERVAL calls (default 100)
-  _SF_EMIT_CALL_COUNT=$(( _SF_EMIT_CALL_COUNT + 1 ))
-  if [ $(( _SF_EMIT_CALL_COUNT % _SF_ROTATION_CHECK_INTERVAL )) -eq 0 ]; then
-    _sf_check_rotation "$out_file"
-  fi
+  # Rotation check: runs on every emission. Cost: one wc -l per emission — cheap.
+  # File-state check ensures rotation triggers even in short-lived single-emit invocations.
+  _sf_check_rotation "$out_file"
 }
 
 # ---------------------------------------------------------------------------

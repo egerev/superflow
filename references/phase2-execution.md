@@ -73,9 +73,25 @@ fi
 Initialize state at the start of Phase 2:
 
 ```bash
-cat > .superflow-state.json << STATEEOF
-{"version":1,"phase":2,"phase_label":"Autonomous Execution","stage":"setup","stage_index":0,"sprint":1,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
-STATEEOF
+python3 -c "
+import json, datetime, os, tempfile
+p='.superflow-state.json'
+s = json.load(open(p)) if os.path.exists(p) else {}
+# Update phase/stage fields only; preserve context (run_id, charter_file, etc.)
+s['version'] = 1
+s['phase'] = 2
+s['phase_label'] = 'Autonomous Execution'
+s['stage'] = 'setup'
+s['stage_index'] = 0
+s['sprint'] = s.get('sprint', 1)
+s['last_updated'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+# Context block — merge, don't replace
+s.setdefault('context', {})
+# Atomic write
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p) or '.', prefix='.superflow-state.', suffix='.tmp')
+with os.fdopen(fd, 'w') as f: json.dump(s, f, indent=2)
+os.replace(tmp, p)
+"
 sf_emit phase.start phase:int=2 label="Autonomous Execution"
 ```
 
