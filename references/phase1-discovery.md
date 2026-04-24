@@ -127,6 +127,27 @@ Replace `MODE` with `light`, `standard`, or `critical`.
 | **Plan review** | Single Claude reviewer | Dual-model (Product + Technical) | Deep-tier dual-model review |
 | **Charter** | Includes inline spec + plan (generated via `charter_to_queue()`) | Separate file, references spec/plan | Separate file, references spec/plan |
 
+## Step 2b: Git Workflow Mode Selection
+<!-- Stage 1: Research, Todo 2 -->
+
+Read `references/git-workflow-modes.md`. Select a git workflow based on task shape, repo practices, team context, CI maturity, sprint dependency graph, and user preference. Do not assume solo always means one PR; disjoint solo work can still benefit from `parallel_wave_prs`, and dependent team work can benefit from `stacked_prs`.
+
+Available modes:
+- `solo_single_pr` — one feature branch, one final PR; default for small-to-medium coherent solo/vibe-coding work.
+- `sprint_pr_queue` — one branch/PR per sprint from `main`; default for team, critical, or audit-heavy work.
+- `stacked_prs` — sprint branches stack on previous sprint branches; best for dependent multi-sprint changes.
+- `parallel_wave_prs` — independent sprint branches from `main`; best for disjoint files/modules and parallel agent/team work.
+- `trunk_based` — short-lived branches and feature flags; use when the project already works this way.
+
+Present the recommendation with reasoning:
+> "Recommended git workflow: **[mode]** because [dependency/PR/CI/team reasoning]. Use this mode? (yes / override to solo_single_pr/sprint_pr_queue/stacked_prs/parallel_wave_prs/trunk_based)"
+
+Wait for confirmation. Store the selected mode in `.superflow-state.json`:
+```bash
+python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s.setdefault('context',{})['git_workflow_mode']='MODE'; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
+```
+Replace `MODE` with the selected git workflow mode.
+
 ### Conditional Flow by Mode
 
 - **Light mode**: Skip Step 3 (research) → 1 round-trip brainstorm (Step 5) → Skip Step 6a (grilling) → Product Approval (Step 7) → Write inline charter with brief+spec+plan (Step 13) → Skip spec review (Step 9) → Single Claude plan reviewer (Step 11) → User Approval (Step 12) → Generate queue via `charter_to_queue()` from charter body
@@ -385,6 +406,13 @@ If the spec includes a "Tech Debt Resolution" section, allocate a dedicated spri
 
 Break into sprints (independently deployable), 3-8 tasks each, each task 2-5 min. Include: files, steps, commit message.
 
+Read `context.git_workflow_mode` from `.superflow-state.json` and shape the plan for that mode:
+- `solo_single_pr`: keep sprint boundaries as internal checkpoints; estimated PR count is 1.
+- `sprint_pr_queue`: each sprint must be independently reviewable and mergeable into `main`.
+- `stacked_prs`: each sprint may depend on earlier sprint branches; call out stack order explicitly.
+- `parallel_wave_prs`: only place sprints in the same wave when they have no file overlap, state dependency, or ordering dependency.
+- `trunk_based`: keep slices small and note any feature flags or disabled-by-default paths.
+
 **Sprint parallelism metadata (required):** For each sprint, include:
 - `files:` — list of files this sprint modifies/creates
 - `depends_on:` — list of sprint numbers this sprint depends on (empty = independent)
@@ -427,13 +455,14 @@ Both must APPROVE. If either returns NEEDS_REVISION: fix, re-review.
 Present the complete plan overview:
 - Sprint breakdown with task counts and complexity tags
 - Key files touched per sprint
+- Selected git workflow mode and why it fits this task
 - **Sprint wave plan** — show which sprints run in parallel:
   ```
   Wave 1: [Sprint 1, Sprint 2, Sprint 6] — parallel (independent files)
   Wave 2: [Sprint 3, Sprint 4, Sprint 5] — parallel (depends on Wave 1)
   Estimated speedup: 6 sprints → 2 waves
   ```
-- Estimated PR count (1 per sprint)
+- Estimated PR count based on git workflow mode
 - Merge order and dependencies
 - Total scope (number of sprints, number of waves, estimated changes)
 
@@ -449,7 +478,7 @@ mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Imp
 ## Step 13: Generate Autonomy Charter
 <!-- Stage 5: Planning, Todo 5 -->
 
-After user approval and before auto-launch, generate an Autonomy Charter from the brief, spec, and plan. Include the selected governance mode from Step 2:
+After user approval and before auto-launch, generate an Autonomy Charter from the brief, spec, and plan. Include the selected governance mode from Step 2 and git workflow mode from Step 2b:
 
 **Charter structure** (YAML frontmatter + Markdown body):
 
@@ -463,10 +492,11 @@ success_criteria:
   - "Measurable outcome 1 (from brief success criteria)"
   - "Measurable outcome 2"
 governance_mode: "light|standard|critical"  # from Step 2 selection
+git_workflow_mode: "solo_single_pr|sprint_pr_queue|stacked_prs|parallel_wave_prs|trunk_based"  # from Step 2b selection
 ---
 ```
 
-**Body:** Free-form notes on scope boundaries, forbidden approaches, or risk areas.
+**Body:** Free-form notes on scope boundaries, forbidden approaches, risk areas, and branch/PR policy for the selected git workflow mode.
 
 Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`. Update `.superflow-state.json` context with `charter_file` path.
 

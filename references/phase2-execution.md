@@ -218,6 +218,14 @@ When a sprint has multiple tasks, analyze them for parallelism before dispatchin
 
 ## Sprint-Level Parallel Dispatch
 
+Read `context.git_workflow_mode` from `.superflow-state.json` before building the sprint execution loop. If the field is missing, default to `sprint_pr_queue` for backward compatibility. The selected mode controls branch bases, PR count, and whether sprint-level parallelism is allowed:
+
+- `solo_single_pr`: run sprints sequentially on one feature branch; task-level parallelism inside a sprint is still allowed.
+- `sprint_pr_queue`: run dependent sprints sequentially; independent sprint waves may run in parallel only if their PRs are independently reviewable from `main`.
+- `stacked_prs`: run dependent sprints as a stack; do not parallelize dependent stack segments.
+- `parallel_wave_prs`: run independent sprint waves in parallel; each sprint branch starts from `origin/main`.
+- `trunk_based`: keep branches short-lived and sequential unless the plan explicitly identifies independent deployable slices.
+
 Before the execution loop, analyze the plan for sprint-level parallelism. Independent sprints run concurrently — each in its own worktree.
 
 **Sprint wave analysis (runs once at Phase 2 start):**
@@ -266,8 +274,8 @@ for each wave in sprint_waves:
     if conflicts found:
       resolve conflicts manually on the later sprint's branch
 
-    # Merge completed wave PRs before next wave
-    # (so next wave's sprints see the combined codebase)
+    # Do not merge during Phase 2 unless the user explicitly approved auto-merge in Phase 1.
+    # If later work must see earlier merged code, use stacked_prs or run dependent sprints sequentially.
 ```
 
 **Each parallel sprint runs the full Per-Sprint Flow** (Setup → Implementation → Review → PAR → Docs → Ship) independently in its own worktree. The orchestrator dispatches them as background agents and waits.
@@ -297,6 +305,18 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
 
 **Holistic review trigger:** When `max_parallel > 1` (any wave had 2+ sprints), holistic review is mandatory (enforcement rule 9).
 
+## Branch and PR Policy by Git Workflow Mode
+
+Use the selected `context.git_workflow_mode`:
+
+- `solo_single_pr`: create/reuse `.worktrees/solo` on `feat/<feature>` from `origin/main`. Each sprint commits to the same branch. Run PR-gated docs update/review and create one PR only after the final sprint.
+- `sprint_pr_queue`: create `.worktrees/sprint-N` on `feat/<feature>-sprint-N` from `origin/main`. Create one PR per sprint with base `main`.
+- `stacked_prs`: Sprint 1 starts from `origin/main`; Sprint N starts from `feat/<feature>-sprint-(N-1)`. Create one PR per sprint; PR base is the previous sprint branch until Phase 3 retargets/rebases.
+- `parallel_wave_prs`: create every sprint branch from `origin/main`. Only independent sprints may run in the same wave. Create one PR per sprint with base `main`.
+- `trunk_based`: create short-lived branches per deployable slice. Keep incomplete work behind flags or disabled paths.
+
+Never silently switch modes during Phase 2. If the selected mode becomes unsafe because the plan has unexpected dependencies or conflicts, stop the parallel path and continue sequentially within the same mode, then report the fallback in the Completion Report.
+
 ---
 
 ## Per-Sprint Flow
@@ -304,7 +324,7 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
 1. <!-- Stage 1: Setup, Todo 1 --> **Re-read** this file (`references/phase2-execution.md`), the **charter** (from `context.charter_file` in `.superflow-state.json`), AND the **specific sprint section** from the plan. Extract and paste the exact task list for this sprint into the implementer prompt — do NOT rely on LLM memory of the plan. The implementer must see every task, every file path, every expected behavior verbatim.
    **Immediately after re-reading:** emit heartbeat (see "Heartbeat Writes → At sprint start" above). Use the charter path from `context.charter_file` in state as `$CHARTER_FILE`.
 2. <!-- Stage 1: Setup, Todo 2 --> **Telegram update** (if MCP connected): "Starting sprint N: [title]"
-3. <!-- Stage 1: Setup, Todo 3 --> **Worktree**: verify `.worktrees/` is gitignored (`git check-ignore -q .worktrees || echo '.worktrees/' >> .gitignore`), then `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`
+3. <!-- Stage 1: Setup, Todo 3 --> **Worktree/branch**: verify `.worktrees/` is gitignored (`git check-ignore -q .worktrees || echo '.worktrees/' >> .gitignore`), then create the branch/worktree according to "Branch and PR Policy by Git Workflow Mode" above.
 4. <!-- Stage 1: Setup, Todo 4 --> **Baseline tests** in worktree: run full test suite, record output. If tests fail on baseline, stop and report — do not build on a broken base.
 5. <!-- Stage 2: Implementation, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=implementation`, `$SPRINT_NUM=N`). **Dispatch implementers** — model from plan's sprint complexity tag (see Adaptive Implementation Model below), wave analysis for parallelism (see Parallel Dispatch above).
    - 5a. Analyze task list — identify independent tasks
@@ -347,7 +367,7 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
    }
    ```
    Both verdicts must be APPROVE/ACCEPTED/PASS. If either agent returned issues, they must be fixed and the agent re-run before evidence is written.
-8. <!-- Stage 5: Docs, Todos 1-4 --> **Emit unified stage transition** (`$NEXT_STAGE=docs`, `$SPRINT_NUM=N`). **Mandatory documentation update + documentation review before PR** — first dispatch `standard-doc-writer` to audit/update CLAUDE.md and llms.txt based on sprint changes, then dispatch a review-only doc pass. This is a PR gate for every sprint, including one-sprint Superflow runs. `llms.txt` is always checked; it may be committed as unchanged only after the doc update agent explicitly confirms no material update is needed:
+8. <!-- Stage 5: Docs, Todos 1-4 --> **Emit unified stage transition** (`$NEXT_STAGE=docs`, `$SPRINT_NUM=N`). **Mandatory documentation update + documentation review before PR** — first dispatch `standard-doc-writer` to audit/update CLAUDE.md and llms.txt based on sprint changes, then dispatch a review-only doc pass. This is a gate before every PR. In `solo_single_pr`, run it before the final PR (and optionally at checkpoints if docs drift would make later review harder); in per-sprint PR modes, run it every sprint. `llms.txt` is always checked; it may be committed as unchanged only after the doc update agent explicitly confirms no material update is needed:
    ```
    Agent(
      subagent_type: "standard-doc-writer",
@@ -410,9 +430,9 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
    )
    ```
    Fix any `NEEDS_FIXES`, commit doc fixes if any, then re-run the documentation review. Update `.par-evidence.json` with `"docs_review":"PASS"`.
-9. <!-- Stage 6: Ship, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=ship`, `$SPRINT_NUM=N`). **Push + PR**: verify `.par-evidence.json` exists with both verdicts passing, `docs_update` set to `UPDATED` or `UNCHANGED`, and `docs_review` = `PASS`. `git push -u origin feat/<feature>-sprint-N`, then `gh pr create --base main`
-10. <!-- Stage 6: Ship, Todo 3 --> **Cleanup**: verify PR was created successfully (`gh pr view` returns data), then `git worktree remove .worktrees/sprint-N`
-11. <!-- Stage 6: Ship, Todo 4 --> **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." Then next sprint.
+9. <!-- Stage 6: Ship, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=ship`, `$SPRINT_NUM=N`). **Push + PR/checkpoint**: verify `.par-evidence.json` exists with review verdicts passing. If this sprint creates a PR under the selected git workflow mode, `docs_update` must be `UPDATED` or `UNCHANGED` and `docs_review` must be `PASS`; push the mode-specific branch and create the mode-specific PR. In `solo_single_pr`, non-final sprints push checkpoint commits to the shared feature branch without creating a PR; the final sprint creates one PR after docs gates pass.
+10. <!-- Stage 6: Ship, Todo 3 --> **Cleanup**: if a PR was created, verify it successfully (`gh pr view` returns data), then remove only the worktree for completed per-sprint branches. In `solo_single_pr`, keep the shared worktree until the final PR is created.
+11. <!-- Stage 6: Ship, Todo 4 --> **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." For non-final `solo_single_pr` checkpoints, say "Sprint N checkpoint pushed." Then next sprint.
 
 ## Sprint Completion Checklist
 
@@ -424,7 +444,7 @@ Before creating the PR, verify ALL:
 - [ ] `.par-evidence.json` written with review verdicts passing, `docs_update` set, and `docs_review` = `PASS`
 - [ ] Documentation update completed before PR; `llms.txt` explicitly updated or confirmed unchanged
 - [ ] Documentation review completed before PR and passed
-- [ ] PR created with `--base main`
+- [ ] PR created with the base branch required by `context.git_workflow_mode`
 - [ ] Worktree cleaned up
 
 ## Adaptive Implementation Model
@@ -534,7 +554,7 @@ If `.superflow/compact-log/` does not exist, the PreCompact hook isn't installed
 
 For ≤3 linear sequential sprints in light/standard mode, holistic review is skipped and the Completion Report proceeds without holistic evidence.
 
-When holistic IS required: After all sprint PRs created, before Completion Report. Reasoning: Deep tier.
+When holistic IS required: after all mode-specific PRs/checkpoints are created, before Completion Report. Reasoning: Deep tier.
 Both agents review ALL code across ALL sprints as a unified system. Same principle: Claude = Product, secondary = Technical.
 
 Check Codex availability first. If available:
@@ -570,6 +590,7 @@ For each feature group:
 
 **3. Technical Summary** (collapsed/brief):
 - PRs: list with links and status
+- Git workflow: selected mode, PR count, and any sequential fallback from planned parallelism
 - Tests: total count, all passing
 - Review: holistic review verdict
 - Known limitations or follow-ups

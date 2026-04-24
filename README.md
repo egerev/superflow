@@ -6,7 +6,7 @@ Autonomous dev workflow for Claude Code. Describe a feature — get reviewed PRs
 
 The more autonomous AI coding gets, the less you see what's happening. Telegram integrations, remote sessions — you're no longer watching every line. That's powerful, but it needs structure.
 
-Superflow gives that structure: a 4-phase workflow that takes a feature from idea to merged PRs. You brainstorm together, approve a plan, then walk away. The agent executes sprints, writes tests, runs cross-model reviews, creates PRs. You come back to reviewed code ready to merge.
+Superflow gives that structure: a 4-phase workflow that takes a feature from idea to merged PRs. You brainstorm together, choose the right governance and git workflow, approve a plan, then walk away. The agent executes sprints, writes tests, runs cross-model reviews, creates PRs according to the selected branch/PR strategy. You come back to reviewed code ready to merge.
 
 ## How It Works
 
@@ -27,9 +27,9 @@ Agent: [Phase 3: docs → merge → cleanup]
 
 **Phase 0 — Onboarding.** Auto-detects your stack, runs 5 parallel audit agents, sets up docs and permissions. Once per project.
 
-**Phase 1 — Discovery.** Expert panel brainstorming (parallel persona agents produce a Board Memo), governance mode selection, spec and plan with dual-model review. Generates an Autonomy Charter before execution.
+**Phase 1 — Discovery.** Expert panel brainstorming (parallel persona agents produce a Board Memo), governance mode selection, git workflow mode selection, spec and plan with dual-model review. Generates an Autonomy Charter before execution.
 
-**Phase 2 — Execution.** Fully autonomous. Governance-aware review tiering (light/standard/critical), charter compliance checks, wave-based parallel dispatch, per-sprint documentation updates, codebase hygiene checks (duplication, type redefinition, dead code), PR per sprint.
+**Phase 2 — Execution.** Fully autonomous. Governance-aware review tiering (light/standard/critical), selected git workflow mode (`solo_single_pr`, `sprint_pr_queue`, `stacked_prs`, `parallel_wave_prs`, or `trunk_based`), charter compliance checks, wave-based parallel dispatch, per-PR documentation updates, codebase hygiene checks (duplication, type redefinition, dead code).
 
 **Phase 3 — Merge.** You say "merge" — sequential rebase merge with CI checks and doc updates.
 

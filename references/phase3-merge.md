@@ -29,7 +29,7 @@ Stage 3: "Post-merge"
 
 ### Phase 3 Entry After Compaction
 
-On Phase 3 entry, check for a heartbeat block in `.superflow-state.json`. If `heartbeat.phase2_step == 'ship'`, the previous Phase 2 run ended cleanly and all sprint PRs were created. Re-read this file (`references/phase3-merge.md`) before every PR merge — it is already included in `heartbeat.must_reread` via the Phase 2 heartbeat writer, so compaction-triggered rehydration will pull the exact merge procedure into context automatically.
+On Phase 3 entry, check for a heartbeat block in `.superflow-state.json`. If `heartbeat.phase2_step == 'ship'`, the previous Phase 2 run ended cleanly and all mode-specific PRs/checkpoints were created. Re-read this file (`references/phase3-merge.md`) before every PR merge — it is already included in `heartbeat.must_reread` via the Phase 2 heartbeat writer, so compaction-triggered rehydration will pull the exact merge procedure into context automatically.
 
 ### State Management
 
@@ -106,7 +106,7 @@ Before merging any PR:
 ## Documentation Update (pre-merge)
 <!-- Stage 1: Pre-merge, Todos 3-4 -->
 
-Before the first merge, create a dedicated documentation commit on the last sprint branch:
+Before the first merge, verify the PR-level docs gate for the selected git workflow mode. For per-sprint PR modes, docs should already be updated/reviewed on each PR. For `solo_single_pr`, the final PR must include the docs update/review. If the audit finds drift, create a dedicated documentation commit on the last branch/PR that will be merged:
 1. Update `CLAUDE.md` with new/changed modules, files, conventions
 2. Update `llms.txt` if project structure changed
 3. Push the doc update, wait for CI to pass again
@@ -133,13 +133,22 @@ If CWD is already inside a worktree, ALL subsequent commands will fail with "Pat
 
 Use the PR list and merge order from the Phase 2 Completion Report. If the report is unavailable (context compaction), enumerate open PRs: `gh pr list --state open --author @me --json number,title,headRefName --jq 'sort_by(.number)'`
 
+Read `context.git_workflow_mode` from `.superflow-state.json`; if missing, default to `sprint_pr_queue`.
+
+Merge policy by mode:
+- `solo_single_pr`: merge the single final PR after CI, docs, and review checks pass.
+- `sprint_pr_queue`: merge PRs sequentially in sprint order.
+- `parallel_wave_prs`: merge PRs sequentially in wave order, then sprint order inside each wave. Never merge in parallel.
+- `stacked_prs`: merge Sprint 1 first. Before each later sprint merge, fetch `origin/main`, check out the sprint branch, rebase it onto `origin/main`, push with `--force-with-lease`, retarget the PR base to `main` (`gh pr edit <number> --base main`), wait for CI, then merge.
+- `trunk_based`: merge short-lived PRs in dependency order from the completion data.
+
 At merge start, if Telegram MCP available:
 ```
 mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Merging N PRs...")
 ```
 (Replace N with actual PR count.)
 
-PRs merge sequentially in sprint order (Sprint 1 first, then Sprint 2, etc.):
+PRs merge sequentially in the order required by the selected git workflow mode:
 
 ```
 for each PR in sprint order:

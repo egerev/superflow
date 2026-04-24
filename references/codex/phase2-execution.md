@@ -4,10 +4,27 @@
 
 ## Critical Codex Differences
 
-1. **Flat dispatch only.** max_depth=1 — orchestrator dispatches ALL agents directly. No sprint-level delegation.
-2. **Sequential sprints.** No wave-based parallel sprint execution. Sprint 1 → Sprint 2 → Sprint 3.
-3. **Context budget:** ~258K. Use `/compact` between sprints. For 4+ sprints, consider session-per-sprint.
-4. **No TaskCreate/TaskUpdate.** Use printf for progress tracking.
+1. **Hierarchical dispatch is supported when configured.** Recommended config is `[agents] max_threads=6, max_depth=2`. With `max_depth>=2`, the orchestrator may spawn sprint supervisors in parallel, and each sprint supervisor may spawn implement/review/doc agents for its own sprint.
+2. **Fallback for old config.** If Codex is still configured with `max_depth=1`, subagents cannot spawn sub-subagents. Fall back to flat sequential sprints and report: "Update ~/.codex/config.toml to max_depth=2 to enable sprint-level parallelism."
+3. **Sprint-level parallelism follows git workflow mode.** Read `context.git_workflow_mode`; `parallel_wave_prs` and independent `sprint_pr_queue` waves may run concurrently, `solo_single_pr` and dependent `stacked_prs` run sequentially.
+4. **Context budget:** ~258K. Use `/compact` between sequential sprints or after each completed sprint wave. For 4+ sprints, consider session-per-wave.
+5. **No TaskCreate/TaskUpdate.** Use printf for progress tracking.
+
+## Sprint-Level Parallel Dispatch
+
+For each sprint wave from the main Phase 2 plan:
+
+- If wave size is 1, run the normal Per-Sprint Dispatch Patterns below.
+- If wave size is >1 and `max_depth>=2`, spawn one sprint supervisor per sprint in parallel using `spawn_agent("standard-implementer")` or `spawn_agent("deep-implementer")` based on sprint complexity.
+- If wave size is >1 but `max_depth=1`, run the sprints sequentially in wave order.
+
+Sprint supervisor prompt requirements:
+- State that the supervisor owns exactly one sprint and its worktree/branch.
+- Include the selected `git_workflow_mode`, branch base policy, charter, and the exact sprint section from the plan.
+- Tell the supervisor it may spawn implement/review/doc agents for that sprint, but must not touch other sprint worktrees or branches.
+- Require a final response with PR URL or checkpoint status, tests evidence summary, `.par-evidence.json` status, and any blockers.
+
+The parent orchestrator waits for all sprint supervisors in a wave, checks for branch/file conflicts, and runs the holistic review if required. Phase 2 does not merge wave PRs unless Phase 1 explicitly approved auto-merge.
 
 ## Per-Sprint Dispatch Patterns
 
@@ -94,8 +111,7 @@ Same as main doc (push, PR, cleanup, Telegram). PR creation is blocked until doc
 
 ## Holistic Review (after all sprints, conditional)
 
-**Required when:** ≥4 sprints, or governance_mode="critical".
-Note: parallel execution trigger doesn't apply — Codex runs sprints sequentially.
+**Required when:** ≥4 sprints, parallel execution was used, `git_workflow_mode` is `parallel_wave_prs` or `stacked_prs`, or governance_mode="critical".
 
 1. Claude Opus 4.7 product reviewer:
    ```bash

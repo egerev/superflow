@@ -13,8 +13,9 @@ Only then resume work.
 ## Hard Rules
 
 1. **Subagents write all code.** Orchestrator reads, plans, reviews, dispatches via `spawn_agent` tool. Orchestrator never writes implementation code directly.
-2. **Git worktrees per sprint.** `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`. Verify `.worktrees/` is in `.gitignore` before creating.
-3. **Flat dispatch only.** Codex `max_depth=1` — subagents cannot spawn sub-subagents. Orchestrator dispatches ALL agents directly. No sprint-level delegation. Sprints execute sequentially.
+2. **Honor selected git workflow mode.** Read `context.git_workflow_mode` from `.superflow-state.json` before Phase 2 work. If missing, default to `sprint_pr_queue`. Valid modes: `solo_single_pr`, `sprint_pr_queue`, `stacked_prs`, `parallel_wave_prs`, `trunk_based`. See `references/git-workflow-modes.md`.
+2a. **Use isolated branches/worktrees.** For sprint-based modes, use `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`. For `solo_single_pr`, use one `feat/<feature>` branch/worktree for the run. Verify `.worktrees/` is in `.gitignore` before creating.
+3. **Hierarchical dispatch is allowed when configured.** Recommended Codex config is `[agents] max_threads=6, max_depth=2`. With `max_depth>=2`, the orchestrator may dispatch independent sprint supervisors in parallel; each sprint supervisor may spawn implement/review/doc agents for that sprint. If the runtime is still `max_depth=1`, fall back to flat sequential sprints and report that config upgrade is needed for sprint-level parallelism.
 4. **Unified Review before every PR** (2 agents for standard/critical sprints; single Technical reviewer for light-mode sprints):
    1. Dispatch Claude Opus 4.7 as product reviewer: `$TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "PRODUCT_REVIEW_PROMPT" 2>&1`
    2. Use spawn_agent tool to dispatch Codex technical reviewer (agent: "standard-code-reviewer")
@@ -28,9 +29,9 @@ Only then resume work.
 6. **Re-read phase docs** at each sprint boundary. Read `references/codex/<phase>.md` for dispatch patterns, main `references/<phase>.md` for workflow logic.
 7. **Dual-model reviews: specialize, don't duplicate.** Claude Opus 4.7 = Product lens (spec fit, user scenarios, data integrity). Codex = Technical lens (correctness, security, architecture). No overlapping roles.
 8. **No secondary provider = two Codex agents.** Product (product-reviewer) + Technical (code-reviewer) via spawn_agent.
-9. **One PR per sprint.** Execute silently after plan approval.
+9. **PR policy follows git workflow mode.** `solo_single_pr` creates one final PR; `sprint_pr_queue`, `stacked_prs`, and `parallel_wave_prs` create PRs per sprint; `trunk_based` creates short-lived PRs per deployable slice. Execute silently after plan approval.
 9a. **NEVER `gh pr merge --admin`.** If CI is red, fix CI first.
-10. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode.
+10. **Final Holistic Review — conditional.** Required when: ≥4 sprints, parallel execution, `git_workflow_mode` is `parallel_wave_prs` or `stacked_prs`, or governance_mode="critical". Skip for ≤3 linear sequential sprints in light/standard mode.
 11. **Governance mode fixed for the run.**
 12. **Orchestrator delegates investigation to subagents.** In Phase 2, orchestrator does NOT read source files >50 lines directly. Dispatch "deep-analyst" via spawn_agent and require a <2k-token summary. Exceptions: files <50 lines, state files, single-line status outputs.
 
@@ -65,8 +66,8 @@ For each phase, read TWO files:
 
 ## Context Management (258K budget)
 
-- Use `/compact` between sprints in Phase 2
-- For 4+ sprints: consider session-per-sprint (`/clear` then `$superflow`)
+- Use `/compact` between sequential sprints or after each completed sprint wave in Phase 2
+- For 4+ sprints: consider session-per-wave (`/clear` then `$superflow`) when using sprint-level parallelism
 - After compaction: ALWAYS re-read this file + `.superflow-state.json`
 - Subagent contexts are discarded after return — use them to avoid bloating orchestrator context
 
@@ -77,7 +78,7 @@ If you think any of these, STOP and do the thing:
 - "Too simple for a worktree" → create worktree
 - "One reviewer is enough" → check governance+complexity table
 - "I'll ask the user during Phase 2" → Phase 2 is autonomous
-- "One big PR is easier" → one PR per sprint
+- "One big PR is easier" → follow `context.git_workflow_mode`; one big PR is allowed only in `solo_single_pr`
 - "I'll just git merge locally" → use `gh pr merge --rebase --delete-branch`
 - "I'll just quickly Read this file myself" → dispatch "deep-analyst" via spawn_agent
 

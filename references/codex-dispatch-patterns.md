@@ -30,12 +30,17 @@ Lookup table mapping every Agent() dispatch in Superflow to its Codex spawn_agen
 | P2 | Implementer (simple) | fast-implementer | spawn_agent("fast-implementer") |
 | P2 | Implementer (medium) | standard-implementer | spawn_agent("standard-implementer") |
 | P2 | Implementer (complex) | deep-implementer | spawn_agent("deep-implementer") |
+| P2 | Sprint supervisor (parallel wave) | standard/deep implementer | spawn_agent("standard-implementer" or "deep-implementer") when `max_depth>=2` |
 | P2 | Unified review (product) | Claude Opus 4.7 | `claude --model claude-opus-4-7 --effort xhigh -p` + prompts/claude/product-reviewer.md |
 | P2 | Unified review (tech) | standard-code-reviewer | spawn_agent("standard-code-reviewer") |
 | P2 | Doc update | standard-doc-writer | spawn_agent("standard-doc-writer") |
 | P2 | Doc review | standard-doc-writer | spawn_agent("standard-doc-writer") review-only |
 | P2 | Holistic (product) | Claude Opus 4.7 | `claude --model claude-opus-4-7 --effort xhigh -p` + prompts/claude/product-reviewer.md |
 | P2 | Holistic (tech) | deep-code-reviewer | spawn_agent("deep-code-reviewer") |
+
+## Codex Sprint-Level Parallelism
+
+Recommended Codex config is `[agents] max_threads=6, max_depth=2`. With `max_depth>=2`, the parent orchestrator can spawn one sprint supervisor per independent sprint in a wave; each supervisor can then spawn implement/review/doc agents inside its sprint. If the user still has `max_depth=1`, use flat sequential sprints and report that the config must be updated to enable sprint-level parallelism.
 
 ## Secondary Provider Inversion
 

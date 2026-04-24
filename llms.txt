@@ -1,14 +1,14 @@
 # Superflow
 
-> A pure Markdown Claude Code skill that orchestrates a full dev workflow: onboarding, product discovery with expert panel brainstorming, autonomous execution with adaptive governance and PR-per-sprint, and merge. Zero Python dependencies.
+> A pure Markdown Claude Code skill that orchestrates a full dev workflow: onboarding, product discovery with expert panel brainstorming and git workflow selection, autonomous execution with adaptive governance and selected branch/PR strategy, and merge. Zero Python dependencies.
 
 ## Overview
 
 Superflow is a 4-phase development workflow skill for Claude Code:
 
 - **Phase 0 (Onboarding):** Auto-detects project state and confirms with user, analyzes codebase with 5 parallel agents (4 Claude + 1 Codex), generates health report, creates/audits llms.txt and CLAUDE.md, sets up permissions — structured as 5 modular stage files
-- **Phase 1 (Product Discovery):** Expert panel brainstorming (3-4 parallel persona agents producing a Board Memo), governance mode selection (light/standard/critical), dual-model spec/plan review, Autonomy Charter generation
-- **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — git worktrees, TDD, wave-based parallel dispatch, governance-aware review tiering, charter compliance checks, mandatory per-PR `llms.txt`/`CLAUDE.md` update + review gate, one PR per sprint
+- **Phase 1 (Product Discovery):** Expert panel brainstorming (3-4 parallel persona agents producing a Board Memo), governance mode selection (light/standard/critical), git workflow mode selection, dual-model spec/plan review, Autonomy Charter generation
+- **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — selected git workflow mode, git worktrees, TDD, wave-based parallel dispatch, governance-aware review tiering, charter compliance checks, mandatory per-PR `llms.txt`/`CLAUDE.md` update + review gate
 - **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification, structured completion data (`completion-data.json`), and documentation update
 
 Version: v4.2.0 (2026-03-27). MIT License.
@@ -29,7 +29,8 @@ Version: v4.2.0 (2026-03-27). MIT License.
 - [references/phase0/stage4-setup.md](references/phase0/stage4-setup.md): 3 concurrent branches, strict file ownership (~238 lines)
 - [references/phase0/stage5-completion.md](references/phase0/stage5-completion.md): Markers, tech debt persistence, restart (~163 lines)
 - [references/phase0/greenfield.md](references/phase0/greenfield.md): Greenfield path G1-G6 (~350 lines)
-- [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — expert panel brainstorming (Board Memo pattern), governance mode selection, spec/plan review, Autonomy Charter generation (~330 lines)
+- [references/git-workflow-modes.md](references/git-workflow-modes.md): Git workflow modes — selection heuristic, branch base policy, Phase 2 merge boundary
+- [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — expert panel brainstorming (Board Memo pattern), governance mode + git workflow mode selection, spec/plan review, Autonomy Charter generation
 - [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — wave-based parallel dispatch, governance-aware review tiering, charter compliance, per-PR docs update/review gate, holistic review, heartbeat writes at each stage transition (544 lines)
 - [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, CI handling, structured completion-data.json, post-merge report (184 lines)
 
@@ -63,11 +64,13 @@ Version: v4.2.0 (2026-03-27). MIT License.
 ## Key Concepts
 
 - **Event log telemetry:** Append-only `.superflow/events.jsonl` stream grouping all events for a run under a `SUPERFLOW_RUN_ID` (UUID). Emitted via `tools/sf-emit.sh`. `run_id` is persisted to `.superflow-state.json` under `context.run_id` so `/clear` + resume restores the same run identity. Event log is telemetry — not required for execution; missing `sf-emit.sh` logs a warning and continues.
-- **Autonomy Charter:** Durable intent artifact generated at end of Phase 1. Contains goal, non-negotiables, success criteria, and governance mode. Injected into every sprint prompt and reviewer context — single source of truth for autonomous execution boundaries
+- **Autonomy Charter:** Durable intent artifact generated at end of Phase 1. Contains goal, non-negotiables, success criteria, governance mode, and git workflow mode. Injected into every sprint prompt and reviewer context — single source of truth for autonomous execution boundaries
 - **Adaptive governance:** Three modes (light/standard/critical) auto-suggested based on task dimensions. Controls review depth, holistic review threshold, and plan structure. Light mode uses inline sprint plans in the charter
+- **Git workflow modes:** Phase 1 selects `solo_single_pr`, `sprint_pr_queue`, `stacked_prs`, `parallel_wave_prs`, or `trunk_based`. The mode is stored in `.superflow-state.json` and the charter, and controls branch bases, PR count, sprint parallelism, docs gate timing, and Phase 3 merge order
 - **Expert panel brainstorming:** Phase 1 dispatches 3-4 parallel expert persona agents (Product GM, Staff Engineer, UX/Workflow, Domain Expert). Outputs synthesized into Board Memo with consensus, disagreements, risks, and decisions needed
 - **2-agent specialized review:** Every PR is reviewed by 2 agents in parallel — Claude (Product lens: spec fit, user scenarios, charter compliance) + Codex/secondary (Technical lens: correctness, security, charter compliance). Governance mode controls whether single or dual review
 - **Codex model policy:** Codex subagents and Claude-runtime `codex exec` secondary calls use `gpt-5.5`; deep analyst/implementer/reviewer roles use `xhigh`, standard roles use `high`, and fast implementer uses `medium`. Codex-runtime Claude product/research secondary calls use exact model `claude-opus-4-7` with `--effort xhigh`
+- **Codex sprint-level parallelism:** Recommended config is `[agents] max_threads=6, max_depth=2`. With `max_depth>=2`, Codex can spawn parallel sprint supervisors that spawn per-sprint implement/review/doc agents. Old `max_depth=1` configs fall back to sequential sprints
 - **Review gate:** Mandatory gate before every PR push — product/technical reviewers must pass, sprint docs must be updated or explicitly confirmed unchanged, and documentation review must pass; evidence is written to `.par-evidence.json`
 - **Per-PR docs gate:** Every sprint PR audits `llms.txt` and `CLAUDE.md` before creation. `.par-evidence.json` records `docs_update` (`UPDATED` or `UNCHANGED`) and `docs_review: PASS`
 - **Final Holistic Review:** After all sprints complete (conditional on governance mode and sprint count), two reviewers review ALL code together to catch cross-module issues

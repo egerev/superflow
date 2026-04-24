@@ -3,7 +3,7 @@
 
 [agents]
 max_threads = 6       # Parallel subagent cap (Superflow uses up to 5)
-max_depth = 1         # Codex constraint: subagents cannot spawn sub-subagents
+max_depth = 2         # Enables sprint supervisors to spawn per-sprint implement/review/doc agents
 
 [features]
 codex_hooks = true    # Required for SessionStart + Stop hooks
