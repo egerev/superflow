@@ -48,6 +48,12 @@ Stage 6: "Ship"
   - "Send Telegram update"
 ```
 
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
+
 ### State Management
 
 Initialize state at the start of Phase 2:
@@ -323,12 +329,6 @@ Never silently switch modes during Phase 2. If the selected mode becomes unsafe 
 ---
 
 ## Per-Sprint Flow
-
-```bash
-# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
-# This ensures sessions without events.jsonl still work (charter non-negotiable).
-command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
-```
 
 1. <!-- Stage 1: Setup, Todo 1 --> **Re-read** this file (`references/phase2-execution.md`), the **charter** (from `context.charter_file` in `.superflow-state.json`), AND the **specific sprint section** from the plan. Extract and paste the exact task list for this sprint into the implementer prompt — do NOT rely on LLM memory of the plan. The implementer must see every task, every file path, every expected behavior verbatim.
    **Immediately after re-reading:** emit `sprint.start` and `stage.start`, then emit heartbeat (see "Heartbeat Writes → At sprint start" above). Use the charter path from `context.charter_file` in state as `$CHARTER_FILE`.

@@ -42,11 +42,17 @@ SESSION_ID="${SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-unknown}}"
 CWD="${CWD:-${CLAUDE_PROJECT_DIR:-${CLAUDE_CODE_CWD:-$PWD}}}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 
-# Read SUPERFLOW_RUN_ID from state file if env unset; fall back to "unknown".
+# Read SUPERFLOW_RUN_ID from state file if env unset.
+# If run_id is missing or not a real UUID, install a no-op sf_emit to avoid
+# emitting schema-invalid events (run_id must be a UUID, not "unknown").
 if [ -z "${SUPERFLOW_RUN_ID:-}" ] && [ -f "$CWD/.superflow-state.json" ] && command -v jq >/dev/null 2>&1; then
-  SUPERFLOW_RUN_ID="$(jq -r '.context.run_id // "unknown"' "$CWD/.superflow-state.json" 2>/dev/null || echo "unknown")"
+  SUPERFLOW_RUN_ID="$(jq -r '.context.run_id // empty' "$CWD/.superflow-state.json" 2>/dev/null || true)"
 fi
-export SUPERFLOW_RUN_ID="${SUPERFLOW_RUN_ID:-unknown}"
+if [ -z "${SUPERFLOW_RUN_ID:-}" ]; then
+  sf_emit() { return 0; }
+else
+  export SUPERFLOW_RUN_ID
+fi
 
 # Project-local dump for SuperFlow runs; home fallback otherwise.
 if [ -f "$CWD/.superflow-state.json" ]; then
