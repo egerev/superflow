@@ -208,9 +208,9 @@ When a sprint has multiple tasks, analyze them for parallelism before dispatchin
 4. Dispatch each wave: all tasks in wave via `Agent(run_in_background: true)`
 5. Wait for wave to complete before dispatching next wave
 
-**Example:** 6 tasks → Wave 1: tasks 1,2,3 (independent files) → Wave 2: task 4 (depends on 1) → Wave 3: tasks 5,6 (independent)
+**Example:** 6 tasks -> Wave 1: tasks 1,2,3 (independent files) -> Wave 2: task 4 (depends on 1) -> Wave 3: tasks 5,6 (independent)
 
-**Fallback:** If ≤3 tasks in the sprint, skip wave analysis and dispatch sequentially. The overhead of parallelism isn't worth it for small task counts.
+**Fallback:** If <=3 tasks in the sprint, skip wave analysis and dispatch sequentially. The overhead of parallelism isn't worth it for small task counts.
 
 **After all waves:** Verify no file conflicts by checking `git status` — if two agents modified the same file, resolve manually.
 
@@ -250,11 +250,11 @@ Sprint 4: files=[src/ui/], depends_on=[2]
 Sprint 5: files=[tests/], depends_on=[1,2]
 Sprint 6: files=[docs/], depends_on=[]
 
-Graph → Waves:
+Graph -> Waves:
   Wave 1: [Sprint 1, Sprint 2, Sprint 6]  — all independent
   Wave 2: [Sprint 3, Sprint 4, Sprint 5]  — dependencies satisfied
 
-6 sprints → 2 waves → ~2x speedup
+6 sprints -> 2 waves -> ~2x speedup
 ```
 
 **Execution loop (replaces sequential sprint-by-sprint):**
@@ -278,7 +278,7 @@ for each wave in sprint_waves:
     # If later work must see earlier merged code, use stacked_prs or run dependent sprints sequentially.
 ```
 
-**Each parallel sprint runs the full Per-Sprint Flow** (Setup → Implementation → Review → PAR → Docs → Ship) independently in its own worktree. The orchestrator dispatches them as background agents and waits.
+**Each parallel sprint runs the full Per-Sprint Flow** (Setup -> Implementation -> Review -> PAR -> Docs -> Ship) independently in its own worktree. The orchestrator dispatches them as background agents and waits.
 
 **Parallel sprint agent dispatch:**
 ```
@@ -295,13 +295,13 @@ Charter: [charter_content]
 
 Your worktree: .worktrees/sprint-N on branch feat/<feature>-sprint-N
 
-Execute all 6 stages: Setup → Implementation → Review → PAR → Docs → Ship.
+Execute all 6 stages: Setup -> Implementation -> Review -> PAR -> Docs -> Ship.
 Create the PR at the end. Report back with PR URL or BLOCKED status.
 "
 )
 ```
 
-**Fallback:** If ≤3 total sprints or all sprints are in a single wave chain (each depends on the previous), skip wave analysis and run sequentially. The overhead of parallel orchestration isn't worth it.
+**Fallback:** If <=3 total sprints or all sprints are in a single wave chain (each depends on the previous), skip wave analysis and run sequentially. The overhead of parallel orchestration isn't worth it.
 
 **Holistic review trigger:** When `max_parallel > 1` (any wave had 2+ sprints), holistic review is mandatory (enforcement rule 9).
 
@@ -322,38 +322,101 @@ Never silently switch modes during Phase 2. If the selected mode becomes unsafe 
 ## Per-Sprint Flow
 
 1. <!-- Stage 1: Setup, Todo 1 --> **Re-read** this file (`references/phase2-execution.md`), the **charter** (from `context.charter_file` in `.superflow-state.json`), AND the **specific sprint section** from the plan. Extract and paste the exact task list for this sprint into the implementer prompt — do NOT rely on LLM memory of the plan. The implementer must see every task, every file path, every expected behavior verbatim.
-   **Immediately after re-reading:** emit heartbeat (see "Heartbeat Writes → At sprint start" above). Use the charter path from `context.charter_file` in state as `$CHARTER_FILE`.
+   **Immediately after re-reading:** emit `sprint.start` and `stage.start`, then emit heartbeat (see "Heartbeat Writes -> At sprint start" above). Use the charter path from `context.charter_file` in state as `$CHARTER_FILE`.
+   ```bash
+   sf_emit sprint.start sprint:int=$SPRINT_NUM total_sprints:int=$TOTAL_SPRINTS goal="$SPRINT_GOAL" complexity=$COMPLEXITY
+   sf_emit stage.start stage=setup sprint:int=$SPRINT_NUM
+   # COMPLEXITY: simple | medium | complex — from plan's sprint tag
+   ```
 2. <!-- Stage 1: Setup, Todo 2 --> **Telegram update** (if MCP connected): "Starting sprint N: [title]"
 3. <!-- Stage 1: Setup, Todo 3 --> **Worktree/branch**: verify `.worktrees/` is gitignored (`git check-ignore -q .worktrees || echo '.worktrees/' >> .gitignore`), then create the branch/worktree according to "Branch and PR Policy by Git Workflow Mode" above.
 4. <!-- Stage 1: Setup, Todo 4 --> **Baseline tests** in worktree: run full test suite, record output. If tests fail on baseline, stop and report — do not build on a broken base.
+   ```bash
+   sf_emit test.run suite="baseline" cmd="$TEST_CMD"
+   # ... run tests ...
+   sf_emit test.result suite="baseline" status=pass|fail duration_s:int=$DURATION
+   sf_emit stage.end stage=setup sprint:int=$SPRINT_NUM
+   ```
 5. <!-- Stage 2: Implementation, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=implementation`, `$SPRINT_NUM=N`). **Dispatch implementers** — model from plan's sprint complexity tag (see Adaptive Implementation Model below), wave analysis for parallelism (see Parallel Dispatch above).
+   ```bash
+   sf_emit stage.start stage=implementation sprint:int=$SPRINT_NUM
+   ```
    - 5a. Analyze task list — identify independent tasks
    - 5b. Group into waves
-   - 5c. For Wave 1: dispatch each as `Agent(run_in_background: true)` with appropriate implementer tier
+   - 5c. For Wave 1: dispatch each as `Agent(run_in_background: true)` with appropriate implementer tier. Before/after dispatch:
+     ```bash
+     sf_emit agent.dispatch agent_type=implementer task="Sprint N: <task-title>" model=sonnet
+     # After agent returns (repeat per agent in wave):
+     sf_emit agent.complete agent_type=implementer duration_s:int=$DURATION
+     # On failure instead:
+     sf_emit agent.fail agent_type=implementer duration_s:int=$DURATION error="<summary>"
+     ```
    - 5d. For subsequent waves: same pattern
    - 5e. After all waves: verify no file conflicts with `git status`
+   ```bash
+   sf_emit stage.end stage=implementation sprint:int=$SPRINT_NUM
+   ```
    Include `llms.txt` content in agent context (if exists).
 6. <!-- Stage 3: Review, Todos 1-3 --> **Emit unified stage transition** (`$NEXT_STAGE=review`, `$SPRINT_NUM=N`). **Unified Review** (2 specialized agents parallel, Reasoning: Standard tier):
    Both agents receive: the SPEC, the product brief, and the relevant git diff.
    Principle: **specialize, don't duplicate** — Claude = Product lens, secondary = Technical lens.
+   ```bash
+   sf_emit stage.start stage=review sprint:int=$SPRINT_NUM
+   ```
 
    First, check Codex availability: `codex --version 2>/dev/null`
 
    If Codex available:
-   a. Claude product reviewer: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "[SPEC + brief + diff context]")`
-   b. Codex technical reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -m gpt-5.5 -c model_reasoning_effort=high --ephemeral - < <(echo "SPEC_CONTEXT" | cat - prompts/codex/code-reviewer.md) 2>&1` (run_in_background)
+   a. Claude product reviewer:
+      ```bash
+      sf_emit review.start reviewer=product provider=claude
+      sf_emit agent.dispatch agent_type=standard-product-reviewer task="Sprint N: product review" model=opus
+      ```
+      `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "[SPEC + brief + diff context]")`
+   b. Codex technical reviewer:
+      ```bash
+      sf_emit review.start reviewer=technical provider=codex
+      ```
+      `$TIMEOUT_CMD 600 codex exec review --base main -m gpt-5.5 -c model_reasoning_effort=high --ephemeral - < <(echo "SPEC_CONTEXT" | cat - prompts/codex/code-reviewer.md) 2>&1` (run_in_background)
 
    If Codex NOT available (split-focus fallback — 2 Claude agents):
-   a. Claude product: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "Focus: spec fit, user scenarios, data integrity")`
-   b. Claude technical: `Agent(subagent_type: "standard-code-reviewer", run_in_background: true, prompt: "Focus: correctness, security, architecture, performance")`
+   a. Claude product:
+      ```bash
+      sf_emit review.start reviewer=product provider=claude
+      sf_emit agent.dispatch agent_type=standard-product-reviewer task="Sprint N: product review" model=opus
+      ```
+      `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "Focus: spec fit, user scenarios, data integrity")`
+   b. Claude technical:
+      ```bash
+      sf_emit review.start reviewer=technical provider=claude
+      sf_emit agent.dispatch agent_type=standard-code-reviewer task="Sprint N: technical review" model=opus
+      ```
+      `Agent(subagent_type: "standard-code-reviewer", run_in_background: true, prompt: "Focus: correctness, security, architecture, performance")`
    Record `"provider": "split-focus"` in .par-evidence.json.
 
-   Wait for both. Aggregate findings:
+   Wait for both. After each reviewer returns:
+   ```bash
+   sf_emit agent.complete agent_type=standard-product-reviewer duration_s:int=$DURATION
+   sf_emit review.verdict reviewer=product verdict=ACCEPTED|REQUEST_CHANGES
+   sf_emit agent.complete agent_type=standard-code-reviewer duration_s:int=$DURATION
+   sf_emit review.verdict reviewer=technical verdict=APPROVE|NEEDS_FIXES
+   ```
+   Aggregate findings:
    - CRITICAL/REQUEST_CHANGES from either agent = fix required
    - Fix confirmed issues. Re-run only the agent that flagged issues.
    - If a finding is incorrect (reviewer lacked context), record disagreement with reasoning and skip.
+   ```bash
+   sf_emit stage.end stage=review sprint:int=$SPRINT_NUM
+   ```
 7. <!-- Stage 4: PAR, Todos 1-4 --> **Emit unified stage transition** (`$NEXT_STAGE=par`, `$SPRINT_NUM=N`). **Post-review test verification + PAR evidence**:
+   ```bash
+   sf_emit stage.start stage=par sprint:int=$SPRINT_NUM
+   sf_emit test.run suite="post-review" cmd="$TEST_CMD"
+   ```
    Run full test suite after all review fixes. Paste actual output as evidence (enforcement rule 4).
+   ```bash
+   sf_emit test.result suite="post-review" status=pass|fail duration_s:int=$DURATION
+   ```
    Write `.par-evidence.json` in worktree root:
    ```json
    {
@@ -367,7 +430,14 @@ Never silently switch modes during Phase 2. If the selected mode becomes unsafe 
    }
    ```
    Both verdicts must be APPROVE/ACCEPTED/PASS. If either agent returned issues, they must be fixed and the agent re-run before evidence is written.
+   ```bash
+   sf_emit stage.end stage=par sprint:int=$SPRINT_NUM
+   ```
 8. <!-- Stage 5: Docs, Todos 1-4 --> **Emit unified stage transition** (`$NEXT_STAGE=docs`, `$SPRINT_NUM=N`). **Mandatory documentation update + documentation review before PR** — first dispatch `standard-doc-writer` to audit/update CLAUDE.md and llms.txt based on sprint changes, then dispatch a review-only doc pass. This is a gate before every PR. In `solo_single_pr`, run it before the final PR (and optionally at checkpoints if docs drift would make later review harder); in per-sprint PR modes, run it every sprint. `llms.txt` is always checked; it may be committed as unchanged only after the doc update agent explicitly confirms no material update is needed:
+   ```bash
+   sf_emit stage.start stage=docs sprint:int=$SPRINT_NUM
+   sf_emit agent.dispatch agent_type=standard-doc-writer task="Sprint N: docs update" model=sonnet
+   ```
    ```
    Agent(
      subagent_type: "standard-doc-writer",
@@ -381,17 +451,17 @@ Never silently switch modes during Phase 2. If the selected mode becomes unsafe 
    - `prompts/claude-md-writer.md` and `prompts/llms-txt-writer.md` for standards
 
    **CLAUDE.md — update if any of these changed:**
-   - New key files or modules added → add to Key Files table
-   - New conventions introduced → add to Conventions
-   - New commands or workflows → add to relevant section
-   - Architecture changed → update Architecture section
+   - New key files or modules added -> add to Key Files table
+   - New conventions introduced -> add to Conventions
+   - New commands or workflows -> add to relevant section
+   - Architecture changed -> update Architecture section
    If nothing materially changed, report `CLAUDE.md: UNCHANGED` with the reason.
 
    **llms.txt — ALWAYS AUDIT, update if any of these changed:**
-   - New API endpoints or features → add to relevant section
-   - New dependencies or integrations → document
-   - Removed functionality → remove from docs
-   - Public commands, setup, architecture, key modules, or workflows changed → update
+   - New API endpoints or features -> add to relevant section
+   - New dependencies or integrations -> document
+   - Removed functionality -> remove from docs
+   - Public commands, setup, architecture, key modules, or workflows changed -> update
    If nothing materially changed, report `llms.txt: UNCHANGED` with the reason.
 
    **Rules:**
@@ -404,10 +474,16 @@ Never silently switch modes during Phase 2. If the selected mode becomes unsafe 
    "
    )
    ```
+   ```bash
+   sf_emit agent.complete agent_type=standard-doc-writer duration_s:int=$DURATION
+   ```
    After agent completes, commit doc changes: `git add CLAUDE.md llms.txt && git commit -m "docs: update project documentation for sprint N" || true` (the `|| true` handles the case where nothing changed).
    Update `.par-evidence.json` with `"docs_update":"UPDATED"` or `"docs_update":"UNCHANGED"`.
 
    **Documentation review (mandatory, review-only):** dispatch `standard-doc-writer` with a review-only prompt:
+   ```bash
+   sf_emit agent.dispatch agent_type=standard-doc-writer task="Sprint N: docs review" model=sonnet
+   ```
    ```
    Agent(
      subagent_type: "standard-doc-writer",
@@ -429,8 +505,21 @@ Never silently switch modes during Phase 2. If the selected mode becomes unsafe 
    "
    )
    ```
+   ```bash
+   sf_emit agent.complete agent_type=standard-doc-writer duration_s:int=$DURATION
+   ```
    Fix any `NEEDS_FIXES`, commit doc fixes if any, then re-run the documentation review. Update `.par-evidence.json` with `"docs_review":"PASS"`.
+   ```bash
+   sf_emit stage.end stage=docs sprint:int=$SPRINT_NUM
+   ```
 9. <!-- Stage 6: Ship, Todos 1-2 --> **Emit unified stage transition** (`$NEXT_STAGE=ship`, `$SPRINT_NUM=N`). **Push + PR/checkpoint**: verify `.par-evidence.json` exists with review verdicts passing. If this sprint creates a PR under the selected git workflow mode, `docs_update` must be `UPDATED` or `UNCHANGED` and `docs_review` must be `PASS`; push the mode-specific branch and create the mode-specific PR. In `solo_single_pr`, non-final sprints push checkpoint commits to the shared feature branch without creating a PR; the final sprint creates one PR after docs gates pass.
+   ```bash
+   sf_emit stage.start stage=ship sprint:int=$SPRINT_NUM
+   # After gh pr create succeeds:
+   sf_emit pr.create pr:int=$PR_NUM title="$PR_TITLE" base=main head=$BRANCH_NAME
+   sf_emit sprint.end sprint:int=$SPRINT_NUM status=completed|blocked|failed pr:int=$PR_NUM
+   sf_emit stage.end stage=ship sprint:int=$SPRINT_NUM
+   ```
 10. <!-- Stage 6: Ship, Todo 3 --> **Cleanup**: if a PR was created, verify it successfully (`gh pr view` returns data), then remove only the worktree for completed per-sprint branches. In `solo_single_pr`, keep the shared worktree until the final PR is created.
 11. <!-- Stage 6: Ship, Todo 4 --> **Telegram update** (if MCP connected): "Sprint N complete. PR #NNN created." For non-final `solo_single_pr` checkpoints, say "Sprint N checkpoint pushed." Then next sprint.
 
@@ -529,6 +618,8 @@ To hydrate cleanly after compaction:
 
 If `.superflow/compact-log/` does not exist, the PreCompact hook isn't installed — continue without hydration and note it for the next onboarding cycle.
 
+**Event log note:** `compact.pre` and `compact.post` events are emitted automatically by `hooks/precompact-state-externalization.sh` — no `sf_emit` call needed here. The compact log dump already serves as the event evidence.
+
 ## Failure & Debugging
 
 1. Read failure output. Identify the failing assertion or error.
@@ -548,11 +639,11 @@ If `.superflow/compact-log/` does not exist, the PreCompact hook isn't installed
 ## Final Holistic Review (after all sprints)
 
 **Conditional — run only when any of the following apply:**
-- Total sprints ≥ 4
+- Total sprints >= 4
 - Parallel execution was used (max_parallel > 1)
 - Governance mode is "critical"
 
-For ≤3 linear sequential sprints in light/standard mode, holistic review is skipped and the Completion Report proceeds without holistic evidence.
+For <=3 linear sequential sprints in light/standard mode, holistic review is skipped and the Completion Report proceeds without holistic evidence.
 
 When holistic IS required: after all mode-specific PRs/checkpoints are created, before Completion Report. Reasoning: Deep tier.
 Both agents review ALL code across ALL sprints as a unified system. Same principle: Claude = Product, secondary = Technical.
@@ -574,6 +665,12 @@ These issues are invisible in per-sprint review but become apparent when viewing
 Fix CRITICAL/HIGH issues before Completion Report.
 
 ## Completion Report (Product Release Format)
+
+After the Completion Report is presented, emit `run.end` to close Phase 2:
+
+```bash
+sf_emit run.end phase:int=2 total_sprints:int=$TOTAL_SPRINTS
+```
 
 Present as a **product release report** — what the team built for users, not a sprint log. Think "release notes for stakeholders", not "git log for developers".
 
@@ -603,3 +700,5 @@ For each feature group:
 - Group by what changed for the user, not by sprint boundaries
 - Concrete examples > abstract descriptions
 - Skip internal process details (PAR, worktrees, review rounds) — those are for the PR descriptions
+
+**Note on `pr.merge`:** The `pr.merge` event is emitted during Phase 3 merge, not Phase 2. See `references/phase3-merge.md` for placement.
