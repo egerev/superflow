@@ -140,7 +140,7 @@ Return structured JSON evidence bundle.
 **If Codex is available** (check by running `which codex 2>/dev/null`):
 
 ```bash
-$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=high "$(cat prompts/codex/audit.md)" 2>&1
+$TIMEOUT_CMD 600 codex exec --full-auto -m gpt-5.5 -c model_reasoning_effort=high "$(cat prompts/codex/audit.md)" 2>&1
 ```
 
 Run in background (shell background: append `&`, capture PID). Codex focus: hardcoded secrets, injection vectors, dependency CVEs, CI/CD security gaps.

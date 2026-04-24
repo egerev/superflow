@@ -8,7 +8,7 @@ Survives context compaction. SKILL.md does not.
 2. **Git worktrees per sprint.** `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`. Verify `.worktrees/` is in `.gitignore` before creating (`git check-ignore -q .worktrees`).
 3. **Unified Review before every PR** (2 agents for standard/critical sprints; single Technical reviewer for light-mode sprints):
    1. Dispatch Claude product reviewer (subagent_type: standard-product-reviewer). `run_in_background: true`
-   2. Dispatch secondary technical reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=high --ephemeral` (or Claude code-quality if no secondary)
+   2. Dispatch secondary technical reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -m gpt-5.5 -c model_reasoning_effort=high --ephemeral` (or Claude code-quality if no secondary)
    3. Wait for both. Fix confirmed issues (NEEDS_FIXES, REQUEST_CHANGES, or FAIL). Re-review only flagging agent.
    4. Run mandatory sprint documentation update (`CLAUDE.md` + `llms.txt`) before PR creation. `llms.txt` must be explicitly checked on every sprint, even if unchanged.
    5. Run documentation review after the update/unchanged decision. It must verify `llms.txt` and `CLAUDE.md` reflect the sprint diff and contain no stale paths/commands.
@@ -30,8 +30,8 @@ Survives context compaction. SKILL.md does not.
 
 **When Claude is orchestrator (RUNTIME:claude):**
 ```bash
-$TIMEOUT_CMD 600 codex exec --full-auto -c model_reasoning_effort=<LEVEL> "PROMPT" 2>&1          # general
-$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=<LEVEL> --ephemeral "PROMPT" 2>&1  # code review
+$TIMEOUT_CMD 600 codex exec --full-auto -m gpt-5.5 -c model_reasoning_effort=<LEVEL> "PROMPT" 2>&1          # general
+$TIMEOUT_CMD 600 codex exec review --base main -m gpt-5.5 -c model_reasoning_effort=<LEVEL> --ephemeral "PROMPT" 2>&1  # code review
 $TIMEOUT_CMD 600 gemini "PROMPT" 2>&1                                                             # Gemini
 $TIMEOUT_CMD 600 $SECONDARY_PROVIDER <non-interactive-flag> "PROMPT" 2>&1                        # Other
 # No secondary → two Claude agents with split focus (Product + Technical)
@@ -49,9 +49,9 @@ See `references/codex-dispatch-patterns.md` for the complete dispatch mapping.
 
 | Tier | Claude Agent (subagent_type) | Codex | When |
 |------|-------------------------------|-------|------|
-| **deep** | `deep-spec-reviewer`, `deep-code-reviewer`, `deep-product-reviewer`, `deep-analyst`, `deep-doc-writer` (opus, effort: high); `deep-implementer` (sonnet, effort: high) | `-c model_reasoning_effort=high` + `prompts/codex/` | Phase 0 audit+security, Phase 1 spec review, Phase 2 final holistic, llms.txt/CLAUDE.md generation |
-| **standard** | `standard-spec-reviewer`, `standard-code-reviewer`, `standard-product-reviewer`, `standard-doc-writer` (opus, effort: medium); `standard-implementer` (sonnet, effort: medium) | `-c model_reasoning_effort=high` + `prompts/codex/` | Phase 1 plan review, Phase 2 unified review, Phase 3 doc updates |
-| **fast** | `fast-implementer` (sonnet, effort: low) | `-c model_reasoning_effort=medium` | Simple implementation tasks |
+| **deep** | `deep-spec-reviewer`, `deep-code-reviewer`, `deep-product-reviewer`, `deep-analyst`, `deep-doc-writer` (opus, effort: high); `deep-implementer` (sonnet, effort: high) | `-m gpt-5.5 -c model_reasoning_effort=high` + `prompts/codex/` | Phase 0 audit+security, Phase 1 spec review, Phase 2 final holistic, llms.txt/CLAUDE.md generation |
+| **standard** | `standard-spec-reviewer`, `standard-code-reviewer`, `standard-product-reviewer`, `standard-doc-writer` (opus, effort: medium); `standard-implementer` (sonnet, effort: medium) | `-m gpt-5.5 -c model_reasoning_effort=high` + `prompts/codex/` | Phase 1 plan review, Phase 2 unified review, Phase 3 doc updates |
+| **fast** | `fast-implementer` (sonnet, effort: low) | `-m gpt-5.5 -c model_reasoning_effort=medium` | Simple implementation tasks |
 
 Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` during SKILL.md startup (step 3). Agent() does NOT accept inline `effort` — controlled via agent definition files only.
 

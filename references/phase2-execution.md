@@ -321,7 +321,7 @@ Create the PR at the end. Report back with PR URL or BLOCKED status.
 
    If Codex available:
    a. Claude product reviewer: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "[SPEC + brief + diff context]")`
-   b. Codex technical reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=high --ephemeral - < <(echo "SPEC_CONTEXT" | cat - prompts/codex/code-reviewer.md) 2>&1` (run_in_background)
+   b. Codex technical reviewer: `$TIMEOUT_CMD 600 codex exec review --base main -m gpt-5.5 -c model_reasoning_effort=high --ephemeral - < <(echo "SPEC_CONTEXT" | cat - prompts/codex/code-reviewer.md) 2>&1` (run_in_background)
 
    If Codex NOT available (split-focus fallback — 2 Claude agents):
    a. Claude product: `Agent(subagent_type: "standard-product-reviewer", run_in_background: true, prompt: "Focus: spec fit, user scenarios, data integrity")`
@@ -539,7 +539,7 @@ Both agents review ALL code across ALL sprints as a unified system. Same princip
 
 Check Codex availability first. If available:
 a. Claude Product: `Agent(subagent_type: "deep-product-reviewer", run_in_background: true, prompt: "Review ALL sprint changes. Focus: end-to-end user flows, data integrity across sprints, spec compliance.")`
-b. Codex Technical: `$TIMEOUT_CMD 900 codex exec review -c model_reasoning_effort=high --ephemeral "Review all changes across all sprints for cross-module issues, architecture, security." 2>&1`
+b. Codex Technical: `$TIMEOUT_CMD 900 codex exec review -m gpt-5.5 -c model_reasoning_effort=high --ephemeral "Review all changes across all sprints for cross-module issues, architecture, security." 2>&1`
 
 If no Codex: 2 split-focus Claude agents (Product: deep-product-reviewer, Technical: deep-code-reviewer), both using deep-tier agent definitions.
 
