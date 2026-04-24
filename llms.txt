@@ -17,6 +17,7 @@ Version: v5.2.0 (2026-04-24). MIT License.
 
 - [SKILL.md](SKILL.md): Entry point — startup checklist (6 steps), provider detection, phase routing (~240 lines)
 - [superflow-enforcement.md](superflow-enforcement.md): 13 hard rules that survive context compaction — deployed to ~/.claude/rules/ (103 lines)
+- [codex/AGENTS.md](codex/AGENTS.md): Codex equivalent of superflow-enforcement.md — hard rules and agent behavior for Codex runtime (98 lines)
 - [CLAUDE.md](CLAUDE.md): Project instructions for Claude — architecture, key files table, conventions (~110 lines)
 - [README.md](README.md): Installation, usage, v4.1 features, permissions setup
 
