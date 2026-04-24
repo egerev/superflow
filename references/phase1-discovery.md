@@ -1,5 +1,11 @@
 # Phase 1: Product Discovery (COLLABORATIVE)
 
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
+
 ## Stage Structure
 
 Phase 1 has 5 stages. Use TaskCreate at each stage start, TaskUpdate as todos complete.

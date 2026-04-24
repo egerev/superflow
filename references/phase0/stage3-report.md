@@ -1,6 +1,12 @@
 # Phase 0 — Stage 3: Report & Proposal
 <!-- Stage 3, Todos: generate health report, show summary, get approval -->
 
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
+
 Re-read this file at the start of Stage 3. Context compaction during Stage 2 analysis erases prior content.
 
 **State source of truth:** Read `.superflow-state.json` — do not rely on LLM context for `$PREFLIGHT` or agent results.

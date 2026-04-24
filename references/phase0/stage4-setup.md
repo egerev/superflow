@@ -1,6 +1,12 @@
 # Phase 0 — Stage 4: Documentation & Environment
 <!-- Stage 4, Todos: dispatch 3 branches, wait, validate, recommend skills/plugins -->
 
+```bash
+# Backward-compat guard: if sf-emit.sh wasn't sourced at session start, define a no-op fallback.
+# This ensures sessions without events.jsonl still work (charter non-negotiable).
+command -v sf_emit >/dev/null 2>&1 || sf_emit() { return 0; }
+```
+
 Re-read this file at the start of Stage 4. Context compaction during Stage 3 erases prior content.
 
 **State source of truth:** Read `context.approval` from `.superflow-state.json` before dispatching any branch. Do not rely on LLM context.
