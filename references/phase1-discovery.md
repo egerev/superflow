@@ -50,6 +50,7 @@ s = json.load(open(p)) if os.path.exists(p) else {}
 s.update({'version':1,'phase':1,'phase_label':'Product Discovery','stage':'research','stage_index':0,'last_updated':datetime.datetime.now(datetime.timezone.utc).isoformat()})
 json.dump(s, open(p,'w'), indent=2)
 "
+sf_emit phase.start phase:int=1
 ```
 
 After each stage transition, update via python3:
@@ -82,6 +83,10 @@ TaskUpdate(id: <task_id>, status: "completed")
 ```
 
 ---
+
+```bash
+sf_emit stage.start stage=research phase:int=1
+```
 
 ## Step 1: Context Exploration
 <!-- Stage 1: Research, Todo 1 -->
@@ -188,6 +193,11 @@ Wait for all background tasks to complete. If research yields insufficient resul
 <!-- Stage 1: Research, Todo 5 -->
 
 Present a brief summary of research results to the user before brainstorming. Include product expert proposals. This ensures the user sees what was discovered and can steer the conversation.
+
+```bash
+sf_emit stage.end stage=research phase:int=1
+sf_emit stage.start stage=brainstorming phase:int=1
+```
 
 ## Step 5: Multi-Expert Brainstorming
 <!-- Stage 2: Brainstorming, Todo 1 -->
@@ -315,6 +325,11 @@ This summary is merged into the Product Summary in Step 7, so the user sees ever
 
 > **Reasoning:** Board Memo gives the panoramic view; grilling gives the depth. Running it by default in critical mode reduces spec-review churn because contested technical decisions are already resolved with user input before the spec writer starts.
 
+```bash
+sf_emit stage.end stage=brainstorming phase:int=1
+sf_emit stage.start stage=product-approval phase:int=1
+```
+
 ## Step 7: Product Approval (MERGED GATE)
 <!-- Stage 3: Product Approval, Todos 1-2 -->
 
@@ -363,6 +378,11 @@ mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Pro
 - "fix ..." / "changes" → ask what to change, update, re-present
 - "restart" → go back to Step 5 (brainstorming)
 
+```bash
+sf_emit stage.end stage=product-approval phase:int=1
+sf_emit stage.start stage=spec phase:int=1
+```
+
 ## Step 8: Spec Document
 <!-- Stage 4: Specification, Todo 1 -->
 
@@ -396,6 +416,11 @@ Run two reviewers in parallel. Both reviewers receive the product brief AND the 
 
 Wait for both. If either returns NEEDS_REVISION: fix issues, re-run both reviews.
 Both must return PASS to proceed.
+
+```bash
+sf_emit stage.end stage=spec phase:int=1
+sf_emit stage.start stage=plan phase:int=1
+```
 
 ## Step 10: Implementation Plan
 <!-- Stage 5: Planning, Todo 1 -->
@@ -447,6 +472,11 @@ Run two reviewers in parallel (same mechanism as Step 8):
 
 Both must APPROVE. If either returns NEEDS_REVISION: fix, re-review.
 
+```bash
+sf_emit stage.end stage=plan phase:int=1
+sf_emit stage.start stage=user-approval phase:int=1
+```
+
 ## Step 12: User Approval (FINAL GATE)
 <!-- Stage 5: Planning, Todo 4 -->
 
@@ -474,6 +504,11 @@ mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Imp
 **FINAL GATE:** Ask the user: "Ready to start autonomous execution? Say 'go' when ready."
 - User says "go" / "start" / "давай" / affirmative → proceed to auto-launch flow below
 - User requests changes → update plan, re-present
+
+```bash
+sf_emit stage.end stage=user-approval phase:int=1
+sf_emit stage.start stage=charter phase:int=1
+```
 
 ## Step 13: Generate Autonomy Charter
 <!-- Stage 5: Planning, Todo 5 -->
@@ -510,4 +545,9 @@ After displaying the charter and confirming with the user, transition to Phase 2
 2. Tell the user:
    > "Plan approved. Phase 2 needs a fresh context for best quality.
    > Run `/clear` then `/superflow` — it will pick up from Phase 2 automatically."
+```bash
+sf_emit stage.end stage=charter phase:int=1
+sf_emit phase.end phase:int=1 status=completed
+```
+
 3. Do NOT proceed to Phase 2 in the same session

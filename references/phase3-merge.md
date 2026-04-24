@@ -42,6 +42,7 @@ s = json.load(open(p)) if os.path.exists(p) else {}
 s.update({'version':1,'phase':3,'phase_label':'Merge','stage':'pre-merge','stage_index':0,'last_updated':datetime.datetime.now(datetime.timezone.utc).isoformat()})
 json.dump(s, open(p,'w'), indent=2)
 "
+sf_emit phase.start phase:int=3
 ```
 
 After each stage transition, update via python3:
@@ -86,6 +87,10 @@ TaskCreate(
 
 ---
 
+```bash
+sf_emit stage.start stage=pre-merge phase:int=3
+```
+
 ## Pre-Merge Checklist
 <!-- Stage 1: Pre-merge -->
 
@@ -128,6 +133,11 @@ git worktree prune
 
 If CWD is already inside a worktree, ALL subsequent commands will fail with "Path does not exist" after `--delete-branch` removes the branch. This is unrecoverable within the same shell.
 
+```bash
+sf_emit stage.end stage=pre-merge phase:int=3
+sf_emit stage.start stage=merge phase:int=3
+```
+
 ## Merge Order
 <!-- Stage 2: Merge -->
 
@@ -159,7 +169,9 @@ for each PR in sprint order:
   1. gh pr checks <number> — verify CI green
      - If CI failing, send Telegram (if MCP available):
        mcp__plugin_telegram_telegram__reply(chat_id: <chat_id>, text: "PR #N CI failed, investigating...")
+     - sf_emit pr.merge pr:int=NNN method=rebase status=failed error="CI checks failed"  # on CI failure
   2. gh pr merge <number> --rebase --delete-branch
+     sf_emit pr.merge pr:int=NNN method=rebase status=success  # replace NNN with actual PR number
   3. If merge fails due to conflict:
      a. git fetch origin main
      b. git checkout <branch>
@@ -200,6 +212,11 @@ If `gh pr checks <number>` shows failing checks:
 6. If CI still fails after 2 fix attempts: stop and report to user with error details
 7. Resume merge sequence from the failed PR
 
+```bash
+sf_emit stage.end stage=merge phase:int=3
+sf_emit stage.start stage=post-merge phase:int=3
+```
+
 ## Post-Merge Verification
 <!-- Stage 2: Merge (final step) -->
 
@@ -234,6 +251,11 @@ Send the post-merge report via Telegram if MCP connected (detected by availabili
 mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "<post-merge report summary>")
 ```
 Include merged PR numbers, CI status, test results, and branch cleanup status in the summary.
+
+```bash
+sf_emit stage.end stage=post-merge phase:int=3
+sf_emit phase.end phase:int=3
+```
 
 ## Known Issues
 

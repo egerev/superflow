@@ -22,6 +22,10 @@ TaskCreate(
 )
 ```
 
+```bash
+sf_emit stage.start stage=completion phase:int=0
+```
+
 ---
 
 ## Todo 0: Ensure .gitignore (always runs, regardless of approval mode)
@@ -199,3 +203,8 @@ Walk through each item. If any is unchecked, go back to the relevant stage and c
 - [ ] `context.tech_debt` populated with values from Stage 2 analysis
 
 All items checked → Phase 0 is complete.
+
+```bash
+sf_emit stage.end stage=completion phase:int=0
+sf_emit phase.end phase:int=0 status=completed
+```

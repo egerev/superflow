@@ -22,6 +22,7 @@ s['stage']='setup'; s['stage_index']=3
 s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat()
 json.dump(s,open('.superflow-state.json','w'),indent=2)
 "
+sf_emit stage.start stage=setup phase:int=0
 ```
 
 TaskCreate:
@@ -240,6 +241,7 @@ s['stage']='completion'; s['stage_index']=4
 s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat()
 json.dump(s,open('.superflow-state.json','w'),indent=2)
 "
+sf_emit stage.end stage=setup phase:int=0
 ```
 
 TaskUpdate: mark all todos complete, status="completed". Proceed to Stage 5 (Completion).

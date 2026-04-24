@@ -71,6 +71,7 @@ s['stage_index'] = 1
 s['last_updated'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 json.dump(s, open('.superflow-state.json', 'w'), indent=2)
 "
+sf_emit stage.start stage=analysis phase:int=0
 ```
 
 ---
@@ -254,6 +255,10 @@ The bundle is **not shown to the user yet** — Stage 3 (Proposal) reads it and 
 ---
 
 ## Completion
+
+```bash
+sf_emit stage.end stage=analysis phase:int=0
+```
 
 ```
 TaskUpdate(id: <task_id>, status: "completed")
