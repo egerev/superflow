@@ -45,8 +45,8 @@ git worktree add -b feat/<feature>-sprint-2 .worktrees/sprint-2 feat/<feature>-s
 # Sprint 3 — base is Sprint 2's branch:
 git worktree add -b feat/<feature>-sprint-3 .worktrees/sprint-3 feat/<feature>-sprint-2
 ```
-Branch base: previous sprint's local branch (not `origin/main`). One PR per sprint; PR base is
-retargeted to `main` automatically after the previous sprint merges (GitHub does this on stack merge).
+Branch base: previous sprint's local branch (not `origin/main`). One PR per sprint.
+Stacked PRs do NOT auto-retarget — see `ship-pr.md` § "Stack rebase and retarget after parent merges" for the explicit `git rebase origin/main` + `gh pr edit --base main` procedure that must run after each parent sprint merges.
 
 ### `parallel_wave_prs` — independent branches off main, dispatched in parallel waves
 ```bash
