@@ -1,7 +1,7 @@
 # Superflow — Claude Instructions
 
 ## Project Overview
-Superflow is a pure Markdown skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, Product Vision alignment, and git workflow selection, autonomous execution with a selected branch/PR strategy, and merge. v5.2.2, MIT License. Supports both **Claude Code** and **Codex CLI** as primary orchestrator (auto-detected at startup via `$CLAUDE_CODE_SESSION_ID`).
+Superflow is a pure Markdown skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, Product Vision alignment, and git workflow selection, autonomous execution with a selected branch/PR strategy, and merge. v5.3.0, MIT License. Supports both **Claude Code** and **Codex CLI** as primary orchestrator (auto-detected at startup via `$CLAUDE_CODE_SESSION_ID`).
 
 ## Key Rules
 - All documentation output in English — user communication follows their language preference
