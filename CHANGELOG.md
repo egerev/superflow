@@ -13,6 +13,19 @@ MEDIUM/LOW event-log gaps identified in Sprint 3 coverage audit; not in scope fo
 - **LOW:** Normalize shell var quoting for typed args (`sprint:int="$VAR"`) — some phase docs use unquoted `$VAR` in typed-arg position; safe in practice but inconsistent; a style pass would standardize to `sprint:int=$VAR` (no quotes needed for numeric vars) uniformly
 - **LOW:** `run.start` charter field population on Phase 1→2 boundary — `run.start` schema allows an optional `charter` field (path to Autonomy Charter); currently emitted without it since the charter is generated at end of Phase 1 after `run.start` fires; fix requires either a `run.update` event type or re-emitting `run.start` at Phase 2 entry with charter path
 
+## [5.3.0] - 2026-04-25
+
+### Changed — Phase 2 DAG Integration (Run 3 Sprint 2)
+- **Reduced `references/phase2-execution.md`** from 756 lines to 39 lines: now a thin router that
+  loads `references/phase2/workflow.json` (DAG), `references/phase2/overview.md` (context), and
+  `references/phase2/steps/*.md` (on-demand step details). Full prose preserved in git history.
+- **Updated SKILL.md Phase 2 routing**: Phase References section now points at `workflow.json`,
+  `overview.md`, and `steps/` as primary; `phase2-execution.md` listed as legacy/fallback router.
+- **Updated SKILL.md re-read instruction**: sprint boundary re-read now specifies DAG-based loading
+  procedure (workflow.json once, overview.md once, step files on-demand).
+- **Removed TDD cycle duplication**: removed lines 13-21 from `prompts/testing-guidelines.md`
+  (the TDD cycle was duplicated from `prompts/implementer.md`; implementer.md is self-contained).
+
 ## [5.2.2] - 2026-04-25
 
 ### Changed — Recommendation Shortcut in Product Vision Alignment
