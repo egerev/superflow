@@ -6,7 +6,7 @@
       "light+simple":    { "reviewers": 1, "tier": "standard", "par_skip_product": true },
       "light+medium":    { "reviewers": 1, "tier": "standard", "par_skip_product": true },
       "light+complex":   { "reviewers": 1, "tier": "standard", "par_skip_product": true },
-      "standard+simple": { "reviewers": 1, "tier": "standard", "par_skip_product": false },
+      "standard+simple": { "reviewers": 2, "tier": "standard", "par_skip_product": false },
       "standard+medium": { "reviewers": 2, "tier": "standard", "par_skip_product": false },
       "standard+complex":{ "reviewers": 2, "tier": "standard", "par_skip_product": false },
       "critical+simple": { "reviewers": 2, "tier": "deep", "par_skip_product": false },
@@ -34,9 +34,9 @@
     },
     {
       "id": "par",
-      "steps": ["dispatch_product_reviewer", "dispatch_technical_reviewer", "fix_needs_fixes", "write_par_evidence"],
+      "steps": ["fix_needs_fixes", "write_par_evidence"],
       "next": "docs",
-      "note": "If par_skip_product=true, skip product reviewer, technical only"
+      "note": "Reviewers are dispatched in `review` stage (unified_review); `par` only finalizes evidence. If par_skip_product=true, claude_product may be 'SKIPPED'."
     },
     {
       "id": "docs",
@@ -49,5 +49,23 @@
       "next": null
     }
   ],
-  "step_detail_dir": "references/phase2/steps/"
+  "step_detail_dir": "references/phase2/steps/",
+  "step_files": {
+    "reread": "setup-reread.md",
+    "telegram": null,
+    "worktree": "setup-worktree.md",
+    "baseline_tests": null,
+    "dispatch_implementers": "impl-dispatch.md",
+    "collect_results": "impl-dispatch.md",
+    "unified_review": "review-unified.md",
+    "fix_findings": "review-unified.md",
+    "post_review_tests": "review-unified.md",
+    "fix_needs_fixes": "par-evidence.md",
+    "write_par_evidence": "par-evidence.md",
+    "dispatch_doc_update": null,
+    "commit_docs": null,
+    "push_create_pr": "ship-pr.md",
+    "verify_pr": "ship-pr.md",
+    "cleanup_worktree": "ship-pr.md"
+  }
 }
