@@ -11,7 +11,7 @@ Load individual step files only when entering that step.
 
 Phase 2 is an autonomous sprint execution loop. The orchestrator reads the plan, groups sprints into
 parallel waves (if independent), and runs each sprint through 6 stages: Setup → Implementation →
-Review → PAR → Docs → Ship. The orchestrator never writes code directly — it dispatches subagents
+Review → Docs → PAR → Ship. The orchestrator never writes code directly — it dispatches subagents
 for all implementation, review, and documentation work, then coordinates results. It runs
 continuously without asking the user. Each sprint produces a PR; Phase 2 ends with a Completion
 Report when all sprints are done.
