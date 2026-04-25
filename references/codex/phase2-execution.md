@@ -1,6 +1,6 @@
 # Phase 2: Autonomous Execution — Codex Dispatch Overlay
 
-> For workflow logic (stage structure, sprint checklist, PAR evidence, test discipline, failure handling), read the main file: `references/phase2-execution.md`.
+> For workflow logic, read: `references/phase2/workflow.json` (DAG + decision matrix), `references/phase2/overview.md` (always-loaded context), and on-demand step files in `references/phase2/steps/`. The legacy `references/phase2-execution.md` is now a router stub only.
 
 ## Critical Codex Differences
 
