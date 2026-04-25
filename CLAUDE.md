@@ -33,7 +33,7 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
   │   │   ├── stage5-completion.md (markers, tech debt persistence, restart)
   │   │   └── greenfield.md (empty project path, G1-G6)
   │   ├── phase1-discovery.md (interactive, expert panel brainstorming, Product Vision alignment, governance mode selection, charter generation)
-  │   ├── phase2-execution.md (autonomous, governance-aware review tiering, holistic review) (Sprint 2 will reduce to a router that loads phase2/workflow.json)
+  │   ├── phase2-execution.md (legacy router — Sprint 2 reduced to ~39 lines pointing at phase2/)
   │   ├── phase2/ (Run 3 — DAG-driven Phase 2; integration in Run 3 Sprint 2)
   │   │   ├── workflow.json (DAG: 9-cell governance×complexity decision matrix + 6 stages + step_files map)
   │   │   ├── overview.md (Phase 2 high-level context, wave analysis, model selection)
@@ -77,7 +77,7 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 | `references/phase0/greenfield.md` | Greenfield path G1-G6 |
 | `references/git-workflow-modes.md` | Git workflow modes, selection heuristic, branch base policy |
 | `references/phase1-discovery.md` | Expert panel brainstorming, Board Memo, Product Vision alignment, governance mode, charter generation |
-| `references/phase2-execution.md` | Governance-aware review tiering, holistic review, per-PR docs update/review gate, subagent execution |
+| `references/phase2-execution.md` | Legacy router (~39 lines) — points at `references/phase2/workflow.json`, `overview.md`, and `steps/`; full prose preserved in git history (pre-Sprint-2) |
 | `references/phase2/workflow.json` | Phase 2 lifecycle DAG with governance×complexity decision matrix |
 | `references/phase3-merge.md` | 3 stages, sequential rebase merge with CI gate |
 | `prompts/implementer.md` | Red-Green-Refactor TDD cycle for code agents |
@@ -106,7 +106,6 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 - **Per-PR docs gate**: every PR must run documentation update and separate documentation review before `gh pr create`. In per-sprint PR modes this happens every sprint; in `solo_single_pr` it happens before the final PR. `.par-evidence.json` must include `docs_update` (`UPDATED` or `UNCHANGED`) and `docs_review: PASS`; `llms.txt` is explicitly audited for every PR.
 
 ## Known Issues & Tech Debt
-- TDD cycle duplicated in `implementer.md:23-31` and `testing-guidelines.md:13-21` (agent sees it twice since implementer includes testing-guidelines)
 - Permissions JSON: single-sourced in `references/phase0/stage4-setup.md` (Branch B); `README.md` has a short example with a link to the canonical source
 - Greenfield templates (nextjs.md, python.md) provide config files but not source file contents — LLM generates those
 - **Phase 3 post-compaction merge regression**: context compaction during Phase 3 merge loop can cause agent to fall back to local `git merge` instead of `gh pr merge --rebase --delete-branch`, leaving GitHub PRs open and creating non-linear history. Mitigated by: (1) merge method rule in `superflow-enforcement.md` (survives compaction); (2) heartbeat `must_reread` includes `references/phase3-merge.md` starting at Sprint 1 end — compaction-triggered rehydration pulls the exact Phase 3 merge procedure into context automatically. Full fix: re-read `phase3-merge.md` before each PR merge (already in must_reread via Phase 2 heartbeat).
