@@ -84,18 +84,20 @@ Record: `{"provider":"split-focus","claude_product":"ACCEPTED","technical_review
 Verify with:
 ```bash
 jq -e '
-  # technical reviewer always required
-  (.technical_review == "APPROVE") and
-  # docs gate
-  ((.docs_update == "UPDATED") or (.docs_update == "UNCHANGED")) and
-  (.docs_review == "PASS") and
+  # required fields presence + types
+  (has("sprint") and (.sprint | type) == "number") and
+  (has("governance") and (.governance | IN("light", "standard", "critical"))) and
+  (has("complexity") and (.complexity | IN("simple", "medium", "complex"))) and
+  (has("par_skip_product") and (.par_skip_product | type) == "boolean") and
+  (has("technical_review") and (.technical_review == "APPROVE")) and
+  (has("docs_update") and (.docs_update | IN("UPDATED", "UNCHANGED"))) and
+  (has("docs_review") and (.docs_review == "PASS")) and
+  has("claude_product") and has("provider") and has("ts") and
   # product verdict policy
   (
     if (.par_skip_product == true) then
-      # only valid in light governance
-      (.governance == "light") and (.claude_product == "SKIPPED" or .claude_product == "ACCEPTED")
+      (.governance == "light") and (.claude_product | IN("SKIPPED", "ACCEPTED"))
     else
-      # standard or critical: product verdict must pass
       (.claude_product == "ACCEPTED")
     end
   )
