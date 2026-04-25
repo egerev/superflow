@@ -10,17 +10,6 @@ These guidelines exist because the most common test failures in code review are 
 </context>
 
 <instructions>
-## TDD Cycle
-
-1. Write ONE failing test.
-2. Run it — confirm it fails for the right reason (an assertion failure, not a syntax or import error).
-3. Write minimal code to pass.
-4. Run it — confirm it passes.
-5. Refactor if needed.
-6. Repeat.
-
-Step 2 is required every time. A test that was never seen to fail has never proven it can catch a bug.
-
 ## Mock vs Real
 
 Use this table to decide whether to mock a dependency or use the real one:
