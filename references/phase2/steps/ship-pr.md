@@ -8,17 +8,53 @@
 
 ## Pre-Ship Gate
 
-Verify `.par-evidence.json` exists with both verdicts passing before proceeding.
-`gh pr create` is blocked until evidence is confirmed (see `par-evidence.md`).
+Verify `.par-evidence.json` exists with all verdicts passing before proceeding.
+`gh pr create` is BLOCKED until evidence is confirmed (see `par-evidence.md`).
+
+## PR Policy by git_workflow_mode
+
+| Mode | Branch pushed | PR `--base` | When to open PR |
+|------|--------------|------------|-----------------|
+| `solo_single_pr` | `feat/<feature>` | `main` | Once, after final sprint |
+| `sprint_pr_queue` | `feat/<feature>-sprint-N` | `main` | Each sprint |
+| `stacked_prs` | `feat/<feature>-sprint-N` | `feat/<feature>-sprint-(N-1)` (Sprint 1 → `main`) | Each sprint; retargets to `main` when prior sprint merges |
+| `parallel_wave_prs` | `feat/<feature>-sprint-N` | `main` | Each sprint |
+| `trunk_based` | `feat/<feature>-slice-N` | `main` | Each slice |
 
 ## Push and Create PR
 
+### `solo_single_pr`
+```bash
+# Only after ALL sprints complete:
+git push -u origin feat/<feature>
+gh pr create --base main --title "<feature>: [summary]" --body "..."
+```
+
+### `sprint_pr_queue` / `parallel_wave_prs`
 ```bash
 git push -u origin feat/<feature>-sprint-N
 gh pr create --base main --title "Sprint N: [title]" --body "..."
 ```
 
-Include in PR body: PR description, link to `.par-evidence.json` verdicts, test evidence summary.
+### `stacked_prs`
+```bash
+# Sprint 1 — base is main:
+git push -u origin feat/<feature>-sprint-1
+gh pr create --base main --title "Sprint 1: [title]" --body "..."
+
+# Sprint N (N > 1) — base is previous sprint's branch:
+git push -u origin feat/<feature>-sprint-N
+gh pr create --base feat/<feature>-sprint-$(( N - 1 )) --title "Sprint N: [title]" --body "..."
+# Note: GitHub auto-retargets this PR to main once the prior sprint merges.
+```
+
+### `trunk_based`
+```bash
+git push -u origin feat/<feature>-slice-N
+gh pr create --base main --title "Slice N: [title]" --body "..."
+```
+
+Include in every PR body: description, link to `.par-evidence.json` verdicts, test evidence summary.
 
 ## Wait for CI Green
 
@@ -37,7 +73,7 @@ Wait for CI to go green. If CI fails:
 ## Verify PR Created
 
 ```bash
-gh pr view feat/<feature>-sprint-N
+gh pr view <branch-name>
 ```
 
 Must return PR data (number, URL, status). If command errors, PR was not created — retry `gh pr create`.
@@ -46,7 +82,7 @@ Must return PR data (number, URL, status). If command errors, PR was not created
 
 Only after the PR is created AND verified:
 ```bash
-git worktree remove .worktrees/sprint-N
+git worktree remove .worktrees/sprint-N   # or slice-N / feat-<feature>
 ```
 
 Do NOT remove the worktree before the PR is created — the branch must exist to push to.
