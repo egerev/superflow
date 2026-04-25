@@ -62,6 +62,8 @@ Version: v5.3.0 (2026-04-26). MIT License.
 ## Tools & Schemas
 
 - [tools/sf-emit.sh](tools/sf-emit.sh): Source-safe bash library for JSONL event emission — `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true key:json='...'`; validates type allowlist and key identifier regex; concurrent-safe via flock, with threshold-based log rotation to archive/ (356 lines)
+- [tools/verify-phase2-dag.sh](tools/verify-phase2-dag.sh): Static DAG verifier (Run 3 Sprint 3) — validates all 9 governance×complexity decision-matrix cells, 7-stage sequence, step_files coverage, and on-disk step file existence; exits 0 on full pass, non-zero with summary on failure; pure bash + python3 + jq
+- [tools/measure-phase2-context.sh](tools/measure-phase2-context.sh): Context savings quantifier (Run 3 Sprint 3) — computes pre-Run-3 vs post-Run-3 Phase 2 per-turn token load using git history; summary: Pre 755 lines (~10048 tokens) | Post-typical 224 lines (~2375 tokens) | Savings 76.4%
 - [templates/event-schema.json](templates/event-schema.json): JSON Schema 2020-12 defining the event envelope (`v`, `id`, `ts`, `run_id`, `type`, `data`, `instance_id`, `parent_id`) and 20 per-type data schemas; additive evolution policy (524 lines)
 - [templates/superflow-state-schema.json](templates/superflow-state-schema.json): JSON Schema for `.superflow-state.json` state file including the `context.run_id` field added in Run 2 Sprint 1
 
