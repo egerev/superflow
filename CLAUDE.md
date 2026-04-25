@@ -33,7 +33,11 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
   │   │   ├── stage5-completion.md (markers, tech debt persistence, restart)
   │   │   └── greenfield.md (empty project path, G1-G6)
   │   ├── phase1-discovery.md (interactive, expert panel brainstorming, Product Vision alignment, governance mode selection, charter generation)
-  │   ├── phase2-execution.md (autonomous, governance-aware review tiering, holistic review)
+  │   ├── phase2-execution.md (autonomous, governance-aware review tiering, holistic review) (Sprint 2 will reduce to a router that loads phase2/workflow.json)
+  │   ├── phase2/ (Run 3 — DAG-driven Phase 2; integration in Run 3 Sprint 2)
+  │   │   ├── workflow.json (DAG: 9-cell governance×complexity decision matrix + 6 stages + step_files map)
+  │   │   ├── overview.md (Phase 2 high-level context, wave analysis, model selection)
+  │   │   └── steps/ (8 step detail files: setup-reread, setup-worktree, impl-dispatch, review-unified, par-evidence, ship-pr, compaction-recovery, holistic-review)
   │   └── phase3-merge.md (user-initiated merge, 3 stages)
   ├── prompts/
   │   ├── implementer.md (TDD code agent)
@@ -74,6 +78,7 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 | `references/git-workflow-modes.md` | Git workflow modes, selection heuristic, branch base policy |
 | `references/phase1-discovery.md` | Expert panel brainstorming, Board Memo, Product Vision alignment, governance mode, charter generation |
 | `references/phase2-execution.md` | Governance-aware review tiering, holistic review, per-PR docs update/review gate, subagent execution |
+| `references/phase2/workflow.json` | Phase 2 lifecycle DAG with governance×complexity decision matrix |
 | `references/phase3-merge.md` | 3 stages, sequential rebase merge with CI gate |
 | `prompts/implementer.md` | Red-Green-Refactor TDD cycle for code agents |
 | `prompts/expert-panel.md` | Expert persona prompt — proposals, challenge, recommendation |
@@ -109,4 +114,4 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 - **Codex no PreCompact/PostCompact**: compaction recovery relies on Stop hook dumps + SessionStart re-injection + self-referential rule in AGENTS.md. Less reliable than Claude's hook-based recovery.
 - **Codex context ~258K**: 4x smaller than Claude's 1M. Long Phase 2 runs (4+ sprints) require session-per-wave/session-per-sprint strategy or aggressive /compact usage.
 - **Per-event-type key allowlist**: `sf_emit` validates key names against an identifier regex and the event type against a global allowlist, but does not yet validate which keys are legal per event type. Practical injection is blocked; semantic key validation deferred to a future sprint.
-<!-- updated-by-superflow:2026-04-20 -->
+<!-- updated-by-superflow:2026-04-25 -->
