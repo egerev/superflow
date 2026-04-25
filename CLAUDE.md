@@ -85,6 +85,8 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 | `prompts/llms-txt-writer.md` | llmstxt.org standard, no hard size limit |
 | `prompts/claude-md-writer.md` | Verified paths/commands, <200 lines target |
 | `tools/sf-emit.sh` | Source-safe bash library for emitting JSONL events; usage: `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true` (356 lines) |
+| `tools/verify-phase2-dag.sh` | Static DAG verifier — validates all 9 governance×complexity cells, 7-stage sequence, step_files coverage, and on-disk step file existence; exits 0 on full pass |
+| `tools/measure-phase2-context.sh` | Context savings quantifier — computes pre-Run-3 vs post-Run-3 per-turn token load using git history; outputs a one-line summary (Savings: 76.4%) |
 | `hooks/precompact-state-externalization.sh` | PreCompact hook — sources sf-emit, emits `compact.pre`/`compact.post` events with absolute path to the dump file |
 | `templates/event-schema.json` | JSON Schema 2020-12 for all event types — envelope fields + 20 per-type data schemas, additive evolution policy (524 lines) |
 
