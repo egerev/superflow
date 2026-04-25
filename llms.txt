@@ -32,10 +32,10 @@ Version: v5.2.2 (2026-04-25). MIT License.
 - [references/phase0/greenfield.md](references/phase0/greenfield.md): Greenfield path G1-G6 (~350 lines)
 - [references/git-workflow-modes.md](references/git-workflow-modes.md): Git workflow modes — selection heuristic, branch base policy, Phase 2 merge boundary
 - [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — expert panel brainstorming (Board Memo pattern), governance mode + git workflow mode selection, spec/plan review, Autonomy Charter generation
-- [references/phase2-execution.md](references/phase2-execution.md): Autonomous sprint execution — wave-based parallel dispatch, governance-aware review tiering, charter compliance, per-PR docs update/review gate, holistic review, heartbeat writes at each stage transition (544 lines) (Sprint 2 of Run 3 will reduce this to a router that loads phase2/workflow.json)
-- [references/phase2/workflow.json](references/phase2/workflow.json): Phase 2 sprint lifecycle DAG — 9-cell governance×complexity decision matrix, 6 stages (setup→implementation→review→docs→par→ship), step_files mapping for 16 step names (~71 lines)
+- [references/phase2-execution.md](references/phase2-execution.md): Legacy router stub pointing at phase2/workflow.json + overview.md + steps/ (39 lines, router only)
+- [references/phase2/workflow.json](references/phase2/workflow.json): Phase 2 sprint lifecycle DAG — 9-cell governance×complexity decision matrix, 7 stages (setup→implementation→review→docs→par→ship→completion), step_files mapping for 19 step names (~80 lines)
 - [references/phase2/overview.md](references/phase2/overview.md): Phase 2 high-level context, wave analysis, model selection, orchestrator tool budget — always-loaded companion to workflow.json (~69 lines)
-- [references/phase2/steps/](references/phase2/steps/): 8 per-step detail files for the Phase 2 DAG, loaded on-demand by the orchestrator when entering a stage (~30-90 lines each)
+- [references/phase2/steps/](references/phase2/steps/): 10 per-step detail files for the Phase 2 DAG, loaded on-demand by the orchestrator when entering a stage (~30-100 lines each)
 - [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, CI handling, structured completion-data.json, post-merge report (184 lines)
 
 ## Agent Prompts
