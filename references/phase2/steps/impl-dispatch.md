@@ -64,3 +64,6 @@ Without it, subagents inherit the parent's model (Opus), wasting tokens.
 Include `llms.txt` content in agent context (if file exists).
 Extract and paste the exact task list, file paths, and expected behaviors verbatim into the
 implementer prompt — do NOT rely on LLM memory of the plan.
+
+If `frontend: true` is set on the sprint, also load `frontend-testing.md` and follow its
+visual verification protocol after implementation completes.

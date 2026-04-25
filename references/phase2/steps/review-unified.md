@@ -51,3 +51,8 @@ After all fixes: run full test suite. Paste actual output as evidence (enforceme
 
 When `par_skip_product=true` (light governance), run Technical reviewer only.
 PAR evidence: `{"claude_product":"SKIPPED","technical_review":"APPROVE","governance":"light",...}`
+
+## Frontend Sprints
+
+If frontend changes shipped in this sprint, verify visual evidence per `frontend-testing.md`
+before issuing a review verdict. APPROVE is blocked without screenshot or recording evidence.

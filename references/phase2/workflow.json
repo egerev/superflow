@@ -68,6 +68,7 @@
     "write_par_evidence": "par-evidence.md",
     "push_create_pr": "ship-pr.md",
     "verify_pr": "ship-pr.md",
-    "cleanup_worktree": "ship-pr.md"
+    "cleanup_worktree": "ship-pr.md",
+    "frontend_testing": "frontend-testing.md"
   }
 }
