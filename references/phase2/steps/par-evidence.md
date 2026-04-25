@@ -92,7 +92,9 @@ jq -e '
   (has("technical_review") and (.technical_review == "APPROVE")) and
   (has("docs_update") and (.docs_update | IN("UPDATED", "UNCHANGED"))) and
   (has("docs_review") and (.docs_review == "PASS")) and
-  has("claude_product") and has("provider") and has("ts") and
+  (has("claude_product") and (.claude_product | type) == "string") and
+  (has("provider") and (.provider | type) == "string") and
+  (has("ts") and (.ts | type) == "string") and
   # product verdict policy
   (
     if (.par_skip_product == true) then

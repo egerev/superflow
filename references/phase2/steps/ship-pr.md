@@ -17,7 +17,7 @@ Verify `.par-evidence.json` exists with all verdicts passing before proceeding.
 |------|--------------|------------|-----------------|
 | `solo_single_pr` | `feat/<feature>` | `main` | Once, after final sprint |
 | `sprint_pr_queue` | `feat/<feature>-sprint-N` | `main` | Each sprint |
-| `stacked_prs` | `feat/<feature>-sprint-N` | `feat/<feature>-sprint-(N-1)` (Sprint 1 → `main`) | Each sprint; retargets to `main` when prior sprint merges |
+| `stacked_prs` | `feat/<feature>-sprint-N` | `feat/<feature>-sprint-(N-1)` (Sprint 1 → `main`) | Each sprint; **must explicitly rebase + retarget** to `main` after parent merges (see "Stack rebase and retarget" below — NOT automatic) |
 | `parallel_wave_prs` | `feat/<feature>-sprint-N` | `main` | Each sprint |
 | `trunk_based` | `feat/<feature>-slice-N` | `main` | Each slice |
 
