@@ -67,3 +67,14 @@ implementer prompt — do NOT rely on LLM memory of the plan.
 
 If `frontend: true` is set on the sprint, also load `frontend-testing.md` and follow its
 visual verification protocol after implementation completes.
+
+## Failure Handling
+
+1. Read failure output. Identify the failing assertion or error.
+2. Form a hypothesis before touching code.
+3. Targeted fix, then verify with the specific test, then the full suite.
+4. 3+ failed attempts on the same issue: likely architectural problem. Report BLOCKED with
+   evidence, suggest rethinking approach.
+5. Agent BLOCKED: re-dispatch with more context. 2 fails on same agent task → orchestrator
+   implements the specific task manually as a last resort.
+6. Never stop to ask the user during Phase 2. Accumulate issues and report at end.
