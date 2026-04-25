@@ -29,19 +29,19 @@
     {
       "id": "review",
       "steps": ["unified_review", "fix_findings", "post_review_tests"],
-      "next": "par",
+      "next": "docs",
       "note": "Reviewer count and tier from decision_matrix[governance_mode+complexity]"
     },
     {
-      "id": "par",
-      "steps": ["fix_needs_fixes", "write_par_evidence"],
-      "next": "docs",
-      "note": "Reviewers are dispatched in `review` stage (unified_review); `par` only finalizes evidence. If par_skip_product=true, claude_product may be 'SKIPPED'."
+      "id": "docs",
+      "steps": ["dispatch_doc_update", "commit_docs", "dispatch_doc_review", "fix_doc_review_findings"],
+      "next": "par"
     },
     {
-      "id": "docs",
-      "steps": ["dispatch_doc_update", "commit_docs"],
-      "next": "ship"
+      "id": "par",
+      "steps": ["assemble_par_evidence", "write_par_evidence"],
+      "next": "ship",
+      "note": "PAR evidence is written only after docs review passes. Reviewers are dispatched in `review` stage (unified_review). If par_skip_product=true AND governance=light, claude_product may be 'SKIPPED'."
     },
     {
       "id": "ship",
@@ -60,10 +60,12 @@
     "unified_review": "review-unified.md",
     "fix_findings": "review-unified.md",
     "post_review_tests": "review-unified.md",
-    "fix_needs_fixes": "par-evidence.md",
-    "write_par_evidence": "par-evidence.md",
     "dispatch_doc_update": null,
     "commit_docs": null,
+    "dispatch_doc_review": null,
+    "fix_doc_review_findings": null,
+    "assemble_par_evidence": "par-evidence.md",
+    "write_par_evidence": "par-evidence.md",
     "push_create_pr": "ship-pr.md",
     "verify_pr": "ship-pr.md",
     "cleanup_worktree": "ship-pr.md"
