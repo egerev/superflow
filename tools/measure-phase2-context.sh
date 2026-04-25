@@ -8,7 +8,30 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${1:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo-root)
+      [[ -z "${2:-}" ]] && { echo "Error: --repo-root requires a path" >&2; exit 2; }
+      REPO_ROOT="$2"
+      shift 2
+      ;;
+    --repo-root=*)
+      REPO_ROOT="${1#--repo-root=}"
+      shift
+      ;;
+    -h|--help)
+      sed -n '/^# Usage:/,/^[^#]/p' "$0" | sed 's/^# \?//'
+      exit 0
+      ;;
+    *)
+      echo "Error: unknown argument '$1'" >&2
+      exit 2
+      ;;
+  esac
+done
+[[ -d "$REPO_ROOT" ]] || { echo "Error: REPO_ROOT '$REPO_ROOT' not a directory" >&2; exit 2; }
 
 # ---------------------------------------------------------------------------
 # Config
@@ -58,14 +81,25 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[ PRE-RUN-3: references/phase2-execution.md (fully loaded per sprint) ]"
 
-PRE_LINES="$(git -C "$REPO_ROOT" show "${PRE_RUN3_COMMIT}:${PRE_FILE}" 2>/dev/null | wc -l | tr -d ' ')"
-PRE_CHARS="$(git -C "$REPO_ROOT" show "${PRE_RUN3_COMMIT}:${PRE_FILE}" 2>/dev/null | wc -c | tr -d ' ')"
-PRE_TOKENS="$(to_tokens "$PRE_CHARS")"
+PRE_BASELINE_AVAILABLE=0
+PRE_LINES=0
+PRE_CHARS=0
+PRE_TOKENS=0
 
-echo "  File:   ${PRE_FILE} (at commit 65a90db — last pre-Run-3)"
-echo "  Lines:  ${PRE_LINES}"
-echo "  Chars:  ${PRE_CHARS}"
-echo "  Tokens: ~${PRE_TOKENS}"
+if git -C "$REPO_ROOT" cat-file -e "${PRE_RUN3_COMMIT}:${PRE_FILE}" 2>/dev/null; then
+  PRE_BASELINE_AVAILABLE=1
+  PRE_LINES="$(git -C "$REPO_ROOT" show "${PRE_RUN3_COMMIT}:${PRE_FILE}" | wc -l | tr -d ' ')"
+  PRE_CHARS="$(git -C "$REPO_ROOT" show "${PRE_RUN3_COMMIT}:${PRE_FILE}" | wc -c | tr -d ' ')"
+  PRE_TOKENS="$(to_tokens "$PRE_CHARS")"
+  echo "  File:   ${PRE_FILE} (at commit 65a90db — last pre-Run-3)"
+  echo "  Lines:  ${PRE_LINES}"
+  echo "  Chars:  ${PRE_CHARS}"
+  echo "  Tokens: ~${PRE_TOKENS}"
+else
+  echo "  Pre: N/A (baseline commit ${PRE_RUN3_COMMIT} not in this checkout)"
+  echo "  NOTE: Shallow clone or exported tarball — pre-Run-3 baseline unavailable."
+  echo "        Continuing with post-Run-3 measurements only."
+fi
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -131,21 +165,21 @@ echo ""
 echo "[ SAVINGS ANALYSIS ]"
 
 # Savings: typical-per-turn vs pre-Run-3
-if [ "$PRE_CHARS" -gt 0 ]; then
+if [ "$PRE_BASELINE_AVAILABLE" -eq 1 ] && [ "$PRE_CHARS" -gt 0 ]; then
   # Use python3 for float arithmetic
   SAVINGS_PCT="$(python3 -c "print(f'{(1 - $TYPICAL_CHARS / $PRE_CHARS) * 100:.1f}')")"
   WORST_SAVINGS_PCT="$(python3 -c "print(f'{(1 - $WORST_CHARS / $PRE_CHARS) * 100:.1f}')")"
+  echo "  Pre-Run-3 (always loaded):     ${PRE_LINES} lines / ${PRE_CHARS} chars / ~${PRE_TOKENS} tokens"
+  echo "  Post-Run-3 worst case:         ${WORST_LINES} lines / ${WORST_CHARS} chars / ~${WORST_TOKENS} tokens"
+  echo "  Post-Run-3 typical per-turn:   ${TYPICAL_LINES} lines / ${TYPICAL_CHARS} chars / ~${TYPICAL_TOKENS} tokens"
+  echo ""
+  echo "  Savings (typical vs pre):      ${SAVINGS_PCT}% reduction in chars / tokens per turn"
+  echo "  Savings (worst vs pre):        ${WORST_SAVINGS_PCT}% reduction even when all files are loaded"
 else
-  SAVINGS_PCT="N/A"
-  WORST_SAVINGS_PCT="N/A"
+  echo "  NOTE: Pre-Run-3 baseline unavailable — savings comparison skipped."
+  echo "  Post-Run-3 worst case:         ${WORST_LINES} lines / ${WORST_CHARS} chars / ~${WORST_TOKENS} tokens"
+  echo "  Post-Run-3 typical per-turn:   ${TYPICAL_LINES} lines / ${TYPICAL_CHARS} chars / ~${TYPICAL_TOKENS} tokens"
 fi
-
-echo "  Pre-Run-3 (always loaded):     ${PRE_LINES} lines / ${PRE_CHARS} chars / ~${PRE_TOKENS} tokens"
-echo "  Post-Run-3 worst case:         ${WORST_LINES} lines / ${WORST_CHARS} chars / ~${WORST_TOKENS} tokens"
-echo "  Post-Run-3 typical per-turn:   ${TYPICAL_LINES} lines / ${TYPICAL_CHARS} chars / ~${TYPICAL_TOKENS} tokens"
-echo ""
-echo "  Savings (typical vs pre):      ${SAVINGS_PCT}% reduction in chars / tokens per turn"
-echo "  Savings (worst vs pre):        ${WORST_SAVINGS_PCT}% reduction even when all files are loaded"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -154,6 +188,10 @@ echo ""
 echo "================================================================"
 echo "SUMMARY"
 echo "================================================================"
-echo "Pre: ${PRE_LINES} lines (~${PRE_TOKENS} tokens) | Post-typical: ${TYPICAL_LINES} lines (~${TYPICAL_TOKENS} tokens) | Savings: ${SAVINGS_PCT}%"
+if [ "$PRE_BASELINE_AVAILABLE" -eq 1 ]; then
+  echo "Pre: ${PRE_LINES} lines (~${PRE_TOKENS} tokens) | Post-typical: ${TYPICAL_LINES} lines (~${TYPICAL_TOKENS} tokens) | Savings: ${SAVINGS_PCT}%"
+else
+  echo "Pre: N/A (baseline commit ${PRE_RUN3_COMMIT} not in this checkout) | Post-typical: ${TYPICAL_LINES} lines (~${TYPICAL_TOKENS} tokens)"
+fi
 echo ""
 exit 0
