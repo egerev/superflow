@@ -18,35 +18,51 @@ If `.gitignore` was updated, commit it before continuing.
 
 ## Worktree Creation by git_workflow_mode
 
-Read `context.git_workflow_mode` from `.superflow-state.json`.
+Read `context.git_workflow_mode` from `.superflow-state.json`, then use the matching command:
 
-**`sprint_pr_queue` (default) / `stacked_prs` / `parallel_wave_prs`:**
+### `solo_single_pr` — one branch for the entire run
 ```bash
-git worktree add .worktrees/sprint-N feat/<feature>-sprint-N
+# Sprint 1 only — create the single feature branch from main:
+git worktree add -b feat/<feature> .worktrees/<feature> origin/main
+# Subsequent sprints: worktree already exists; commit directly to feat/<feature>.
 ```
-One worktree per sprint. Branch name: `feat/<feature>-sprint-N`.
+Branch name: `feat/<feature>`. Base: `origin/main`. One PR at end of run.
 
-**`solo_single_pr`:**
+### `sprint_pr_queue` — independent sprints off main, sequential PRs
 ```bash
-git worktree add .worktrees/feat-<feature> feat/<feature>
+git worktree add -b feat/<feature>-sprint-N .worktrees/sprint-N origin/main
 ```
-One worktree for the entire run. All sprints commit to the same branch.
+Branch name: `feat/<feature>-sprint-N`. Base: `origin/main`. One PR per sprint.
 
-**`trunk_based`:**
+### `stacked_prs` — each sprint branches from the previous sprint's branch
 ```bash
-git worktree add .worktrees/sprint-N feat/<feature>-sprint-N
-```
-Short-lived branch per deployable slice; merge frequently. Same creation command as `sprint_pr_queue`.
+# Sprint 1 — base is main:
+git worktree add -b feat/<feature>-sprint-1 .worktrees/sprint-1 origin/main
 
-**`parallel_wave_prs`:**
-Multiple worktrees created concurrently — one per sprint in the current wave:
-```bash
-git worktree add .worktrees/sprint-1 feat/<feature>-sprint-1
-git worktree add .worktrees/sprint-2 feat/<feature>-sprint-2
-# ... dispatched simultaneously for parallel sprint agents
+# Sprint 2 — base is Sprint 1's branch:
+git worktree add -b feat/<feature>-sprint-2 .worktrees/sprint-2 feat/<feature>-sprint-1
+
+# Sprint 3 — base is Sprint 2's branch:
+git worktree add -b feat/<feature>-sprint-3 .worktrees/sprint-3 feat/<feature>-sprint-2
 ```
+Branch base: previous sprint's local branch (not `origin/main`). One PR per sprint; PR base is
+retargeted to `main` automatically after the previous sprint merges (GitHub does this on stack merge).
+
+### `parallel_wave_prs` — independent branches off main, dispatched in parallel waves
+```bash
+# All wave sprints created simultaneously:
+git worktree add -b feat/<feature>-sprint-N .worktrees/sprint-N origin/main
+```
+Branch name: `feat/<feature>-sprint-N`. Base: `origin/main`. One PR per sprint, merged in order.
+
+### `trunk_based` — short-lived slice branches off main
+```bash
+git worktree add -b feat/<feature>-slice-N .worktrees/slice-N origin/main
+```
+Branch name: `feat/<feature>-slice-N`. Base: `origin/main`. Merge each slice frequently.
 
 ## After Creation
 
 Verify the worktree exists: `ls .worktrees/`
+
 All implementation work happens inside the worktree directory — never in the main repo root.
