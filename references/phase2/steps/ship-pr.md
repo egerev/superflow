@@ -50,6 +50,19 @@ gh pr create --base feat/<feature>-sprint-$(( N - 1 )) --title "Sprint N: [title
 **Note:** GitHub does NOT automatically retarget stacked PRs — the orchestrator must rebase and
 retarget explicitly after the parent sprint merges (see section below).
 
+## Sprint Completion Checklist
+
+Before creating the PR, verify ALL:
+- [ ] Worktree created and work done in isolation
+- [ ] Implementation dispatched to subagents (not written by orchestrator)
+- [ ] Unified review completed: 2 agents (Product + Technical), both APPROVE/ACCEPTED
+- [ ] Full test suite passes with pasted evidence
+- [ ] `.par-evidence.json` written with review verdicts passing, `docs_update` set, and `docs_review` = `PASS`
+- [ ] Documentation update completed before PR; `llms.txt` explicitly updated or confirmed unchanged
+- [ ] Documentation review completed before PR and passed
+- [ ] PR created with the base branch required by `context.git_workflow_mode`
+- [ ] Worktree cleaned up
+
 #### Stack rebase and retarget after parent merges
 
 After the previous sprint's PR merges, run from the dependent sprint's worktree:
