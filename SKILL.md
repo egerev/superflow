@@ -158,7 +158,7 @@ superflow/
 6. **Display startup banner** — output immediately after detection, before any phase routing:
    ```
    ╔═══════════════════════════════════╗
-   ║  ⚡ SUPERFLOW v5.2.2              ║
+   ║  ⚡ SUPERFLOW v5.3.0              ║
    ║  Autonomous Dev Workflow          ║
    ╚═══════════════════════════════════╝
    ```
@@ -228,7 +228,7 @@ fi
 
 - Phase 0: `references/phase0-onboarding.md` (router — first run only); stages: `references/phase0/stage1-detect.md`, `references/phase0/stage2-analysis.md`, `references/phase0/stage3-report.md`, `references/phase0/stage4-setup.md`, `references/phase0/stage5-completion.md`, `references/phase0/greenfield.md`
 - Phase 1: `references/phase1-discovery.md`
-- Phase 2: `references/phase2-execution.md`
+- Phase 2: `references/phase2/workflow.json` (DAG + decision matrix — read once per sprint), `references/phase2/overview.md` (always-loaded context — read once per sprint), `references/phase2/steps/*.md` (on-demand step details — read when entering each step); `references/phase2-execution.md` (legacy/fallback router — use if `references/phase2/` is missing)
 - Phase 3: `references/phase3-merge.md`
 - Prompts: `prompts/implementer.md`, `prompts/expert-panel.md`, `prompts/spec-reviewer.md`, `prompts/code-quality-reviewer.md`, `prompts/product-reviewer.md`
 - Documentation: `prompts/llms-txt-writer.md`, `prompts/claude-md-writer.md`
@@ -237,4 +237,4 @@ fi
 - Codex prompts: `prompts/codex/code-reviewer.md`, `prompts/codex/product-reviewer.md`, `prompts/codex/audit.md`
 - State: `templates/superflow-state-schema.json` (schema), `.superflow-state.json` (runtime, gitignored)
 
-Re-read phase docs at every phase/sprint boundary (compaction erases skill content).
+Re-read phase docs at every phase/sprint boundary (compaction erases skill content). For Phase 2: read `references/phase2/workflow.json` once per sprint; read `references/phase2/overview.md` once per sprint; read step detail files on-demand based on current stage (see `workflow.json` → `step_files` map).
