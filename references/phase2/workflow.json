@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "description": "Phase 2 sprint lifecycle",
+  "decision_matrix": {
+    "review_config": {
+      "light+simple":    { "reviewers": 1, "tier": "standard", "par_skip_product": true },
+      "light+medium":    { "reviewers": 1, "tier": "standard", "par_skip_product": true },
+      "light+complex":   { "reviewers": 1, "tier": "standard", "par_skip_product": true },
+      "standard+simple": { "reviewers": 1, "tier": "standard", "par_skip_product": false },
+      "standard+medium": { "reviewers": 2, "tier": "standard", "par_skip_product": false },
+      "standard+complex":{ "reviewers": 2, "tier": "standard", "par_skip_product": false },
+      "critical+simple": { "reviewers": 2, "tier": "deep", "par_skip_product": false },
+      "critical+medium": { "reviewers": 2, "tier": "deep", "par_skip_product": false },
+      "critical+complex":{ "reviewers": 2, "tier": "deep", "par_skip_product": false }
+    },
+    "holistic_required": "governance_mode == 'critical' OR sprint_count >= 4 OR max_parallel > 1"
+  },
+  "stages": [
+    {
+      "id": "setup",
+      "steps": ["reread", "telegram", "worktree", "baseline_tests"],
+      "next": "implementation"
+    },
+    {
+      "id": "implementation",
+      "steps": ["dispatch_implementers", "collect_results"],
+      "next": "review"
+    },
+    {
+      "id": "review",
+      "steps": ["unified_review", "fix_findings", "post_review_tests"],
+      "next": "par",
+      "note": "Reviewer count and tier from decision_matrix[governance_mode+complexity]"
+    },
+    {
+      "id": "par",
+      "steps": ["dispatch_product_reviewer", "dispatch_technical_reviewer", "fix_needs_fixes", "write_par_evidence"],
+      "next": "docs",
+      "note": "If par_skip_product=true, skip product reviewer, technical only"
+    },
+    {
+      "id": "docs",
+      "steps": ["dispatch_doc_update", "commit_docs"],
+      "next": "ship"
+    },
+    {
+      "id": "ship",
+      "steps": ["push_create_pr", "verify_pr", "cleanup_worktree", "telegram"],
+      "next": null
+    }
+  ],
+  "step_detail_dir": "references/phase2/steps/"
+}
