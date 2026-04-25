@@ -11,7 +11,30 @@ set -euo pipefail
 # Setup
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${1:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo-root)
+      [[ -z "${2:-}" ]] && { echo "Error: --repo-root requires a path" >&2; exit 2; }
+      REPO_ROOT="$2"
+      shift 2
+      ;;
+    --repo-root=*)
+      REPO_ROOT="${1#--repo-root=}"
+      shift
+      ;;
+    -h|--help)
+      sed -n '/^# Usage:/,/^[^#]/p' "$0" | sed 's/^# \?//'
+      exit 0
+      ;;
+    *)
+      echo "Error: unknown argument '$1'" >&2
+      exit 2
+      ;;
+  esac
+done
+[[ -d "$REPO_ROOT" ]] || { echo "Error: REPO_ROOT '$REPO_ROOT' not a directory" >&2; exit 2; }
 
 WORKFLOW_JSON="${REPO_ROOT}/references/phase2/workflow.json"
 STEPS_DIR="${REPO_ROOT}/references/phase2/steps"
@@ -181,11 +204,11 @@ echo ""
 echo "[ Check 6: Step files exist on disk ]"
 
 # Use python3 to parse the step_files object and check non-null values
-python3 - <<PYTHON
+if _WORKFLOW_JSON="$WORKFLOW_JSON" _STEPS_DIR="$STEPS_DIR" python3 - <<'PYTHON'
 import json, os, sys
 
-workflow_path = "$WORKFLOW_JSON"
-steps_dir = "$STEPS_DIR"
+workflow_path = os.environ["_WORKFLOW_JSON"]
+steps_dir = os.environ["_STEPS_DIR"]
 
 with open(workflow_path) as f:
     data = json.load(f)
@@ -210,12 +233,11 @@ for step_id, filename in step_files.items():
 if failures:
     sys.exit(1)
 PYTHON
-STEP_FILES_OK=$?
-if [ "$STEP_FILES_OK" -ne 0 ]; then
-  FAIL=$(( FAIL + 1 ))
-  ERRORS+=("One or more step files missing on disk (see FAIL lines above)")
-else
+then
   PASS=$(( PASS + 1 ))
+else
+  FAIL=$(( FAIL + 1 ))
+  ERRORS+=("Check 6: step files on disk — see python output above")
 fi
 echo ""
 
