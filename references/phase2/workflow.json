@@ -46,6 +46,11 @@
     {
       "id": "ship",
       "steps": ["push_create_pr", "verify_pr", "cleanup_worktree", "telegram"],
+      "next": "completion"
+    },
+    {
+      "id": "completion",
+      "steps": ["holistic_review_if_required", "write_completion_report"],
       "next": null
     }
   ],
@@ -69,6 +74,8 @@
     "push_create_pr": "ship-pr.md",
     "verify_pr": "ship-pr.md",
     "cleanup_worktree": "ship-pr.md",
+    "holistic_review_if_required": "holistic-review.md",
+    "write_completion_report": "completion-report.md",
     "frontend_testing": "frontend-testing.md"
   }
 }
