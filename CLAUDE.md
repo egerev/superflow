@@ -35,9 +35,9 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
   │   ├── phase1-discovery.md (interactive, expert panel brainstorming, Product Vision alignment, governance mode selection, charter generation)
   │   ├── phase2-execution.md (legacy router — Sprint 2 reduced to ~39 lines pointing at phase2/)
   │   ├── phase2/ (Run 3 — DAG-driven Phase 2; integration in Run 3 Sprint 2)
-  │   │   ├── workflow.json (DAG: 9-cell governance×complexity decision matrix + 6 stages + step_files map)
+  │   │   ├── workflow.json (DAG: 9-cell governance×complexity decision matrix + 7 stages + step_files map)
   │   │   ├── overview.md (Phase 2 high-level context, wave analysis, model selection)
-  │   │   └── steps/ (8 step detail files: setup-reread, setup-worktree, impl-dispatch, review-unified, par-evidence, ship-pr, compaction-recovery, holistic-review)
+  │   │   └── steps/ (10 step detail files: setup-reread, setup-worktree, impl-dispatch, review-unified, par-evidence, ship-pr, compaction-recovery, holistic-review, frontend-testing, completion-report)
   │   └── phase3-merge.md (user-initiated merge, 3 stages)
   ├── prompts/
   │   ├── implementer.md (TDD code agent)
@@ -113,4 +113,4 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 - **Codex no PreCompact/PostCompact**: compaction recovery relies on Stop hook dumps + SessionStart re-injection + self-referential rule in AGENTS.md. Less reliable than Claude's hook-based recovery.
 - **Codex context ~258K**: 4x smaller than Claude's 1M. Long Phase 2 runs (4+ sprints) require session-per-wave/session-per-sprint strategy or aggressive /compact usage.
 - **Per-event-type key allowlist**: `sf_emit` validates key names against an identifier regex and the event type against a global allowlist, but does not yet validate which keys are legal per event type. Practical injection is blocked; semantic key validation deferred to a future sprint.
-<!-- updated-by-superflow:2026-04-25 -->
+<!-- updated-by-superflow:2026-04-26 -->
