@@ -45,8 +45,28 @@ gh pr create --base main --title "Sprint 1: [title]" --body "..."
 # Sprint N (N > 1) — base is previous sprint's branch:
 git push -u origin feat/<feature>-sprint-N
 gh pr create --base feat/<feature>-sprint-$(( N - 1 )) --title "Sprint N: [title]" --body "..."
-# Note: GitHub auto-retargets this PR to main once the prior sprint merges.
 ```
+
+**Note:** GitHub does NOT automatically retarget stacked PRs — the orchestrator must rebase and
+retarget explicitly after the parent sprint merges (see section below).
+
+#### Stack rebase and retarget after parent merges
+
+After the previous sprint's PR merges, run from the dependent sprint's worktree:
+
+```bash
+# After the previous sprint's PR merges:
+git fetch origin main
+git rebase origin/main          # rebase the dependent sprint onto fresh main
+git push --force-with-lease     # update the remote branch (safe variant; never use --force)
+gh pr edit <pr_number> --base main   # retarget the PR to main
+gh pr checks <pr_number>        # wait for CI green before proceeding
+```
+
+- `--force-with-lease` is the safe force-push variant; never use bare `--force` here.
+- The dependent PR's diff will appear incomplete until the rebase + retarget completes — this is
+  expected. Verify with `gh pr view <pr_number>` after retargeting.
+- Per enforcement rule 8a: CI must be green before merging. Never use `gh pr merge --admin`.
 
 ### `trunk_based`
 ```bash
