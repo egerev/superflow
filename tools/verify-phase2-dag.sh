@@ -203,7 +203,9 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "[ Check 6: Step files exist on disk ]"
 
-# Use python3 to parse the step_files object and check non-null values
+# Use python3 to parse the step_files object and check non-null values.
+# Wrapped in if-block so a python non-zero exit increments FAIL and continues
+# to the consolidated summary rather than aborting the script under set -e.
 if _WORKFLOW_JSON="$WORKFLOW_JSON" _STEPS_DIR="$STEPS_DIR" python3 - <<'PYTHON'
 import json, os, sys
 
