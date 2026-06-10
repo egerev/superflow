@@ -17,17 +17,17 @@ Only then resume work.
 2a. **Use isolated branches/worktrees.** For sprint-based modes, use `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`. For `solo_single_pr`, use one `feat/<feature>` branch/worktree for the run. Verify `.worktrees/` is in `.gitignore` before creating.
 3. **Hierarchical dispatch is allowed when configured.** Recommended Codex config is `[agents] max_threads=6, max_depth=2`. With `max_depth>=2`, the orchestrator may dispatch independent sprint supervisors in parallel; each sprint supervisor may spawn implement/review/doc agents for that sprint. If the runtime is still `max_depth=1`, fall back to flat sequential sprints and report that config upgrade is needed for sprint-level parallelism.
 4. **Unified Review before every PR** (2 agents for standard/critical sprints; single Technical reviewer for light-mode sprints):
-   1. Dispatch Claude Opus 4.7 as product reviewer: `$TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "PRODUCT_REVIEW_PROMPT" 2>&1`
+   1. Dispatch Claude Fable 5 as product reviewer: `$TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "PRODUCT_REVIEW_PROMPT" 2>&1`
    2. Use spawn_agent tool to dispatch Codex technical reviewer (agent: "standard-code-reviewer")
    3. Wait for both. Fix confirmed issues (NEEDS_FIXES, REQUEST_CHANGES, or FAIL). Re-review only flagging agent.
    4. Run mandatory sprint documentation update (`CLAUDE.md` + `llms.txt`) before PR creation. `llms.txt` must be explicitly checked on every sprint, even if unchanged.
    5. Run documentation review after the update/unchanged decision. It must verify `llms.txt` and `CLAUDE.md` reflect the sprint diff and contain no stale paths/commands.
-   6. Write `.par-evidence.json`: `{"sprint":N,"claude_product":"ACCEPTED","technical_review":"APPROVE","docs_update":"UPDATED|UNCHANGED","docs_review":"PASS","provider":"claude-opus-4-7|split-focus","ts":"..."}`
+   6. Write `.par-evidence.json`: `{"sprint":N,"claude_product":"ACCEPTED","technical_review":"APPROVE","docs_update":"UPDATED|UNCHANGED","docs_review":"PASS","provider":"claude-fable-5|split-focus","ts":"..."}`
    7. GATE: `git push` / `gh pr create` blocked until `.par-evidence.json` exists with review verdicts passing, `docs_update` set, and `docs_review` = `PASS`.
    8. Pass verdicts: APPROVE, ACCEPTED, PASS. Fail verdicts: REQUEST_CHANGES, NEEDS_FIXES, FAIL.
 5. **Tests with evidence.** Paste actual output before claiming done.
 6. **Re-read phase docs** at each sprint boundary. Read `references/codex/<phase>.md` for dispatch patterns, main `references/<phase>.md` for workflow logic.
-7. **Dual-model reviews: specialize, don't duplicate.** Claude Opus 4.7 = Product lens (spec fit, user scenarios, data integrity). Codex = Technical lens (correctness, security, architecture). No overlapping roles.
+7. **Dual-model reviews: specialize, don't duplicate.** Claude Fable 5 = Product lens (spec fit, user scenarios, data integrity). Codex = Technical lens (correctness, security, architecture). No overlapping roles.
 8. **No secondary provider = two Codex agents.** Product (product-reviewer) + Technical (code-reviewer) via spawn_agent.
 9. **PR policy follows git workflow mode.** `solo_single_pr` creates one final PR; `sprint_pr_queue`, `stacked_prs`, and `parallel_wave_prs` create PRs per sprint; `trunk_based` creates short-lived PRs per deployable slice. Execute silently after plan approval.
 9a. **NEVER `gh pr merge --admin`.** If CI is red, fix CI first.
@@ -35,11 +35,12 @@ Only then resume work.
 11. **Governance mode fixed for the run.**
 12. **Orchestrator delegates investigation to subagents.** In Phase 2, orchestrator does NOT read source files >50 lines directly. Dispatch "deep-analyst" via spawn_agent and require a <2k-token summary. Exceptions: files <50 lines, state files, single-line status outputs.
 13. **Event emission on state transition.** Call `sf_emit <event> [key=value...]` at every meaningful state change: `phase.start`, `stage.start`, `stage.end`, `sprint.start`, `sprint.end`, `compact.pre`, `compact.post`. Run the preloader block at the top of every phase doc bash usage before calling `sf_emit`. If `sf_emit` is unavailable after the preloader, events are silently dropped (no-op fallback) — this is intentional and must never cause a script error.
+14. **Testcontainers hygiene.** Implementers gate Ryuk on CI only: set `TESTCONTAINERS_RYUK_DISABLED` exclusively when `process.env.CI === "true"` — never locally. Cleanup of leftover containers is label-based, never name-regex: match via `docker ps -aq --filter "label=org.testcontainers=true"` (testcontainers stamps this label on every container it starts). The orchestrator may run ONLY the helper `bash $SUPERFLOW_SKILL_ROOT/tools/cleanup-testcontainers.sh` — raw docker commands stay outside the orchestrator budget.
 
 ## Claude Product Reviewer Invocation
 
 ```bash
-$TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "PROMPT" 2>&1
+$TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "PROMPT" 2>&1
 # No secondary → two Codex agents with split focus (Product + Technical)
 ```
 
@@ -47,8 +48,8 @@ $TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "PROMPT" 2>&1
 
 | Tier | Codex Agent (spawn_agent) | Claude (secondary) | When |
 |------|---------------------------|---------------------|------|
-| **deep** | deep analyst/implementer/reviewer agents (gpt-5.5, xhigh); deep-doc-writer (gpt-5.5, high) | `claude --model claude-opus-4-7 --effort xhigh -p` for product lens | Phase 0 audit, Phase 1 spec review, Phase 2 holistic |
-| **standard** | standard-* agents (gpt-5.5, high) | `claude --model claude-opus-4-7 --effort xhigh -p` for product lens | Phase 1 plan review, Phase 2 unified review, Phase 3 docs |
+| **deep** | deep analyst/implementer/reviewer agents (gpt-5.5, xhigh); deep-doc-writer (gpt-5.5, high) | `claude --model claude-fable-5 --effort xhigh -p` for product lens | Phase 0 audit, Phase 1 spec review, Phase 2 holistic |
+| **standard** | standard-* agents (gpt-5.5, high) | `claude --model claude-fable-5 --effort xhigh -p` for product lens | Phase 1 plan review, Phase 2 unified review, Phase 3 docs |
 | **fast** | fast-implementer (gpt-5.5, medium) | N/A | Simple implementation tasks |
 
 ## Phase Doc Routing
@@ -56,6 +57,10 @@ $TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "PROMPT" 2>&1
 For each phase, read TWO files:
 1. **Workflow logic**: `references/phase<N>*.md` (shared, Claude-native — ignore Agent() syntax)
 2. **Dispatch patterns**: `references/codex/phase<N>*.md` (Codex-native — use these for actual dispatch)
+
+## Deployed Copy Sync
+
+SKILL.md startup syncs deployed copies by checksum (`cmp -s`, overwrite on mismatch): `codex/AGENTS.md` → `~/.codex/AGENTS.md`, `codex/agents/*.toml` → `~/.codex/agents/`. Exception: `~/.codex/hooks.json` is installed only if missing — if it exists and differs, it is NEVER overwritten (users hold local customizations); startup prints a one-line warning asking to merge manually.
 
 ## Test & Process Discipline
 

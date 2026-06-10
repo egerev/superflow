@@ -79,6 +79,19 @@ End with:
 
 ### Verdict: APPROVE | REQUEST_CHANGES
 
+## Machine-Readable Verdict (mandatory)
+
+Your final message MUST end with a fenced json block. The orchestrator extracts this block mechanically (fence extraction piped to jq) and assembles `.par-evidence.json` directly from its fields — no prose parsing:
+
+```json
+{"verdict": "APPROVE|REQUEST_CHANGES", "findings": [{"severity": "critical|high|medium|low", "file": "path/to/file", "line": 0, "scenario": "breakage scenario", "description": "what is wrong"}], "summary": "one-sentence overall assessment"}
+```
+
+- `verdict` must match your prose verdict exactly.
+- Map prose severities to the JSON scale: critical → `critical`, important → `high`, minor → `low`.
+- `findings` is an empty array `[]` when there are none.
+- Nothing may follow the closing fence.
+
 ## Verification
 
 Before submitting your verdict, confirm:
@@ -88,3 +101,4 @@ Before submitting your verdict, confirm:
 - [ ] Each finding includes file:line, problem, and a concrete fix.
 - [ ] You acknowledged at least one strength of the implementation.
 - [ ] You only flagged issues in changed code, not pre-existing problems.
+- [ ] Your final message ends with the fenced json verdict block, and its `verdict` matches your prose verdict.

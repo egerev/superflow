@@ -19,7 +19,7 @@ complete before this stage). Required fields:
 - `technical_review` — technical review verdict
 - `docs_update` — `"UPDATED"` or `"UNCHANGED"`
 - `docs_review` — `"PASS"`
-- `provider` — `"codex"`, `"split-focus"`, etc.
+- `provider` — `"codex"`, `"code-review-skill"`, or `"split-focus"`
 - `ts` — ISO timestamp
 
 Standard/critical sprint example:
@@ -59,6 +59,40 @@ Light governance sprint example (`par_skip_product: true`):
 `claude_product: "SKIPPED"` is ONLY valid when `par_skip_product: true` AND `governance: "light"`.
 For standard or critical sprints, regardless of complexity, `claude_product` MUST be `"ACCEPTED"`.
 
+## Mechanical Assembly from Verdict Blocks
+
+`.par-evidence.json` is assembled mechanically from the reviewers' fenced JSON verdict blocks
+(see `review-unified.md` § Verdict Contract) — never from prose. Extract each verdict, then build
+the file with jq:
+
+```bash
+extract_verdict() {  # $1 = file holding the reviewer's final message
+  awk '/^```json$/{f=1; buf=""; next} /^```/{f=0; next} f{buf=buf $0 ORS} END{printf "%s", buf}' \
+    "$1" | jq -r '.verdict'
+}
+
+PRODUCT=$(extract_verdict product-review.txt)   # use "SKIPPED" when par_skip_product+light
+TECH=$(extract_verdict technical-review.txt)
+
+jq -n \
+  --argjson sprint "$SPRINT_NUM" \
+  --arg governance "$GOVERNANCE" \
+  --arg complexity "$COMPLEXITY" \
+  --argjson skip "$PAR_SKIP_PRODUCT" \
+  --arg product "$PRODUCT" \
+  --arg tech "$TECH" \
+  --arg docs_update "$DOCS_UPDATE" \
+  --arg docs_review "$DOCS_REVIEW" \
+  --arg provider "$PROVIDER" \
+  '{sprint: $sprint, governance: $governance, complexity: $complexity,
+    par_skip_product: $skip, claude_product: $product, technical_review: $tech,
+    docs_update: $docs_update, docs_review: $docs_review, provider: $provider,
+    ts: (now | todate)}' > .par-evidence.json
+```
+
+If a reviewer's message has no parseable verdict block, that is not a verdict — re-engage the
+reviewer (SendMessage, see `review-unified.md`) for the block instead of inferring one from prose.
+
 ## Verdict Mapping
 
 | Verdict from agent | Meaning | Action |
@@ -71,11 +105,18 @@ If any agent returned issues, fix and re-run that agent before writing `.par-evi
 
 ## No Secondary Provider
 
-When Codex/secondary unavailable, split-focus fallback:
-- Agent A (Product): `standard-product-reviewer` — spec fit, user scenarios, data integrity
-- Agent B (Technical): `standard-code-reviewer` — correctness, security, architecture
+Technical-lens fallback chain when `codex exec review` is unavailable:
 
-Record: `{"provider":"split-focus","claude_product":"ACCEPTED","technical_review":"APPROVE",...}`
+1. **Native `/code-review` skill** — invoke via the Skill tool at `high` effort (technical lens only). Record `provider: "code-review-skill"`.
+2. **Split-focus Claude agents** (last resort when Skill tool also unavailable):
+   - Agent A (Product): `standard-product-reviewer` — spec fit, user scenarios, data integrity
+   - Agent B (Technical): `standard-code-reviewer` — correctness, security, architecture
+   Record `provider: "split-focus"`.
+
+Examples:
+- Codex → `{"provider":"codex","claude_product":"ACCEPTED","technical_review":"APPROVE",...}`
+- /code-review skill → `{"provider":"code-review-skill","claude_product":"ACCEPTED","technical_review":"APPROVE",...}`
+- Split-focus → `{"provider":"split-focus","claude_product":"ACCEPTED","technical_review":"APPROVE",...}`
 
 ## Gate Before `gh pr create`
 

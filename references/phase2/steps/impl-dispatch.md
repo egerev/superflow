@@ -35,15 +35,30 @@ Independent sprints (non-overlapping files, no `depends_on` links) run concurren
 worktrees. Parse all sprint `files:` and `depends_on:` metadata, build dependency graph, group into
 waves by topological sort. Store wave plan in `.superflow-state.json` under `context.sprint_waves`.
 
-Each parallel sprint agent runs the FULL 6-stage Per-Sprint Flow independently:
+**Claude runtime — implementation-only parallelism.** Subagents CANNOT dispatch further subagents
+via the Agent tool, so a sprint agent can never run reviews or create PRs itself. A parallel wave
+is N implementers dispatched in parallel — one per sprint, each in its own worktree:
+
 ```
+# One call per sprint in the wave — implementation ONLY:
 Agent(
-  subagent_type: "standard-implementer",
-  model: "sonnet",  # ALWAYS explicit
+  subagent_type: "standard-implementer",  # tier per complexity table below
+  model: "sonnet",                        # ALWAYS explicit
   run_in_background: true,
-  prompt: "Execute Sprint N: [title] — full Per-Sprint Flow. ..."
+  prompt: "Implement Sprint N: [title] in worktree .worktrees/sprint-N — tasks, code, tests only.
+           Do NOT review, update docs, write PAR evidence, or create PRs."
 )
 ```
+
+As each implementer finishes, the ORCHESTRATOR runs the remaining stages for that sprint
+sequentially: review → docs → PAR → ship. FORBIDDEN on Claude runtime: dispatching one
+implementer to "execute the full Per-Sprint Flow" — reviews and PR creation inside an implementer
+are impossible (no nested Agent dispatch), so that pattern silently skips every gate.
+
+**Codex runtime exception.** With `[agents] max_threads=6, max_depth=2`, sprint supervisors
+spawned via `spawn_agent` CAN spawn their own per-sprint implement/review/doc agents — the full
+per-sprint flow inside a supervisor is allowed there. Old `max_depth=1` configs fall back to
+sequential sprints. See `references/codex-dispatch-patterns.md`.
 
 Fallback: if ≤3 total sprints or all sprints form a single dependency chain, run sequentially.
 Holistic review is mandatory when `max_parallel > 1` (enforcement rule 9).
@@ -55,11 +70,12 @@ Sprint complexity tag in the plan drives implementer tier:
 | Complexity | Agent | Model | Effort | When |
 |-----------|-------|-------|--------|------|
 | simple | fast-implementer | sonnet | low | 1-2 files, CRUD/template, <50 lines |
-| medium | standard-implementer | sonnet | medium | 2-5 files, some new logic. Default if untagged. |
-| complex | deep-implementer | sonnet | high | 5+ files, new architecture, security-sensitive |
+| medium | standard-implementer | sonnet | high | 2-5 files, some new logic. Default if untagged. |
+| complex | deep-implementer | sonnet | max | 5+ files, new architecture, security-sensitive |
 
-**ALWAYS pass `model: "sonnet"` explicitly** — frontmatter `model:` is NOT reliably inherited.
-Without it, subagents inherit the parent's model (Opus), wasting tokens.
+**ALWAYS pass `model: "sonnet"` explicitly for implementers** — frontmatter `model:` is NOT
+reliably inherited. A forgotten `model:` now silently inherits the parent frontier model (Fable) —
+the cost of forgetting went UP.
 
 Include `llms.txt` content in agent context (if file exists).
 Extract and paste the exact task list, file paths, and expected behaviors verbatim into the

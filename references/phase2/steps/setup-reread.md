@@ -26,7 +26,9 @@ context budget monotonically.
 
 ## Heartbeat Check
 
-Before any tool call that advances work, check `.superflow-state.json` for a `heartbeat` block.
+**Claude runtime cadence:** check the `heartbeat` block in `.superflow-state.json` at sprint
+boundaries, stage transitions, and immediately after any compaction/summarization — not literally
+every turn. **Codex runtime:** every-turn discipline unchanged (no PreCompact hook, 258K context).
 If `heartbeat.must_reread` lists paths missing from context, Read them immediately (skip missing
 paths, warn with one line). If `heartbeat.updated_at` is >30 min old, emit a fresh snapshot.
 
@@ -72,7 +74,7 @@ os.replace(tmp, state_file)
 ```bash
 python3 -c "
 import json, datetime, sys, os, tempfile
-STAGE_INDEXES = {'setup':0,'implementation':1,'review':2,'par':3,'docs':4,'ship':5}
+STAGE_INDEXES = {'setup':0,'implementation':1,'review':2,'docs':3,'par':4,'ship':5,'completion':6}
 state_file = '.superflow-state.json'
 s = json.load(open(state_file))
 stage = sys.argv[1]
@@ -89,7 +91,8 @@ with os.fdopen(fd, 'w') as f:
     json.dump(s, f, indent=2)
 os.replace(tmp, state_file)
 " \"\$NEXT_STAGE\" \"\$SPRINT_NUM\"
-# NEXT_STAGE: one of setup | implementation | review | par | docs | ship
+# NEXT_STAGE: one of setup | implementation | review | docs | par | ship | completion
+#             (stage order mirrors references/phase2/workflow.json)
 # SPRINT_NUM: current sprint number (e.g., 1, 2, 3)
 # heartbeat.phase2_step is the authoritative source of current stage on resume.
 ```

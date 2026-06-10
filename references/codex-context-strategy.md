@@ -57,12 +57,15 @@ The orchestrator only keeps summaries, not raw content.
 
 Recommended setting in `~/.codex/config.toml`:
 ```toml
+# Top-level key — MUST appear BEFORE any [table] header
+model_auto_compact_token_limit = 200000
+
 [agents]
 max_threads = 6
 max_depth = 2
-
-model_auto_compact_token_limit = 200000
 ```
+
+**Warning:** `model_auto_compact_token_limit` is a top-level key — a blank line does NOT end a TOML table, so placing it after `[agents]` puts it inside that table, where Codex silently ignores it and auto-compaction never fires.
 
 `max_depth=2` enables sprint supervisors to spawn per-sprint implement/review/doc agents. The auto-compact limit triggers automatic compaction at ~200K tokens, leaving ~58K headroom for the current operation to complete.
 

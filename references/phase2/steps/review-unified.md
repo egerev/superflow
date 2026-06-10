@@ -17,33 +17,93 @@ First, look up `decision_matrix.review_config[governance_mode+"+"+complexity]` i
 
 Both agents receive: the SPEC, the product brief, and the relevant git diff.
 
-## With Codex Available (`codex --version 2>/dev/null` exits 0)
+**Dispatch Claude reviewers as NAMED background agents** so they can be re-engaged after fixes
+with their original context intact:
 
 ```
-a. Agent(subagent_type: "standard-product-reviewer", run_in_background: true,
-         prompt: "[SPEC + brief + diff context]")
-b. $TIMEOUT_CMD 600 codex exec review --base main -c model_reasoning_effort=high --ephemeral \
-     - < <(echo "SPEC_CONTEXT" | cat - prompts/codex/code-reviewer.md) 2>&1  [run_in_background]
+Agent(
+  subagent_type: "standard-product-reviewer",  # deep-product-reviewer for deep tier
+  model: "opus",                               # standard tier; deep tier → model: "fable"
+  name: "sprint-<N>-product-reviewer",
+  run_in_background: true,
+  prompt: "[SPEC + brief + diff context]"
+)
 ```
-For deep tier, use `deep-product-reviewer` and `model_reasoning_effort=high`.
 
-## Without Codex (Split-Focus Fallback — 2 Claude Agents)
+## Technical Lens — Fallback Chain
 
+1. **Primary — Codex** (`codex --version 2>/dev/null` exits 0):
+   ```
+   $TIMEOUT_CMD 600 codex exec review --base main -m gpt-5.5 -c model_reasoning_effort=high --ephemeral \
+        - < <(echo "SPEC_CONTEXT" | cat - prompts/codex/code-reviewer.md) 2>&1  [run_in_background]
+   ```
+   For deep tier, use `model_reasoning_effort=xhigh` (and `deep-product-reviewer` on the product
+   side). Record `"provider": "codex"`.
+2. **Fallback — native `/code-review` skill**: invoke via the Skill tool at high effort. Record
+   `"provider": "code-review-skill"`. Note: `/code-review ultra` CANNOT be launched by the agent
+   (user-triggered, billed) — it is only ever SUGGESTED to the user as an optional extra gate at
+   Phase 3 pre-merge.
+3. **Last resort — split-focus, 2 Claude agents:**
+   ```
+   a. Agent(subagent_type: "standard-product-reviewer", model: "opus",
+            name: "sprint-<N>-product-reviewer", run_in_background: true,
+            prompt: "Focus: spec fit, user scenarios, data integrity")
+   b. Agent(subagent_type: "standard-code-reviewer", model: "opus",
+            name: "sprint-<N>-technical-reviewer", run_in_background: true,
+            prompt: "Focus: correctness, security, architecture, performance")
+   ```
+   Record `"provider": "split-focus"` in `.par-evidence.json`.
+
+## Verdict Contract (Mechanical Extraction)
+
+Every reviewer agent ends its final message with a fenced `json` block:
+
+```json
+{
+  "verdict": "APPROVE|ACCEPTED|PASS|REQUEST_CHANGES|NEEDS_FIXES|FAIL",
+  "findings": [
+    {"severity": "critical|high|medium|low", "file": "...", "line": 0,
+     "scenario": "breakage scenario", "description": "..."}
+  ],
+  "summary": "..."
+}
 ```
-a. Agent(subagent_type: "standard-product-reviewer", run_in_background: true,
-         prompt: "Focus: spec fit, user scenarios, data integrity")
-b. Agent(subagent_type: "standard-code-reviewer", run_in_background: true,
-         prompt: "Focus: correctness, security, architecture, performance")
+
+The orchestrator extracts it mechanically — no prose parsing:
+
+```bash
+# review-output.txt holds the reviewer's final message:
+awk '/^```json$/{f=1; buf=""; next} /^```/{f=0; next} f{buf=buf $0 ORS} END{printf "%s", buf}' \
+  review-output.txt | jq -r '.verdict'
 ```
-Record `"provider": "split-focus"` in `.par-evidence.json`.
+
+`.par-evidence.json` is assembled from these verdict fields — see `par-evidence.md`. A reviewer
+reply without a parseable verdict block is not a verdict: re-engage that reviewer and ask for the
+block.
 
 ## Wait, Aggregate, Fix
 
-Wait for both agents. Aggregate findings:
-- CRITICAL / REQUEST_CHANGES from either agent = fix required
-- Fix confirmed issues one at a time. Re-run ONLY the agent that flagged issues.
+Wait for both agents. Aggregate the JSON `findings` arrays:
+- Any REQUEST_CHANGES / NEEDS_FIXES / FAIL verdict, or any critical finding = fix required
+- Fix confirmed issues one at a time. Re-review ONLY the agent that flagged issues.
 - If a finding is incorrect (reviewer lacked context), record disagreement with technical reasoning
   in the PR description and skip that fix. Do NOT fix based on incorrect context.
+
+**Re-review via SendMessage.** After fixes, re-engage the SAME named background reviewer — its
+original context is intact — scoped to the fix diff plus its original findings:
+
+```
+SendMessage(
+  to: "sprint-<N>-product-reviewer",
+  message: "Fixes applied. Re-review scoped to this diff: [fix diff].
+            Your original findings: [findings JSON from the verdict block].
+            Reply with an updated verdict block."
+)
+```
+
+Cold re-dispatch (fresh Agent call with the fix diff + original findings) is the fallback if the
+agent is gone. For Codex technical reviews, commit the fixes first (secondary providers see only
+committed HEAD), then re-run `codex exec review` against the updated HEAD.
 
 After all fixes: run full test suite. Paste actual output as evidence (enforcement rule 4).
 

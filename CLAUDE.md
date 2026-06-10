@@ -1,7 +1,7 @@
 # Superflow — Claude Instructions
 
 ## Project Overview
-Superflow is a pure Markdown skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, Product Vision alignment, and git workflow selection, autonomous execution with a selected branch/PR strategy, and merge. v5.3.0, MIT License. Supports both **Claude Code** and **Codex CLI** as primary orchestrator (auto-detected at startup via `$CLAUDE_CODE_SESSION_ID`).
+Superflow is a pure Markdown skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, Product Vision alignment, and git workflow selection, autonomous execution with a selected branch/PR strategy, and merge. v5.4.0, MIT License. Supports both **Claude Code** and **Codex CLI** as primary orchestrator (auto-detected at startup via `$CLAUDE_CODE_SESSION_ID`).
 
 ## Key Rules
 - All documentation output in English — user communication follows their language preference
@@ -12,8 +12,8 @@ Superflow is a pure Markdown skill that orchestrates a 4-phase dev workflow: onb
 
 ## Architecture
 ```
-SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
-  ├── superflow-enforcement.md (durable rules → ~/.claude/rules/)
+SKILL.md (entry point, ~260 lines, 10-step startup checklist, auto-detects Claude/Codex runtime)
+  ├── superflow-enforcement.md (durable rules → ~/.claude/rules/, checksum-synced at startup)
   ├── codex/
   │   ├── AGENTS.md (durable rules for Codex → ~/.codex/AGENTS.md)
   │   ├── agents/*.toml (12 Codex agent definitions → ~/.codex/agents/)
@@ -49,19 +49,27 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
   │   ├── claude-md-writer.md (CLAUDE.md generation)
   │   ├── testing-guidelines.md (TDD reference)
   │   ├── security-audit.md (Claude security fallback for Phase 0)
+  │   ├── claude/ (Claude secondary prompts for Codex runtime: audit, code-reviewer, product-reviewer)
   │   └── codex/ (Codex-specific prompts: code-reviewer, product-reviewer, audit)
-  ├── agents/ (12 agent definitions — deep/standard/fast tiers with effort frontmatter)
+  ├── agents/ (12 agent definitions — deep/standard/fast tiers with model+effort frontmatter)
+  ├── tools/
+  │   ├── sf-emit.sh (JSONL event emission library)
+  │   ├── verify-phase2-dag.sh (static DAG verifier)
+  │   ├── measure-phase2-context.sh (context savings quantifier)
+  │   └── cleanup-testcontainers.sh (label-based testcontainers cleanup — only docker command in orchestrator budget)
   ├── templates/
   │   ├── superflow-state-schema.json (state file JSON Schema)
+  │   ├── event-schema.json (event log JSON Schema — 21 event types)
   │   ├── greenfield/ (stack scaffolding: nextjs.md, python.md, generic.md)
   │   └── ci/ (CI workflows: github-actions-node.yml, github-actions-python.yml)
+  └── .github/workflows/ci.yml (repo CI: shellcheck, DAG verify, JSON validation, forbidden-token gate)
 ```
 
 **Key v4.0 artifacts:**
 - **Autonomy Charter** (`docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`): generated at end of Phase 1, injected into every sprint prompt and reviewer. Contains goal, non-negotiables, success criteria, governance mode, and git workflow mode.
 - **completion-data.json** (`.superflow/completion-data.json`): structured completion data for Phase 3 merge context.
 - **Heartbeat block** (optional field in `.superflow-state.json`): compaction-recovery snapshot written at sprint start and each stage transition. 9 fields: `updated_at`, `current_sprint`, `sprint_goal`, `merge_method`, `active_worktree`, `active_branch`, `must_reread`, `last_review_verdict`, `phase2_step`. Enforced by Rule 12; PreCompact hook surfaces it in the dump.
-- **Event log** (`.superflow/events.jsonl`): append-only JSONL telemetry stream. Each line is a compact JSON object conforming to `templates/event-schema.json` (JSON Schema 2020-12, 524 lines, 20 event types). Emitted via `tools/sf-emit.sh`. `SUPERFLOW_RUN_ID` (UUID) groups all events for a run; persisted to `.superflow-state.json` under `context.run_id` for recovery after `/clear`.
+- **Event log** (`.superflow/events.jsonl`): append-only JSONL telemetry stream. Each line is a compact JSON object conforming to `templates/event-schema.json` (JSON Schema 2020-12, 549 lines, 21 event types incl. `pr.fail`). Emitted via `tools/sf-emit.sh`. `SUPERFLOW_RUN_ID` (lowercase UUID — uuidgen output is piped through `tr '[:upper:]' '[:lower:]'`) groups all events for a run; persisted to `.superflow-state.json` under `context.run_id` for recovery after `/clear`.
 
 ## Key Files
 | File | Purpose |
@@ -84,11 +92,13 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 | `prompts/expert-panel.md` | Expert persona prompt — proposals, challenge, recommendation |
 | `prompts/llms-txt-writer.md` | llmstxt.org standard, no hard size limit |
 | `prompts/claude-md-writer.md` | Verified paths/commands, <200 lines target |
-| `tools/sf-emit.sh` | Source-safe bash library for emitting JSONL events; usage: `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true` (356 lines) |
+| `tools/sf-emit.sh` | Source-safe bash library for emitting JSONL events; usage: `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true` (360 lines) |
 | `tools/verify-phase2-dag.sh` | Static DAG verifier — validates all 9 governance×complexity cells, 7-stage sequence, step_files coverage, and on-disk step file existence; exits 0 on full pass |
 | `tools/measure-phase2-context.sh` | Context savings quantifier — computes pre-Run-3 vs post-Run-3 per-turn token load using git history; outputs a one-line summary (Savings: 76.4%) |
+| `tools/cleanup-testcontainers.sh` | Testcontainers cleanup helper — label-based selection (`docker ps -aq --filter "label=org.testcontainers=true"`), optional ancestor filter, idempotent; the ONLY docker-touching command in the orchestrator's Rule 11 budget (37 lines) |
 | `hooks/precompact-state-externalization.sh` | PreCompact hook — sources sf-emit, emits `compact.pre`/`compact.post` events with absolute path to the dump file |
-| `templates/event-schema.json` | JSON Schema 2020-12 for all event types — envelope fields + 20 per-type data schemas, additive evolution policy (524 lines) |
+| `templates/event-schema.json` | JSON Schema 2020-12 for all event types — envelope fields + 21 per-type data schemas incl. `pr.fail`, additive evolution policy (549 lines) |
+| `.github/workflows/ci.yml` | Repo CI on push/PR to main — `shellcheck -S error` over `tools/*.sh hooks/*.sh`, `verify-phase2-dag.sh`, `jq empty` over tracked JSON, forbidden-token gate (stale Opus-4.7 model pin; Ryuk env var without the `TESTCONTAINERS_` prefix) (46 lines) |
 
 ## Conventions
 - Pure Markdown skill (no Python, no pip dependencies)
@@ -103,16 +113,20 @@ SKILL.md (entry point, ~240 lines, auto-detects Claude/Codex runtime)
 - **Git workflow modes** (`solo_single_pr`, `sprint_pr_queue`, `stacked_prs`, `parallel_wave_prs`, `trunk_based`): selected in Phase 1, stored in state and charter, and controls branch base, PR count, sprint parallelism, and merge order
 - **Product Vision alignment**: Phase 1 uses a single recommendation-led decision brief with options, tradeoffs, reversibility, safe defaults, and support for "do what you recommend", one-message, or audio-transcript answers. It replaces the old design-tree grilling pattern.
 - **Autonomy Charter**: durable intent artifact generated at end of Phase 1. Injected into sprint prompts and reviewers as single source of truth for autonomous execution boundaries
-- **Event emission**: `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true key:json='{"x":1}'`. Typed key syntax: bare `=` → string, `:int=` → number, `:bool=` → boolean, `:json=` → raw JSON. jq-only construction; validates type against allowlist and key names against identifier regex before emitting one compact JSONL line.
-- **Codex model policy**: Codex subagents and Claude-runtime `codex exec` secondary calls use `gpt-5.5`; deep analyst/implementer/reviewer roles use `xhigh`, standard roles use `high`, and fast implementer uses `medium`. Codex-runtime Claude product/research secondary calls use exact model `claude-opus-4-7` with `--effort xhigh`.
+- **Event emission**: `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true key:json='{"x":1}'`. Typed key syntax: bare `=` → string, `:int=` → number, `:bool=` → boolean, `:json=` → raw JSON. jq-only construction; validates type against allowlist and key names against identifier regex before emitting one compact JSONL line. `pr.fail` (added in 5.4.0) is emitted when a PR CI run concludes red or a PR is abandoned: `pr_number` (int, required), `reason` (string, required), `ci_run_id` (string, optional).
+- **Model tier policy**: agent frontmatter is the single source of truth — deep-spec/code/product-reviewer + deep-analyst = `fable`/max; deep-doc-writer = `opus`/max; deep-implementer = `sonnet`/max; standard reviewers + standard-doc-writer = `opus`/high; standard-implementer = `sonnet`/high; fast-implementer = `sonnet`/low. Always pass `model:` explicitly in Agent() calls (implementers → sonnet, standard reviewers/doc-writers → opus, deep reviewers/analyst → fable) — a forgotten `model:` silently inherits the parent frontier model (Fable).
+- **Reviewer verdict contract**: every reviewer ends its final message with a fenced `json` block — `{"verdict": ..., "findings": [{severity, file, line, scenario, description}], "summary": ...}`. The orchestrator extracts the fence (awk → jq) and assembles `.par-evidence.json` mechanically — no prose parsing. Re-review goes to the SAME named background reviewer via SendMessage (cold re-dispatch as fallback).
+- **Deploy checksum sync**: SKILL.md startup (step 4) syncs deployed copies via `cmp -s` + overwrite-on-mismatch — `superflow-enforcement.md` → `~/.claude/rules/` and `agents/*.md` → `~/.claude/agents/` (Claude runtime); `codex/agents/*.toml` → `~/.codex/agents/` and `codex/AGENTS.md` → `~/.codex/AGENTS.md` (Codex runtime). Exception: `~/.codex/hooks.json` is installed only if missing, never overwritten (one-line warning asks to merge manually).
+- **Testcontainers canon**: the only env var is `TESTCONTAINERS_RYUK_DISABLED`, set exclusively when `process.env.CI === "true"` — the duty lives in `agents/*-implementer.md` definitions. Orchestrator cleanup runs ONLY `bash $SUPERFLOW_SKILL_ROOT/tools/cleanup-testcontainers.sh` (label-based `label=org.testcontainers=true`); name-regex matching and raw `docker` commands are forbidden.
+- **Heartbeat cadence**: Claude runtime checks heartbeat/`must_reread` at sprint boundaries, stage transitions, and immediately after compaction/summarization; Codex runtime keeps every-turn discipline (no PreCompact hook, 258K context).
+- **Codex model policy**: Codex subagents and Claude-runtime `codex exec` secondary calls use `gpt-5.5`; deep analyst/implementer/reviewer roles use `xhigh`, standard roles use `high`, and fast implementer uses `medium`. Codex-runtime Claude product/research secondary calls use exact model `claude-fable-5` with `--effort xhigh`.
 - **Per-PR docs gate**: every PR must run documentation update and separate documentation review before `gh pr create`. In per-sprint PR modes this happens every sprint; in `solo_single_pr` it happens before the final PR. `.par-evidence.json` must include `docs_update` (`UPDATED` or `UNCHANGED`) and `docs_review: PASS`; `llms.txt` is explicitly audited for every PR.
 
 ## Known Issues & Tech Debt
-- Permissions JSON: single-sourced in `references/phase0/stage4-setup.md` (Branch B); `README.md` has a short example with a link to the canonical source
 - Greenfield templates (nextjs.md, python.md) provide config files but not source file contents — LLM generates those
-- **Phase 3 post-compaction merge regression**: context compaction during Phase 3 merge loop can cause agent to fall back to local `git merge` instead of `gh pr merge --rebase --delete-branch`, leaving GitHub PRs open and creating non-linear history. Mitigated by: (1) merge method rule in `superflow-enforcement.md` (survives compaction); (2) heartbeat `must_reread` includes `references/phase3-merge.md` starting at Sprint 1 end — compaction-triggered rehydration pulls the exact Phase 3 merge procedure into context automatically. Full fix: re-read `phase3-merge.md` before each PR merge (already in must_reread via Phase 2 heartbeat).
+- **Phase 3 post-compaction merge regression**: context compaction during Phase 3 merge loop can cause agent to fall back to local `git merge` instead of `gh pr merge --rebase --delete-branch`. Mitigated by: (1) merge method rule in `superflow-enforcement.md` (survives compaction); (2) heartbeat `must_reread` includes `references/phase3-merge.md`; (3) since 5.4.0 — Claude runtime waits for PR checks via the native Monitor tool (no manual polling drift) and post-merge verification reads `baseline_test_cmd` from `.superflow/completion-data.json` via jq with Autonomy Charter fallback (the fragile `sprint-queue.json` python one-liner is gone). Residual risk: re-read `phase3-merge.md` before each PR merge after compaction.
 - **Codex sprint-level parallelism**: recommended config is `[agents] max_threads=6, max_depth=2`. This allows sprint supervisors to spawn per-sprint implement/review/doc agents, enabling sprint-level parallel waves in Codex when `git_workflow_mode` permits. Old `max_depth=1` configs fall back to sequential sprints.
 - **Codex no PreCompact/PostCompact**: compaction recovery relies on Stop hook dumps + SessionStart re-injection + self-referential rule in AGENTS.md. Less reliable than Claude's hook-based recovery.
 - **Codex context ~258K**: 4x smaller than Claude's 1M. Long Phase 2 runs (4+ sprints) require session-per-wave/session-per-sprint strategy or aggressive /compact usage.
-- **Per-event-type key allowlist**: `sf_emit` validates key names against an identifier regex and the event type against a global allowlist, but does not yet validate which keys are legal per event type. Practical injection is blocked; semantic key validation deferred to a future sprint.
-<!-- updated-by-superflow:2026-04-26 -->
+- **Per-event-type key allowlist**: `sf_emit` validates key names against an identifier regex and the event type against a global allowlist (21 types), but does not yet validate which keys are legal per event type. Practical injection is blocked; semantic key validation deferred to a future sprint.
+<!-- updated-by-superflow:2026-06-11 -->

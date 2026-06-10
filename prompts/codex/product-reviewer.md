@@ -61,6 +61,20 @@ End with:
 
 ### Verdict: ACCEPTED | NEEDS_FIXES
 
+## Machine-Readable Verdict (mandatory)
+
+Your final message MUST end with a fenced json block. The orchestrator extracts this block mechanically (fence extraction piped to jq) and assembles `.par-evidence.json` directly from its fields — no prose parsing:
+
+```json
+{"verdict": "ACCEPTED|NEEDS_FIXES", "findings": [{"severity": "critical|high|medium|low", "file": "path/to/file", "line": 0, "scenario": "breakage scenario", "description": "what is wrong"}], "summary": "one-sentence overall assessment"}
+```
+
+- `verdict` must match your prose verdict exactly.
+- Map prose severities to the JSON scale: blocker → `critical`, concern → `medium`, suggestion → `low`.
+- Use the affected file and line when known; otherwise `""` and `0`.
+- `findings` is an empty array `[]` when there are none.
+- Nothing may follow the closing fence.
+
 ## Resolution Guidance
 
 When resolving issues found during review:
@@ -76,3 +90,4 @@ Before submitting your verdict, confirm:
 - [ ] Each finding includes impact.
 - [ ] You did not flag code style, architecture, or test coverage issues.
 - [ ] Blocker-severity findings have a clear explanation of why the user flow is broken.
+- [ ] Your final message ends with the fenced json verdict block, and its `verdict` matches your prose verdict.

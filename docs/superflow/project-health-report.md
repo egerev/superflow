@@ -1,5 +1,7 @@
 # Project Health Report
 
+> **SUPERSEDED (2026-06-11).** This report describes the removed v3.0.0 Python architecture (supervisor CLI, `lib/`, `bin/superflow-supervisor`, pytest suite), none of which exists in the current pure-Markdown skill. Kept for history only — do not act on its findings.
+
 ## Overview
 - **Project:** Superflow v3.0.0 — Claude Code skill (hybrid: Markdown prompts + Python companion CLI)
 - **Stack:** Python 3.10+ (stdlib only, zero third-party dependencies), Markdown skill files

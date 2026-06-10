@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # sf-emit.sh — Superflow event emission library
 # Source-safe: shell options are scoped to sf_emit() only; sourcing this file does not alter caller shell state.
 # Log rotation: threshold-based, triggered every _SF_ROTATION_CHECK_INTERVAL calls inside sf_emit.
@@ -29,7 +30,7 @@
 #   agent.dispatch, agent.complete, agent.fail,
 #   review.start, review.verdict,
 #   test.run, test.result,
-#   pr.create, pr.merge,
+#   pr.create, pr.merge, pr.fail,
 #   compact.pre, compact.post,
 #   heartbeat
 
@@ -52,6 +53,7 @@ _SF_KNOWN_TYPES=(
   test.result
   pr.create
   pr.merge
+  pr.fail
   compact.pre
   compact.post
   heartbeat
@@ -172,8 +174,8 @@ sf_emit() {
 
   # Validate SUPERFLOW_RUN_ID is set
   if [ -z "${SUPERFLOW_RUN_ID:-}" ]; then
-    echo "sf_emit: SUPERFLOW_RUN_ID is not set. Set it before sourcing: export SUPERFLOW_RUN_ID=\"\$(uuidgen)\"" >&2
-    echo "  Hint: in SKILL.md startup, run: export SUPERFLOW_RUN_ID=\"\$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)\"" >&2
+    echo "sf_emit: SUPERFLOW_RUN_ID is not set. Set it before sourcing: export SUPERFLOW_RUN_ID=\"\$(uuidgen | tr '[:upper:]' '[:lower:]')\"" >&2
+    echo "  Hint: in SKILL.md startup, run: export SUPERFLOW_RUN_ID=\"\$( (uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid) | tr '[:upper:]' '[:lower:]')\"" >&2
     return 1
   fi
 
@@ -251,10 +253,12 @@ sf_emit() {
   done
 
   # Generate event fields
-  local event_id ts instance_id
+  local event_id ts instance_id run_id
   event_id="$(_sf_uuid)" || return 1
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   instance_id="${SUPERFLOW_INSTANCE_ID:-default}"
+  # Defensive lowercase: macOS uuidgen emits uppercase UUIDs; the schema run_id pattern requires lowercase
+  run_id="$(printf '%s' "$SUPERFLOW_RUN_ID" | tr '[:upper:]' '[:lower:]')"
 
   # Build complete event JSON via jq — no shell interpolation of user values
   local event_json
@@ -265,7 +269,7 @@ sf_emit() {
     event_json="$(jq -cn \
       --arg id          "$event_id" \
       --arg ts          "$ts" \
-      --arg run_id      "$SUPERFLOW_RUN_ID" \
+      --arg run_id      "$run_id" \
       --arg instance_id "$instance_id" \
       --arg parent_id   "$SF_PARENT_ID" \
       --arg type        "$type" \
@@ -278,7 +282,7 @@ sf_emit() {
     event_json="$(jq -cn \
       --arg id          "$event_id" \
       --arg ts          "$ts" \
-      --arg run_id      "$SUPERFLOW_RUN_ID" \
+      --arg run_id      "$run_id" \
       --arg instance_id "$instance_id" \
       --arg type        "$type" \
       "${jq_args[@]}" \

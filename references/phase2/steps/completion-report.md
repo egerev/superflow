@@ -6,6 +6,21 @@
 
 ---
 
+## Write completion-data.json
+
+Before presenting the report, write `.superflow/completion-data.json` — structured completion data
+for Phase 3 merge context — and record its path in `.superflow-state.json` under
+`context.completion_data_file`. Fields:
+
+- `feature` — feature/run title
+- `sprints` — sprint count
+- `prs` — PR numbers/URLs with status
+- `holistic_review` — verdict, or `"SKIPPED"` with the Rule 9 reason
+- `baseline_test_cmd` (optional, string) — the project test command verified during Phase 2
+  (e.g. `pnpm test`). Phase 3 post-merge verification reads this field via jq; if the file or
+  field is missing, Phase 3 falls back to the test command recorded in the Autonomy Charter.
+- `ts` — ISO timestamp
+
 ## Product Release Format
 
 Present as a **product release report** — what the team built for users, not a sprint log. Think

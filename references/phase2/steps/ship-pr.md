@@ -89,18 +89,22 @@ gh pr create --base main --title "Slice N: [title]" --body "..."
 
 Include in every PR body: description, link to `.par-evidence.json` verdicts, test evidence summary.
 
-## Wait for CI Green
+## Wait for CI to Conclude
 
-After `gh pr create`, run:
+**Claude runtime:** after `gh pr create`, use the native **Monitor** tool — not a manual polling
+loop — to wait until the PR's checks conclude (success or failure), e.g. monitor
+`gh pr checks <pr_number>` until no check is pending. Then branch on the outcome:
+- **Green** → proceed (PR verified, worktree cleanup, merge path when Phase 3 authorizes it).
+- **Red** → emit `pr.fail` (`pr_number`, `reason`, optional `ci_run_id`), then
+  `gh run view <id> --log-failed` to read the failure, fix, push, monitor again.
+  Also emit `pr.fail` if a PR is abandoned.
+
+**Codex runtime:** no Monitor tool — keep the polling loop:
 ```bash
-gh run list --limit 5
+gh run list --limit 5   # repeat until the run concludes; then gh run view <id> --log-failed if red
 ```
 
-Wait for CI to go green. If CI fails:
-1. `gh run view <id> --log-failed` — read the failure
-2. Fix the issue, push, wait for green
-3. NEVER use `gh pr merge --admin` to bypass CI
-
+Either runtime: NEVER use `gh pr merge --admin` to bypass CI.
 **Branch protection is there for a reason. Fix CI first, then merge.**
 
 ## Verify PR Created

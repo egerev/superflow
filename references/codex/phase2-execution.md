@@ -56,9 +56,9 @@ Include in every implementer prompt:
 Check Claude availability: `claude --version 2>/dev/null`
 
 **If Claude available:**
-1. Claude Opus 4.7 product reviewer:
+1. Claude Fable 5 product reviewer:
    ```bash
-   $TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "Review the following sprint for product fit, user scenarios, data integrity, and charter compliance. $(cat prompts/claude/product-reviewer.md)
+   $TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "Review the following sprint for product fit, user scenarios, data integrity, and charter compliance. $(cat prompts/claude/product-reviewer.md)
 
    SPEC: [spec text]
    PRODUCT BRIEF: [brief text]
@@ -83,7 +83,7 @@ Same format as main doc:
   "technical_review": "APPROVE",
   "docs_update": "UPDATED|UNCHANGED",
   "docs_review": "PASS",
-  "provider": "claude-opus-4-7|split-focus",
+  "provider": "claude-fable-5|split-focus",
   "ts": "ISO-8601"
 }
 ```
@@ -113,9 +113,9 @@ Same as main doc (push, PR, cleanup, Telegram). PR creation is blocked until doc
 
 **Required when:** ≥4 sprints, parallel execution was used, `git_workflow_mode` is `parallel_wave_prs` or `stacked_prs`, or governance_mode="critical".
 
-1. Claude Opus 4.7 product reviewer:
+1. Claude Fable 5 product reviewer:
    ```bash
-   $TIMEOUT_CMD 900 claude --model claude-opus-4-7 --effort xhigh -p "Holistic product review of all sprint changes. Focus: end-to-end user flows, data integrity across sprints, spec compliance, and charter compliance. $(cat prompts/claude/product-reviewer.md)" 2>&1
+   $TIMEOUT_CMD 900 claude --model claude-fable-5 --effort xhigh -p "Holistic product review of all sprint changes. Focus: end-to-end user flows, data integrity across sprints, spec compliance, and charter compliance. $(cat prompts/claude/product-reviewer.md)" 2>&1
    ```
 
 2. Codex technical: spawn_agent("deep-code-reviewer") with:

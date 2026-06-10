@@ -255,8 +255,9 @@ After greenfield scaffolding is complete:
    python3 -c "
    import json, datetime
    s = json.load(open('.superflow-state.json'))
+   ctx = s.setdefault('context', {})  # merge — preserve context.run_id and other existing keys
    # Preflight from greenfield selections
-   s['context']['preflight'] = {
+   ctx['preflight'] = {
        'stack': '$STACK_CHOICE',    # e.g., 'nextjs', 'python', 'react_vite'
        'team_size': '1',
        'ci': '$CI_CHOICE',          # 'yes' or 'no'
@@ -264,8 +265,8 @@ After greenfield scaffolding is complete:
        'pm': '$PM',                 # e.g., 'npm', 'pip'
        'formatters': ['$FORMATTER'] # e.g., ['prettier'], ['ruff']
    }
-   s['context']['approval'] = {'mode': 'all', 'items': ['permissions', 'hooks', 'verify_skill', 'claude_local', 'gitignore', 'enforcement']}
-   s['context']['greenfield'] = True
+   ctx['approval'] = {'mode': 'greenfield', 'items': ['permissions', 'hooks', 'verify_skill', 'claude_local', 'gitignore', 'enforcement']}
+   ctx['greenfield'] = True
    s['stage'] = 'setup'
    s['stage_index'] = 3
    s['last_updated'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -273,6 +274,8 @@ After greenfield scaffolding is complete:
    "
    ```
    Replace `$STACK_CHOICE`, `$CI_CHOICE`, `$PM`, `$FORMATTER` with actual values from G2-G4.
+
+   > `mode` MUST be `'greenfield'` — the Stage 4 execution matrix has a dedicated `greenfield` row (Branch A = No). Writing `'all'` would dispatch Branch A and overwrite the docs just generated in G5.
 
 3. **Rejoin Stage 4 (Branch B and C only):**
    - **Skip Branch A** (llms.txt + CLAUDE.md) — these were just created in G5.
@@ -298,7 +301,7 @@ scaffolded project.
 
 ## State Management
 
-On entry to greenfield path, update state:
+On entry to greenfield path, update state — **merge these keys into the existing `.superflow-state.json`** (set `context.greenfield = true` inside the existing `context`; never replace the file or the `context` object wholesale, or `context.run_id` is lost):
 ```json
 {
   "phase": 0,

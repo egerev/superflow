@@ -135,6 +135,8 @@ Report: 'Branch A complete — llms.txt: [created|updated, N entries, marker: ye
 
 Only dispatch if approved. Check `context.approval` before proceeding.
 
+Branch B is mechanical — file-existence and config-pattern edits. It MAY opt in to `model: "haiku"` for cost when the work is pure file-existence/config-pattern checking — pass it explicitly in the Agent() call.
+
 ```
 Agent(
   subagent_type: "fast-implementer",

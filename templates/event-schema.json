@@ -54,6 +54,7 @@
         "test.result",
         "pr.create",
         "pr.merge",
+        "pr.fail",
         "compact.pre",
         "compact.post",
         "heartbeat"
@@ -465,6 +466,30 @@
               "type": "string",
               "enum": ["rebase", "squash", "merge"],
               "description": "Git merge method used"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "type": { "const": "pr.fail" },
+        "data": {
+          "type": "object",
+          "required": ["pr_number", "reason"],
+          "additionalProperties": false,
+          "properties": {
+            "pr_number": {
+              "type": "integer",
+              "description": "GitHub PR number"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the PR failed (e.g. CI run concluded red, PR abandoned)"
+            },
+            "ci_run_id": {
+              "type": "string",
+              "description": "GitHub Actions run ID of the failing CI run (optional)"
             }
           }
         }

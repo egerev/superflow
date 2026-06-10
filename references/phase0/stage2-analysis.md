@@ -177,12 +177,37 @@ Return structured JSON evidence bundle.
 **If Codex is available** (check by running `which codex 2>/dev/null`):
 
 ```bash
-$TIMEOUT_CMD 600 codex exec --full-auto -m gpt-5.5 -c model_reasoning_effort=high "$(cat prompts/codex/audit.md)" 2>&1
+# Guard: in a fresh shell $TIMEOUT_CMD is unset ("600: command not found"). Resolve it first
+# (same helper as SKILL.md "Timeout Helper").
+if [ -z "${TIMEOUT_CMD:-}" ]; then
+  if command -v gtimeout &>/dev/null; then TIMEOUT_CMD="gtimeout"
+  elif command -v timeout &>/dev/null; then TIMEOUT_CMD="timeout"
+  else timeout_fallback() { perl -e 'alarm shift; exec @ARGV' "$@"; }; TIMEOUT_CMD="timeout_fallback"
+  fi
+fi
+
+# Resolve the audit prompt via the skill root — the path is relative to the SKILL directory,
+# NOT the target project CWD (a bare `cat prompts/codex/audit.md` fails in any real project
+# and runs codex with an empty prompt). Same path convention as the sf-emit preloader.
+AUDIT_PROMPT=""
+for _p in \
+    "${SUPERFLOW_SKILL_ROOT:-}/prompts/codex/audit.md" \
+    "$HOME/.claude/skills/superflow/prompts/codex/audit.md" \
+    "$HOME/.codex/skills/superflow/prompts/codex/audit.md" \
+    "$HOME/.agents/skills/superflow/prompts/codex/audit.md"; do
+  if [ -f "$_p" ]; then AUDIT_PROMPT="$_p"; break; fi
+done
+
+if [ -n "$AUDIT_PROMPT" ]; then
+  $TIMEOUT_CMD 600 codex exec --full-auto -m gpt-5.5 -c model_reasoning_effort=xhigh "$(cat "$AUDIT_PROMPT")" 2>&1
+else
+  echo "WARN: prompts/codex/audit.md not found in any skill root — falling back to Claude security agent" >&2
+fi
 ```
 
 Run in background (shell background: append `&`, capture PID). Codex focus: hardcoded secrets, injection vectors, dependency CVEs, CI/CD security gaps.
 
-**If Codex is NOT available**, dispatch Claude instead:
+**If Codex is NOT available** (or `AUDIT_PROMPT` could not be resolved), dispatch Claude instead:
 
 ```
 Agent(
@@ -202,7 +227,7 @@ Return structured JSON evidence bundle.
 
 ### Agent 4 — DevOps (fast-implementer)
 
-DevOps checks are mechanical — file existence, config patterns. Sonnet is sufficient.
+DevOps checks are mechanical — file existence, config patterns. Sonnet is sufficient. Such mechanical dispatches MAY opt in to `model: "haiku"` for cost when the task is pure file-existence/config-pattern checking — pass it explicitly in the Agent() call.
 
 ```
 Agent(

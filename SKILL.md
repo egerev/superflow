@@ -76,6 +76,21 @@ superflow/
    d. If both pass, commit the stashed changes with appropriate message
 4. **Detect environment** (single bash call + context check):
    ```bash
+   # Re-resolve SUPERFLOW_SKILL_ROOT — step 2 ran in a separate Bash invocation; env vars
+   # do not persist between tool calls, so this block must be self-contained.
+   if [ -z "${SUPERFLOW_SKILL_ROOT:-}" ]; then
+     for d in \
+         "$HOME/.codex/skills/superflow" \
+         "$HOME/.claude/skills/superflow" \
+         "$HOME/.agents/skills/superflow" \
+         "./"; do
+       if [ -f "$d/SKILL.md" ] && [ -f "$d/superflow-enforcement.md" ]; then
+         SUPERFLOW_SKILL_ROOT="$(cd "$d" && pwd)"
+         break
+       fi
+     done
+     export SUPERFLOW_SKILL_ROOT
+   fi
    # All detection in one command — secondary provider detection
    if [ "$RUNTIME" = "codex" ]; then
      # Codex is primary → detect Claude as secondary
@@ -86,57 +101,75 @@ superflow/
    fi
    command -v gtimeout &>/dev/null && echo "TIMEOUT:gtimeout" || { command -v timeout &>/dev/null && echo "TIMEOUT:timeout" || echo "TIMEOUT:perl_fallback"; }
    test -e .git && echo "MODE:enhancement" || echo "MODE:greenfield"
-   # Deploy agent definitions for the detected runtime
+   # Sync skill artifacts for the detected runtime (checksum sync — stale deployed
+   # copies are overwritten on content mismatch; copy-if-missing leaves old versions behind)
+   sf_sync() { [ -f "$1" ] || return 0; cmp -s "$1" "$2" 2>/dev/null || cp "$1" "$2"; }
    if [ "$RUNTIME" = "codex" ]; then
      mkdir -p ~/.codex/agents
-     test -f ~/.codex/agents/deep-analyst.toml || cp "$SUPERFLOW_SKILL_ROOT"/codex/agents/*.toml ~/.codex/agents/ 2>/dev/null
+     for f in "$SUPERFLOW_SKILL_ROOT"/codex/agents/*.toml; do
+       sf_sync "$f" ~/.codex/agents/"$(basename "$f")"
+     done
+     sf_sync "$SUPERFLOW_SKILL_ROOT/codex/AGENTS.md" ~/.codex/AGENTS.md
+     # ~/.codex/hooks.json: install only if missing. If it exists and differs, NEVER
+     # overwrite (users hold local customizations) — warn and ask to merge manually.
+     if [ ! -f ~/.codex/hooks.json ]; then
+       cp "$SUPERFLOW_SKILL_ROOT/codex/hooks.json" ~/.codex/hooks.json 2>/dev/null
+     elif ! cmp -s "$SUPERFLOW_SKILL_ROOT/codex/hooks.json" ~/.codex/hooks.json; then
+       echo "⚠️  ~/.codex/hooks.json differs from skill copy — not overwritten; merge $SUPERFLOW_SKILL_ROOT/codex/hooks.json manually"
+     fi
    else
-     test -f ~/.claude/agents/deep-analyst.md || cp ~/.claude/skills/superflow/agents/*.md ~/.claude/agents/ 2>/dev/null
+     mkdir -p ~/.claude/agents ~/.claude/rules
+     sf_sync "$SUPERFLOW_SKILL_ROOT/superflow-enforcement.md" ~/.claude/rules/superflow-enforcement.md
+     for f in "$SUPERFLOW_SKILL_ROOT"/agents/*.md; do
+       sf_sync "$f" ~/.claude/agents/"$(basename "$f")"
+     done
    fi
    ```
    Telegram: check deferred tools list for `mcp__plugin_telegram_telegram__reply`. **Only mention Telegram updates if detected.** Do NOT promise Telegram without the plugin.
    **Codex runtime:** also persist runtime to state: `context.runtime = "codex"` when writing `.superflow-state.json`.
-4b. **Event log setup** — initialize the run's event log:
-    ```bash
-    # Restore or generate SUPERFLOW_RUN_ID — preserve across resumes
-    if [ -z "${SUPERFLOW_RUN_ID:-}" ]; then
-      SUPERFLOW_RUN_ID=$(jq -r '.context.run_id // empty' .superflow-state.json 2>/dev/null || true)
-      if [ -z "$SUPERFLOW_RUN_ID" ]; then
-        SUPERFLOW_RUN_ID="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)"
-      fi
-      export SUPERFLOW_RUN_ID
-    fi
-    # Persist run_id into state — always, even on first run (creates minimal state if absent)
-    mkdir -p .superflow
-    if [ -f .superflow-state.json ]; then
-      tmp=$(mktemp .superflow-state.XXXXXX)
-      jq --arg rid "$SUPERFLOW_RUN_ID" '.context = (.context // {}) | .context.run_id = $rid' .superflow-state.json > "$tmp" && mv "$tmp" .superflow-state.json
-    else
-      jq -n --arg rid "$SUPERFLOW_RUN_ID" '{"context":{"run_id":$rid}}' > .superflow-state.json
-    fi
-    # Derive current phase from persisted state (0 = onboarding/first-time, which is correct)
-    CURRENT_PHASE=$(jq -r '.phase // 0' .superflow-state.json 2>/dev/null || echo 0)
-    export CURRENT_PHASE
-    # Runtime-aware path discovery — try Claude, Codex, agents, then repo-local
-    _SF_EMIT_FOUND=""
-    for p in \
-        "$SUPERFLOW_SKILL_ROOT/tools/sf-emit.sh" \
-        "$HOME/.codex/skills/superflow/tools/sf-emit.sh" \
-        "$HOME/.claude/skills/superflow/tools/sf-emit.sh" \
-        "$HOME/.agents/skills/superflow/tools/sf-emit.sh" \
-        "./tools/sf-emit.sh"; do
-      if [ -f "$p" ]; then source "$p"; _SF_EMIT_FOUND=1; break; fi
-    done
-    if [ -z "${_SF_EMIT_FOUND:-}" ]; then
-      echo "⚠️  sf-emit.sh not found — event telemetry disabled (see superflow v5 Run 2)" >&2
-      sf_emit() { return 0; }
-    fi
-    sf_emit run.start runtime="${RUNTIME:-claude}" phase:int="$CURRENT_PHASE" || true
-    ```
-    Persist `SUPERFLOW_RUN_ID` into `.superflow-state.json` under `context.run_id` for recovery after `/clear`.
+5. **Event log setup** — initialize the run's event log:
+   ```bash
+   # Restore or generate SUPERFLOW_RUN_ID — preserve across resumes
+   if [ -z "${SUPERFLOW_RUN_ID:-}" ]; then
+     SUPERFLOW_RUN_ID=$(jq -r '.context.run_id // empty' .superflow-state.json 2>/dev/null || true)
+     if [ -z "$SUPERFLOW_RUN_ID" ]; then
+       # uuidgen uppercases on macOS — normalize to lowercase
+       SUPERFLOW_RUN_ID="$( (uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid) | tr "[:upper:]" "[:lower:]" )"
+     fi
+     export SUPERFLOW_RUN_ID
+   fi
+   # Persist run_id into state — MERGE into existing state via jq (preserve all other
+   # fields, never overwrite the file wholesale); create minimal state only if absent
+   mkdir -p .superflow
+   if [ -f .superflow-state.json ]; then
+     tmp=$(mktemp .superflow-state.XXXXXX)
+     jq --arg rid "$SUPERFLOW_RUN_ID" '.context = (.context // {}) | .context.run_id = $rid' .superflow-state.json > "$tmp" && mv "$tmp" .superflow-state.json
+   else
+     jq -n --arg rid "$SUPERFLOW_RUN_ID" '{"context":{"run_id":$rid}}' > .superflow-state.json
+   fi
+   # Derive current phase from persisted state (0 = onboarding/first-time, which is correct)
+   CURRENT_PHASE=$(jq -r '.phase // 0' .superflow-state.json 2>/dev/null || echo 0)
+   export CURRENT_PHASE
+   # Runtime-aware path discovery — try Claude, Codex, agents, then repo-local
+   _SF_EMIT_FOUND=""
+   for p in \
+       "$SUPERFLOW_SKILL_ROOT/tools/sf-emit.sh" \
+       "$HOME/.codex/skills/superflow/tools/sf-emit.sh" \
+       "$HOME/.claude/skills/superflow/tools/sf-emit.sh" \
+       "$HOME/.agents/skills/superflow/tools/sf-emit.sh" \
+       "./tools/sf-emit.sh"; do
+     if [ -f "$p" ]; then source "$p"; _SF_EMIT_FOUND=1; break; fi
+   done
+   if [ -z "${_SF_EMIT_FOUND:-}" ]; then
+     echo "⚠️  sf-emit.sh not found — event telemetry disabled (see superflow v5 Run 2)" >&2
+     sf_emit() { return 0; }
+   fi
+   sf_emit run.start runtime="${RUNTIME:-claude}" phase:int="$CURRENT_PHASE" || true
+   ```
+   Persist `SUPERFLOW_RUN_ID` into `.superflow-state.json` under `context.run_id` for recovery after `/clear` — always as a jq merge into the existing state file, never as an overwrite that drops other fields.
 
-    Note: If `tools/sf-emit.sh` is missing (v4.x installs without Run 2), log a one-line warning and continue — event log is telemetry, not required for execution.
-5. **Check `.superflow-state.json`** for resume context:
+   Note: If `tools/sf-emit.sh` is missing (v4.x installs without Run 2), log a one-line warning and continue — event log is telemetry, not required for execution.
+6. **Check `.superflow-state.json`** for resume context:
    - If `phase = 2` AND current branch is `main`:
      - If `context.charter_file` exists on disk → valid resume (handoff, mid-execution, or completed)
      - Else → state is stale from a previous run. Reset: write fresh state with phase=1
@@ -144,8 +177,8 @@ superflow/
    - If `phase >= 2` AND on `feat/*` branch → valid resume, proceed with session recovery
    - If `phase = 1` → resume Phase 1 from saved stage
    - **Do NOT read old briefs, plans, or sprint queues from previous runs**
-4a. **Heartbeat validation** — if `.superflow-state.json` has a `heartbeat` block, check `heartbeat.must_reread`. For each path: if already read in this session → skip. If not in context → Read it (only short orchestration files belong here; Rule 12 guarantees they are <300 lines). If a listed file does not exist on disk, skip silently and emit a one-line warning. See enforcement Rule 12 for the full, compaction-surviving version of this check.
-5. **Phase 0 gate** (inline — do NOT read phase0-onboarding.md unless needed):
+7. **Heartbeat validation** — if `.superflow-state.json` has a `heartbeat` block, check `heartbeat.must_reread`. For each path: if already read in this session → skip. If not in context → Read it (only short orchestration files belong here; Rule 12 guarantees they are <300 lines). If a listed file does not exist on disk, skip silently and emit a one-line warning. See enforcement Rule 12 for the full, compaction-surviving version of this check.
+8. **Phase 0 gate** (inline — do NOT read phase0-onboarding.md unless needed):
    - If `.superflow-state.json` exists AND `phase > 0` → skip Phase 0
    - If `.superflow-state.json` exists AND `phase = 0` → read `references/phase0-onboarding.md` for crash recovery
    - If `.superflow-state.json` does not exist → **check main branch for markers before triggering Phase 0**:
@@ -155,10 +188,10 @@ superflow/
      ```
      - `MARKER_LOCAL` or `MARKER_ON_MAIN` → skip Phase 0, write fresh state with phase=1
      - `NO_MARKER` → read `references/phase0-onboarding.md` for full Phase 0
-6. **Display startup banner** — output immediately after detection, before any phase routing:
+9. **Display startup banner** — output immediately after detection, before any phase routing:
    ```
    ╔═══════════════════════════════════╗
-   ║  ⚡ SUPERFLOW v5.3.0              ║
+   ║  ⚡ SUPERFLOW v5.4.0              ║
    ║  Autonomous Dev Workflow          ║
    ╚═══════════════════════════════════╝
    ```
@@ -169,7 +202,7 @@ superflow/
    - `⚠️` for: missing state file, Phase 0 required, stale state detected
    - Final line: `Mode: enhancement/greenfield | Phase: N | Governance: mode/—`
    Keep it compact (banner + 4-6 status lines). Do not repeat detection details already shown.
-7. Read project-specific docs if needed (CLAUDE.md is already loaded as project instructions — do not re-read)
+10. Read project-specific docs if needed (CLAUDE.md is already loaded as project instructions — do not re-read)
 
 ## Secondary Provider Detection
 
@@ -178,7 +211,7 @@ superflow/
 codex --version 2>/dev/null && SECONDARY_PROVIDER="codex"
 [ -z "$SECONDARY_PROVIDER" ] && gemini --version 2>/dev/null && SECONDARY_PROVIDER="gemini"
 [ -z "$SECONDARY_PROVIDER" ] && aider --version 2>/dev/null && SECONDARY_PROVIDER="aider"
-# If none found -> split-focus Claude (two agents, different lenses)
+# If none found -> native /code-review skill (Skill tool, high effort) -> split-focus Claude (two agents, different lenses)
 ```
 
 **When RUNTIME=codex** (Codex is orchestrator):
@@ -195,7 +228,7 @@ When RUNTIME=codex, the following differences apply throughout all phases:
 
 - **Dispatch**: use spawn_agent tool with agent name from .toml definitions in `~/.codex/agents/`
 - **Parallelism**: implicit (max_threads=6), no run_in_background needed. Recommended `max_depth=2` enables sprint supervisors to spawn per-sprint implement/review/doc agents.
-- **Claude product/research secondary**: Claude CLI — `$TIMEOUT_CMD 600 claude --model claude-opus-4-7 --effort xhigh -p "PROMPT" 2>&1`
+- **Claude product/research secondary**: Claude CLI — `$TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "PROMPT" 2>&1`
 - **Durable rules**: `codex/AGENTS.md` — re-read after ANY `/compact`
 - **Progress tracking**: printf (no TaskCreate/TaskUpdate available)
 - **Hooks**: `~/.codex/hooks.json` (SessionStart + Stop), no PreCompact/PostCompact

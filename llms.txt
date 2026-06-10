@@ -9,82 +9,90 @@ Superflow is a 4-phase development workflow skill for Claude Code:
 - **Phase 0 (Onboarding):** Auto-detects project state and confirms with user, analyzes codebase with 5 parallel agents (4 Claude + 1 Codex), generates health report, creates/audits llms.txt and CLAUDE.md, sets up permissions — structured as 5 modular stage files
 - **Phase 1 (Product Discovery):** Expert panel brainstorming (3-4 parallel persona agents producing a Board Memo), governance mode selection (light/standard/critical), git workflow mode selection, Product Vision alignment with recommendations/tradeoffs, dual-model spec/plan review, Autonomy Charter generation
 - **Phase 2 (Autonomous Execution):** Sprint-based autonomous development — selected git workflow mode, git worktrees, TDD, wave-based parallel dispatch, governance-aware review tiering, charter compliance checks, mandatory per-PR `llms.txt`/`CLAUDE.md` update + review gate
-- **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification, structured completion data (`completion-data.json`), and documentation update
+- **Phase 3 (Merge):** User-initiated sequential rebase merge with CI verification (native Monitor tool on Claude runtime), structured completion data (`completion-data.json` incl. `baseline_test_cmd`), and documentation update
 
-Version: v5.3.0 (2026-04-26). MIT License.
+Version: v5.4.0 (2026-06-11). MIT License.
 
 ## File Structure
 
-- [SKILL.md](SKILL.md): Entry point — startup checklist (6 steps), provider detection, phase routing (~240 lines)
-- [superflow-enforcement.md](superflow-enforcement.md): 13 hard rules that survive context compaction — deployed to ~/.claude/rules/ (103 lines)
-- [codex/AGENTS.md](codex/AGENTS.md): Codex equivalent of superflow-enforcement.md — hard rules and agent behavior for Codex runtime (98 lines)
-- [CLAUDE.md](CLAUDE.md): Project instructions for Claude — architecture, key files table, conventions (~110 lines)
+- [SKILL.md](SKILL.md): Entry point — startup checklist (10 steps), provider detection, checksum deploy sync, phase routing (273 lines)
+- [superflow-enforcement.md](superflow-enforcement.md): 13 hard rules that survive context compaction — checksum-synced to ~/.claude/rules/ at startup (106 lines)
+- [codex/AGENTS.md](codex/AGENTS.md): Codex equivalent of superflow-enforcement.md — 14 hard rules incl. testcontainers hygiene, plus Deployed Copy Sync section (103 lines)
+- [CLAUDE.md](CLAUDE.md): Project instructions for Claude — architecture, key files table, conventions (132 lines)
 - [README.md](README.md): Installation, usage, v4.1 features, permissions setup
+- [.github/workflows/ci.yml](.github/workflows/ci.yml): Repo CI — shellcheck -S error over tools/hooks scripts, Phase 2 DAG verification, jq validation of tracked JSON, forbidden-token gate against the stale Opus-4.7 model pin and the Ryuk env var without the `TESTCONTAINERS_` prefix (46 lines)
 
 ## Phase References
 
-- [references/phase0-onboarding.md](references/phase0-onboarding.md): Phase 0 router — detection, recovery matrix, stage loading (~80 lines)
-- [references/phase0/stage1-detect.md](references/phase0/stage1-detect.md): Parallel preflight, auto-detection, confirmation (~214 lines)
-- [references/phase0/stage2-analysis.md](references/phase0/stage2-analysis.md): 5 parallel agents, tiered model usage (~256 lines)
-- [references/phase0/stage3-report.md](references/phase0/stage3-report.md): Health report, informative summary, approval (~179 lines)
-- [references/phase0/stage4-setup.md](references/phase0/stage4-setup.md): 3 concurrent branches, strict file ownership (~238 lines)
-- [references/phase0/stage5-completion.md](references/phase0/stage5-completion.md): Markers, tech debt persistence, restart (~163 lines)
-- [references/phase0/greenfield.md](references/phase0/greenfield.md): Greenfield path G1-G6 (~350 lines)
+- [references/phase0-onboarding.md](references/phase0-onboarding.md): Phase 0 router — detection, recovery matrix (incl. greenfield stage routing), state-merge init (142 lines)
+- [references/phase0/stage1-detect.md](references/phase0/stage1-detect.md): Parallel preflight, auto-detection, confirmation; context-preserving state merges (281 lines)
+- [references/phase0/stage2-analysis.md](references/phase0/stage2-analysis.md): 5 parallel agents, tiered model usage, skill-root-resolved Codex audit prompt at xhigh (328 lines)
+- [references/phase0/stage3-report.md](references/phase0/stage3-report.md): Health report, informative summary, approval (232 lines)
+- [references/phase0/stage4-setup.md](references/phase0/stage4-setup.md): 3 concurrent branches, strict file ownership (276 lines)
+- [references/phase0/stage5-completion.md](references/phase0/stage5-completion.md): Markers, tech debt persistence, restart (234 lines)
+- [references/phase0/greenfield.md](references/phase0/greenfield.md): Greenfield path G1-G6, approval mode 'greenfield' (322 lines)
 - [references/git-workflow-modes.md](references/git-workflow-modes.md): Git workflow modes — selection heuristic, branch base policy, Phase 2 merge boundary
 - [references/phase1-discovery.md](references/phase1-discovery.md): Product discovery — expert panel brainstorming (Board Memo pattern), governance mode + git workflow mode selection, spec/plan review, Autonomy Charter generation
 - [references/phase2-execution.md](references/phase2-execution.md): Legacy router stub pointing at phase2/workflow.json + overview.md + steps/ (39 lines, router only)
-- [references/phase2/workflow.json](references/phase2/workflow.json): Phase 2 sprint lifecycle DAG — 9-cell governance×complexity decision matrix, 7 stages (setup→implementation→review→docs→par→ship→completion), step_files mapping for 19 step names (~80 lines)
-- [references/phase2/overview.md](references/phase2/overview.md): Phase 2 high-level context, wave analysis, model selection, orchestrator tool budget — always-loaded companion to workflow.json (~69 lines)
-- [references/phase2/steps/](references/phase2/steps/): 10 per-step detail files for the Phase 2 DAG, loaded on-demand by the orchestrator when entering a stage (~30-100 lines each)
-- [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, CI handling, structured completion-data.json, post-merge report (184 lines)
+- [references/phase2/workflow.json](references/phase2/workflow.json): Phase 2 sprint lifecycle DAG — 9-cell governance×complexity decision matrix, 7 stages (setup→implementation→review→docs→par→ship→completion), step_files mapping for 21 step names (81 lines)
+- [references/phase2/overview.md](references/phase2/overview.md): Phase 2 high-level context, wave analysis, model selection, orchestrator tool budget incl. the testcontainers cleanup helper — always-loaded companion to workflow.json (93 lines)
+- [references/phase2/steps/](references/phase2/steps/): 10 per-step detail files for the Phase 2 DAG, loaded on-demand by the orchestrator when entering a stage (~47-151 lines each)
+- [references/phase3-merge.md](references/phase3-merge.md): Merge workflow — pre-merge checklist, sequential rebase, Monitor-based CI wait (Claude runtime), `pr.fail` emission on abandonment, completion-data.json `baseline_test_cmd` with charter fallback, post-merge report (313 lines)
 
 ## Agent Prompts
 
-- [prompts/implementer.md](prompts/implementer.md): TDD-driven code implementation agent — Red-Green-Refactor cycle, test evidence required (81 lines)
+- [prompts/implementer.md](prompts/implementer.md): TDD-driven code implementation agent — Red-Green-Refactor cycle, test evidence required; source mirror of agents/*-implementer.md (99 lines)
 - [prompts/expert-panel.md](prompts/expert-panel.md): Expert persona prompt for brainstorming — proposals, challenge section, priority recommendation (44 lines)
 - [prompts/spec-reviewer.md](prompts/spec-reviewer.md): Spec compliance reviewer — verifies implementation matches specification (55 lines)
-- [prompts/code-quality-reviewer.md](prompts/code-quality-reviewer.md): Code quality reviewer — correctness, security, charter compliance, OWASP (82 lines)
-- [prompts/product-reviewer.md](prompts/product-reviewer.md): Product acceptance reviewer — user perspective, charter compliance, edge cases (76 lines)
-- [prompts/llms-txt-writer.md](prompts/llms-txt-writer.md): llms.txt generation/audit prompt — llmstxt.org standard, verified entries only (154 lines)
-- [prompts/claude-md-writer.md](prompts/claude-md-writer.md): CLAUDE.md generation/audit prompt — verified paths and commands (148 lines)
-- [prompts/testing-guidelines.md](prompts/testing-guidelines.md): Testing reference — TDD cycle, coverage expectations, included in implementer context (68 lines)
+- [prompts/code-quality-reviewer.md](prompts/code-quality-reviewer.md): Code quality reviewer — correctness, security, charter compliance, OWASP; source mirror of agents/ code reviewers (119 lines)
+- [prompts/product-reviewer.md](prompts/product-reviewer.md): Product acceptance reviewer — user perspective, charter compliance, edge cases; source mirror of agents/ product reviewers (100 lines)
+- [prompts/llms-txt-writer.md](prompts/llms-txt-writer.md): llms.txt generation/audit prompt — llmstxt.org standard, verified entries only (155 lines)
+- [prompts/claude-md-writer.md](prompts/claude-md-writer.md): CLAUDE.md generation/audit prompt — verified paths and commands (149 lines)
+- [prompts/testing-guidelines.md](prompts/testing-guidelines.md): Testing reference — TDD cycle, coverage expectations, included in implementer context (57 lines)
+- [prompts/security-audit.md](prompts/security-audit.md): Claude security audit fallback for Phase 0 when Codex is unavailable (78 lines)
+- [prompts/claude/audit.md](prompts/claude/audit.md): Claude secondary audit prompt for Codex runtime (116 lines)
+- [prompts/claude/code-reviewer.md](prompts/claude/code-reviewer.md): Claude secondary code review prompt for Codex runtime (106 lines)
+- [prompts/claude/product-reviewer.md](prompts/claude/product-reviewer.md): Claude secondary product review prompt for Codex runtime (95 lines)
 - [prompts/codex/code-reviewer.md](prompts/codex/code-reviewer.md): Codex code quality review prompt
 - [prompts/codex/product-reviewer.md](prompts/codex/product-reviewer.md): Codex product acceptance review prompt
 - [prompts/codex/audit.md](prompts/codex/audit.md): Codex onboarding audit prompt
 
 ## Agent Definitions
 
-12 agent definitions in `agents/` with reasoning tier frontmatter (deep/standard/fast):
-- Deep tier (Opus, high effort): deep-implementer, deep-code-reviewer, deep-product-reviewer, deep-spec-reviewer, deep-doc-writer, deep-analyst
-- Standard tier (Sonnet, medium effort): standard-implementer, standard-code-reviewer, standard-product-reviewer, standard-spec-reviewer, standard-doc-writer
-- Fast tier (Sonnet, low effort): fast-implementer
+12 agent definitions in `agents/` with model + reasoning tier frontmatter (deep/standard/fast); all contain an anti-injection `<security>` block, reviewers end with a mandatory fenced-json verdict block:
+- Deep tier: deep-spec-reviewer, deep-code-reviewer, deep-product-reviewer, deep-analyst (fable, effort: max); deep-doc-writer (opus, effort: max); deep-implementer (sonnet, effort: max)
+- Standard tier: standard-spec-reviewer, standard-code-reviewer, standard-product-reviewer, standard-doc-writer (opus, effort: high); standard-implementer (sonnet, effort: high)
+- Fast tier: fast-implementer (sonnet, effort: low)
 
 ## Tools & Schemas
 
-- [tools/sf-emit.sh](tools/sf-emit.sh): Source-safe bash library for JSONL event emission — `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true key:json='...'`; validates type allowlist and key identifier regex; concurrent-safe via flock, with threshold-based log rotation to archive/ (356 lines)
+- [tools/sf-emit.sh](tools/sf-emit.sh): Source-safe bash library for JSONL event emission — `source tools/sf-emit.sh && sf_emit <type> key=val key:int=N key:bool=true key:json='...'`; validates type allowlist (21 types incl. `pr.fail`) and key identifier regex; lowercases `SUPERFLOW_RUN_ID` defensively; concurrent-safe via flock, with threshold-based log rotation to archive/ (360 lines)
 - [tools/verify-phase2-dag.sh](tools/verify-phase2-dag.sh): Static DAG verifier (Run 3 Sprint 3) — validates all 9 governance×complexity decision-matrix cells, 7-stage sequence, step_files coverage, and on-disk step file existence; exits 0 on full pass, non-zero with summary on failure; pure bash + python3 + jq
 - [tools/measure-phase2-context.sh](tools/measure-phase2-context.sh): Context savings quantifier (Run 3 Sprint 3) — computes pre-Run-3 vs post-Run-3 Phase 2 per-turn token load using git history; summary: Pre 755 lines (~10048 tokens) | Post-typical 224 lines (~2375 tokens) | Savings 76.4%
-- [templates/event-schema.json](templates/event-schema.json): JSON Schema 2020-12 defining the event envelope (`v`, `id`, `ts`, `run_id`, `type`, `data`, `instance_id`, `parent_id`) and 20 per-type data schemas; additive evolution policy (524 lines)
+- [tools/cleanup-testcontainers.sh](tools/cleanup-testcontainers.sh): Testcontainers cleanup helper — label-based selection (`docker ps -aq --filter "label=org.testcontainers=true"`), optional ancestor image filter, idempotent, soft-exits when docker absent; the ONLY docker-touching command allowed in the orchestrator's Rule 11 budget (42 lines)
+- [templates/event-schema.json](templates/event-schema.json): JSON Schema 2020-12 defining the event envelope (`v`, `id`, `ts`, `run_id`, `type`, `data`, `instance_id`, `parent_id`) and 21 per-type data schemas incl. `pr.fail` (pr_number, reason, optional ci_run_id); additive evolution policy (549 lines)
 - [templates/superflow-state-schema.json](templates/superflow-state-schema.json): JSON Schema for `.superflow-state.json` state file including the `context.run_id` field added in Run 2 Sprint 1
 
 ## Key Concepts
 
-- **Event log telemetry:** Append-only `.superflow/events.jsonl` stream grouping all events for a run under a `SUPERFLOW_RUN_ID` (UUID). Emitted via `tools/sf-emit.sh`. `run_id` is persisted to `.superflow-state.json` under `context.run_id` so `/clear` + resume restores the same run identity. Event log is telemetry — not required for execution; missing `sf-emit.sh` logs a warning and continues.
+- **Event log telemetry:** Append-only `.superflow/events.jsonl` stream grouping all events for a run under a `SUPERFLOW_RUN_ID` (lowercase UUID). Emitted via `tools/sf-emit.sh`. `run_id` is persisted to `.superflow-state.json` under `context.run_id` so `/clear` + resume restores the same run identity. Event log is telemetry — not required for execution; missing `sf-emit.sh` logs a warning and continues. `pr.fail` records red CI conclusions and abandoned PRs
 - **Autonomy Charter:** Durable intent artifact generated at end of Phase 1. Contains goal, non-negotiables, success criteria, governance mode, and git workflow mode. Injected into every sprint prompt and reviewer context — single source of truth for autonomous execution boundaries
 - **Adaptive governance:** Three modes (light/standard/critical) auto-suggested based on task dimensions. Controls review depth, holistic review threshold, and plan structure. Light mode uses inline sprint plans in the charter
 - **Git workflow modes:** Phase 1 selects `solo_single_pr`, `sprint_pr_queue`, `stacked_prs`, `parallel_wave_prs`, or `trunk_based`. The mode is stored in `.superflow-state.json` and the charter, and controls branch bases, PR count, sprint parallelism, docs gate timing, and Phase 3 merge order
 - **Expert panel brainstorming:** Phase 1 dispatches 3-4 parallel expert persona agents (Product GM, Staff Engineer, UX/Workflow, Domain Expert). Outputs synthesized into Board Memo with consensus, disagreements, risks, and decisions needed
 - **Product Vision alignment:** Replaces design-tree grilling. After direction lock, Superflow presents one recommendation-led decision brief with options, tradeoffs, reversibility, and safe defaults. The user can say "do what you recommend" / "делай как рекомендуешь" to accept all recommendations, answer with corrections only, use a numbered list, or paste an audio transcript; non-blocking gaps become assumptions instead of a long question chain
-- **2-agent specialized review:** Every PR is reviewed by 2 agents in parallel — Claude (Product lens: spec fit, user scenarios, charter compliance) + Codex/secondary (Technical lens: correctness, security, charter compliance). Governance mode controls whether single or dual review
-- **Codex model policy:** Codex subagents and Claude-runtime `codex exec` secondary calls use `gpt-5.5`; deep analyst/implementer/reviewer roles use `xhigh`, standard roles use `high`, and fast implementer uses `medium`. Codex-runtime Claude product/research secondary calls use exact model `claude-opus-4-7` with `--effort xhigh`
-- **Codex sprint-level parallelism:** Recommended config is `[agents] max_threads=6, max_depth=2`. With `max_depth>=2`, Codex can spawn parallel sprint supervisors that spawn per-sprint implement/review/doc agents. Old `max_depth=1` configs fall back to sequential sprints
+- **2-agent specialized review:** Every PR is reviewed by 2 agents in parallel — Claude (Product lens: spec fit, user scenarios, charter compliance) + Codex/secondary (Technical lens: correctness, security, charter compliance). Technical-lens fallback chain: codex exec review → native /code-review skill via Skill tool at high effort → two split-focus Claude agents. Governance mode controls whether single or dual review
+- **Reviewer verdict contract:** Every reviewer ends with a fenced json block (`verdict`, `findings[severity, file, line, scenario, description]`, `summary`); the orchestrator extracts it mechanically (awk → jq) and assembles `.par-evidence.json` from the verdict fields — no prose parsing. Re-review re-engages the SAME named background reviewer via SendMessage, scoped to the fix diff + original findings
+- **Codex model policy:** Codex subagents and Claude-runtime `codex exec` secondary calls use `gpt-5.5`; deep analyst/implementer/reviewer roles use `xhigh`, standard roles use `high`, and fast implementer uses `medium`. Codex-runtime Claude product/research secondary calls use exact model `claude-fable-5` with `--effort xhigh`
+- **Codex sprint-level parallelism:** Recommended config is `[agents] max_threads=6, max_depth=2`. With `max_depth>=2`, Codex can spawn parallel sprint supervisors that spawn per-sprint implement/review/doc agents. On Claude runtime subagents cannot dispatch subagents — a parallel wave is N implementation-only implementers in isolated worktrees; the orchestrator runs review→docs→PAR→ship sequentially per sprint
+- **Testcontainers hygiene:** `TESTCONTAINERS_RYUK_DISABLED` is set only when `process.env.CI === "true"` (duty lives in implementer agent definitions); orchestrator cleanup runs only `tools/cleanup-testcontainers.sh` (label-based); name-regex matching and raw docker commands are forbidden
 - **Review gate:** Mandatory gate before every PR push — product/technical reviewers must pass, sprint docs must be updated or explicitly confirmed unchanged, and documentation review must pass; evidence is written to `.par-evidence.json`
 - **Per-PR docs gate:** Every sprint PR audits `llms.txt` and `CLAUDE.md` before creation. `.par-evidence.json` records `docs_update` (`UPDATED` or `UNCHANGED`) and `docs_review: PASS`
 - **Final Holistic Review:** After all sprints complete (conditional on governance mode and sprint count), two reviewers review ALL code together to catch cross-module issues
 - **Breakage Scenario:** Every review finding must include a concrete scenario where the issue causes a real problem — no scenario = not a finding
-- **Compaction resilience:** Enforcement rules live in `~/.claude/rules/` (auto-loaded by Claude Code), phase docs are re-read from disk at boundaries. Heartbeat block in `.superflow-state.json` adds a second layer — Rule 12 requires re-reading all `must_reread` paths each orchestrator turn; PreCompact hook dumps heartbeat snapshot before context is truncated
+- **Compaction resilience:** Enforcement rules live in `~/.claude/rules/` (checksum-synced at startup, auto-loaded by Claude Code), phase docs are re-read from disk at boundaries. Heartbeat block in `.superflow-state.json` adds a second layer — Rule 12 requires re-reading `must_reread` paths at sprint boundaries, stage transitions, and post-compaction on Claude runtime (every turn on Codex); PreCompact hook dumps heartbeat snapshot before context is truncated
 - **Heartbeat protocol:** Optional `heartbeat` object in `.superflow-state.json` (9 fields: `updated_at`, `current_sprint`, `sprint_goal`, `merge_method`, `active_worktree`, `active_branch`, `must_reread`, `last_review_verdict`, `phase2_step`). Written atomically via `tempfile + os.replace` at sprint start and each stage transition. Enforced by Rule 12 (superflow-enforcement.md). Schema defined in `templates/superflow-state-schema.json`
 - **Markers:** `<!-- updated-by-superflow:YYYY-MM-DD -->` in generated files — used to detect whether Phase 0 has run
 - **Sprint plan:** Implementation plan defines sprints with dependencies and complexity tags, used for autonomous execution
 
-<!-- updated-by-superflow:2026-04-26 -->
+<!-- updated-by-superflow:2026-06-11 -->

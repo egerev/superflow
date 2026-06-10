@@ -56,8 +56,9 @@ Both `<!-- updated-by-superflow:` (v2.0.3+) and `<!-- superflow:onboarded` (v2.0
 
 **Priority 1: Check state file for in-progress Phase 0** (crash recovery):
 
-If `.superflow-state.json` exists AND `phase=0` AND `stage_index < 5`:
-- Resume from Stage at `stage_index` (NOT stage_index+1 — stage_index is set at stage START, so the stage may be incomplete)
+If `.superflow-state.json` exists AND `phase=0`:
+- If `stage == "greenfield"` → resume the greenfield path (`references/phase0/greenfield.md`) at the G-step given by `stage_index` (G1=0 … G6=6). Greenfield `stage_index` numbers G-steps, NOT stage files — never map it through the Stage → File table.
+- Else if `stage_index < 5` → resume from Stage at `stage_index` (NOT stage_index+1 — stage_index is set at stage START, so the stage may be incomplete)
 - This takes priority over marker-based detection
 
 **Priority 2: Marker-based detection** (check in order, stop at first match):
@@ -90,22 +91,35 @@ If markers exist on main but not locally → the current branch was created befo
 |----------|--------|
 | (a) No markers + no `.superflow-state.json` | Full Phase 0 from Stage 1 |
 | (b) State file: phase=0, stage_index=N, N<5 | Resume from Stage at index N (stage may be incomplete) |
+| (b-g) State file: phase=0, stage="greenfield" | Resume greenfield path (`references/phase0/greenfield.md`) at G-step = stage_index (G1=0 … G6=6) — a literal numeric resume via the Stage → File table would misroute |
 | (c) CLAUDE.md marker only, no llms.txt marker | Partial: Stage 1 → inject approval(skip) → Stage 4 Branch A only |
 | (d) All markers + health report missing | Partial: Stage 1 → Stage 2 → Stage 3 → Stage 5 |
 | (e) All markers + all artifacts present | Skip Phase 0, proceed to Phase 1 |
 
-> **State-based recovery (b) takes priority over marker-based detection (c-e).** A Stage 4 crash after Branch A writes markers would be caught by (b) since stage_index=3 < 5, not misclassified by (e).
+> **State-based recovery (b/b-g) takes priority over marker-based detection (c-e).** A Stage 4 crash after Branch A writes markers would be caught by (b) since stage_index=3 < 5, not misclassified by (e). Likewise, a greenfield crash after G5 writes markers is caught by (b-g) via stage="greenfield" — not misclassified as complete.
 
 ---
 
 ## State Management
 
-At Phase 0 start, write `.superflow-state.json` and emit phase start:
+At Phase 0 start, write `.superflow-state.json` and emit phase start. **MERGE into any existing state — never overwrite the file wholesale.** SKILL.md startup writes `context.run_id` before Phase 0 begins; clobbering it silently disables all event telemetry for the run:
 
 ```bash
-cat > .superflow-state.json << STATEEOF
-{"version":1,"phase":0,"phase_label":"Onboarding","stage":"detect","stage_index":0,"last_updated":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
-STATEEOF
+python3 -c "
+import json, datetime, os
+p = '.superflow-state.json'
+s = json.load(open(p)) if os.path.exists(p) else {}
+s.update({
+    'version': 1,
+    'phase': 0,
+    'phase_label': 'Onboarding',
+    'stage': 'detect',
+    'stage_index': 0,
+    'last_updated': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+})
+s.setdefault('context', {})  # preserves context.run_id and any other keys set by SKILL.md
+json.dump(s, open(p, 'w'), indent=2)
+"
 sf_emit phase.start phase:int=0 label="Onboarding"
 ```
 
@@ -115,7 +129,7 @@ Update after each stage transition:
 python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s['stage']='analysis'; s['stage_index']=1; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
 ```
 
-If python3 is unavailable, overwrite the full file with updated JSON manually.
+If python3 is unavailable, rewrite the file manually — but first read the existing JSON and carry over every key you are not changing, especially `context` (it holds `context.run_id` for telemetry).
 
 ---
 

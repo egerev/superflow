@@ -61,6 +61,17 @@ git worktree add -b feat/<feature>-slice-N .worktrees/slice-N origin/main
 ```
 Branch name: `feat/<feature>-slice-N`. Base: `origin/main`. Merge each slice frequently.
 
+## Opt-In Alternative: `Agent(isolation: "worktree")` — Claude Runtime Only
+
+The bash choreography above is the DEFAULT (Codex parity — both runtimes share the same commands).
+On Claude runtime, `Agent(isolation: "worktree")` may be used as an opt-in alternative: the
+harness creates a disposable worktree for the subagent automatically.
+
+**Caveat:** the auto-created branch name and base are harness-chosen. Before relying on such a
+worktree for push/PR flows, verify the branch name and base match the `git_workflow_mode` contract
+above (e.g. `feat/<feature>-sprint-N` off `origin/main` for `sprint_pr_queue`). If they don't
+match, fall back to the bash choreography.
+
 ## After Creation
 
 Verify the worktree exists: `ls .worktrees/`

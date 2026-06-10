@@ -132,6 +132,8 @@ Before merging any PR:
    - Removed or renamed files are cleaned up
    - Use `prompts/claude-md-writer.md` for conventions
 
+> **Optional extra gate:** the orchestrator MAY SUGGEST that the user run `/code-review ultra <PR#>` as an additional deep review pass before merge. Never launch it autonomously — `/code-review ultra` is user-triggered and billed to the user. Suggest only; the user decides.
+
 ## Documentation Update (pre-merge)
 <!-- Stage 1: Pre-merge, Todos 3-4 -->
 
@@ -188,13 +190,17 @@ PRs merge sequentially in the order required by the selected git workflow mode:
 for each PR in sprint order:
   0. Check PR state: `gh pr view <number> --json state -q '.state'`
      - If "MERGED": skip, log as already merged
-     - If "CLOSED": warn user, skip
+     - If "CLOSED": warn user, skip, and emit abandonment telemetry:
+       sf_emit pr.fail pr_number:int=NNN reason="PR closed without merge"
      - If "OPEN": proceed with merge
-  1. gh pr checks <number> — verify CI green
+  1. Verify CI green before merging:
+     - Claude runtime: use the native Monitor tool to wait until the PR's checks
+       conclude (success or failure), then proceed — green → step 2, red → see
+       "CI Failure During Merge" below.
+     - Codex runtime: poll `gh pr checks <number>` / `gh run list` until checks conclude.
+     - NEVER `gh pr merge --admin` to bypass red CI.
      - If CI failing, send Telegram (if MCP available):
        mcp__plugin_telegram_telegram__reply(chat_id: <chat_id>, text: "PR #N CI failed, investigating...")
-     # NOTE: no event emitted on CI failure/abandon — pr.merge is reserved for successful merges.
-     # Failed-merge telemetry is TBD (see CHANGELOG deferred).
   2. gh pr merge <number> --rebase --delete-branch
      sf_emit pr.merge number:int=NNN method=rebase  # replace NNN with actual PR number
   3. If merge fails due to conflict:
@@ -228,13 +234,16 @@ for each PR in sprint order:
 
 ## CI Failure During Merge
 
-If `gh pr checks <number>` shows failing checks:
-1. Identify the failing check: `gh pr checks <number>`
+If the PR's checks conclude red:
+1. Identify the failing check: `gh pr checks <number>`, then investigate with `gh run view <id> --log-failed`
 2. Check out the branch: `git checkout <branch>`
 3. Diagnose: read CI logs, reproduce locally if possible
 4. Fix, commit, push
-5. Wait for CI to pass (poll `gh pr checks <number>`, max 5 minutes)
-6. If CI still fails after 2 fix attempts: stop and report to user with error details
+5. Wait for the new checks run to conclude:
+   - Claude runtime: use the native Monitor tool to wait for checks to conclude (success/failure)
+   - Codex runtime: poll `gh pr checks <number>` / `gh run list`, max 5 minutes
+6. If CI still fails after 2 fix attempts: emit failure telemetry, stop, and report to user with error details:
+   `sf_emit pr.fail pr_number:int=NNN reason="CI red after 2 fix attempts" ci_run_id="<failing run id>"`
 7. Resume merge sequence from the failed PR
 
 ```bash
@@ -248,8 +257,13 @@ sf_emit stage.start stage=post-merge phase:int=3
 After all PRs are merged, run the full test suite on main to verify integration:
 ```bash
 git checkout main && git pull origin main
-python3 -c "import json; q=json.load(open('docs/superflow/sprint-queue.json')); print(q.get('baseline_cmd','No baseline command found'))"
+BASELINE_CMD=$(jq -r '.baseline_test_cmd // empty' .superflow/completion-data.json 2>/dev/null)
 ```
+Resolve the baseline test command with graceful fallback:
+1. `baseline_test_cmd` from `.superflow/completion-data.json` (optional field written by the Phase 2 completion-report step).
+2. If the file or the field is missing: fall back to the test command recorded in the Autonomy Charter (path in `context.charter_file` of `.superflow-state.json`).
+3. If the charter is also unavailable or records no test command: print a warning and ask the user for the project's test command.
+
 Execute the baseline test command. If tests fail: warn the user with specific failures before ending the session. Do NOT proceed to Post-Merge Report until tests pass or user acknowledges failures.
 
 ## Post-Merge Report

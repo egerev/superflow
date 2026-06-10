@@ -1,4 +1,4 @@
-# superflow v5.3.0
+# superflow v5.4.0
 
 Autonomous dev workflow for Claude Code. Describe a feature — get reviewed PRs.
 
@@ -94,7 +94,7 @@ references/
   phase1-discovery.md           — Expert panel, governance, charter
   phase2-execution.md           — Governance-aware execution
   phase3-merge.md               — Sequential rebase merge
-prompts/                        — Agent templates (8 prompts)
+prompts/                        — Agent templates (9 prompts)
 agents/                         — 12 agent definitions (deep/standard/fast tiers)
 ```
 

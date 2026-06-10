@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+
+      # -S error: gate on breakage, not style (sf-emit.sh/hooks carry pre-existing style notes)
+      - name: Shellcheck (errors only)
+        run: shellcheck -S error tools/*.sh hooks/*.sh
+
+      - name: Verify Phase 2 DAG
+        run: bash tools/verify-phase2-dag.sh
+
+      - name: Validate tracked JSON
+        run: |
+          set -euo pipefail
+          git ls-files '*.json' | while IFS= read -r f; do
+            jq empty "$f" || { echo "Invalid JSON: $f" >&2; exit 1; }
+            echo "OK: $f"
+          done
+
+      # CHANGELOG.md keeps historical names; this workflow holds the patterns themselves.
+      - name: Forbidden token gate
+        run: |
+          set -euo pipefail
+          EXCLUDE=(':!CHANGELOG.md' ':!.github/workflows/ci.yml')
+          if git grep -nI -e 'claude-opus-4-7' -- "${EXCLUDE[@]}"; then
+            echo 'FAIL: claude-opus-4-7 found outside CHANGELOG.md (pin is claude-fable-5)' >&2
+            exit 1
+          fi
+          if git grep -nIP -e '(?<!TESTCONTAINERS_)RYUK_DISABLED' -- "${EXCLUDE[@]}"; then
+            echo 'FAIL: bare RYUK_DISABLED found outside CHANGELOG.md (canonical name is TESTCONTAINERS_RYUK_DISABLED)' >&2
+            exit 1
+          fi
+          echo 'OK: no forbidden tokens.'
