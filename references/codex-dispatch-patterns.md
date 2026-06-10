@@ -67,9 +67,11 @@ Record `"provider": "split-focus"` in .par-evidence.json.
 
 | Claude Tier | Claude Model | Claude Effort | Codex Model | Codex Reasoning |
 |-------------|-------------|---------------|-------------|-----------------|
-| deep | claude-fable-5 | xhigh | gpt-5.5 | xhigh |
+| deep | claude-fable-5 (frontier) / claude-opus-4-8 (balanced) | xhigh | gpt-5.5 | xhigh |
 | standard | claude-fable-5 | xhigh | gpt-5.5 | high |
 | fast | sonnet | low | gpt-5.5 | medium |
 | implementer (deep) | sonnet | max | gpt-5.5 | xhigh |
 | implementer (std) | sonnet | high | gpt-5.5 | high |
 | implementer (fast) | sonnet | low | gpt-5.5 | medium |
+
+> **Model profile:** Deep-tier Claude secondary model is controlled by `context.model_profile` in `.superflow-state.json`. `frontier` (default) = `claude-fable-5`; `balanced` = `claude-opus-4-8`. All dispatch rows above that show `claude-fable-5` for deep-tier product/review secondaries should substitute `claude-opus-4-8` when `model_profile=balanced`.

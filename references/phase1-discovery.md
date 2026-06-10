@@ -183,6 +183,25 @@ Replace `MODE` with the selected git workflow mode.
 - **Standard mode**: Full flow as documented. Step 6a presents a recommendation-led Product Vision decision brief; user can answer all open questions in one reply.
 - **Critical mode**: Full flow + dispatch security research agent in Step 3 + run deeper Step 6a Product Vision alignment by default + add threat model section to spec in Step 8 + use deep-tier reviewers in Steps 9 and 11
 
+## Step 2c: Model Profile Selection
+<!-- Stage 1: Research, Todo 2 -->
+
+Select the model tier for deep judgment roles (spec/code/product reviewers + deep-analyst) used throughout autonomous execution:
+
+- **frontier** (default): deep reviewers + deep-analyst use `model: "fable"`; Codex-runtime Claude secondary uses `claude-fable-5`. Best review quality; frontier-model token pricing.
+- **balanced**: deep reviewers + deep-analyst use `model: "opus"`; Codex-runtime Claude secondary uses `claude-opus-4-8`. Strong review quality; significantly cheaper for long multi-sprint runs.
+
+All other roles are identical in both profiles (standard reviewers + doc-writers → opus, implementers → sonnet, fast → sonnet).
+
+Present the recommendation:
+> "Model profile for this run: **frontier** (fable — best review quality, frontier-model pricing) or **balanced** (Opus 4.8 — strong quality, lower cost, recommended for 3+ sprint runs). Use frontier? (yes / switch to balanced)"
+
+Default to **frontier** if the user says "do what you recommend". Wait for confirmation. Store the selected profile in `.superflow-state.json`:
+```bash
+python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s.setdefault('context',{})['model_profile']='PROFILE'; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
+```
+Replace `PROFILE` with `frontier` or `balanced`.
+
 ### Light Mode Sprint Breakdown
 
 In light mode, the charter body contains the sprint breakdown directly. Charter sprint headings use the format: `## Sprint N: Title [complexity: X]`. The sprint plan is derived from the charter — no separate plan file needed.
@@ -573,6 +592,7 @@ Present the complete plan overview:
 - Sprint breakdown with task counts and complexity tags
 - Key files touched per sprint
 - Selected git workflow mode and why it fits this task
+- **Selected model profile** (frontier=fable / balanced=opus-4.8) — can still be changed here before execution starts (e.g. "switch to balanced")
 - **Sprint wave plan** — show which sprints run in parallel:
   ```
   Wave 1: [Sprint 1, Sprint 2, Sprint 6] — parallel (independent files)
@@ -615,6 +635,7 @@ success_criteria:
   - "Measurable outcome 2"
 governance_mode: "light|standard|critical"  # from Step 2 selection
 git_workflow_mode: "solo_single_pr|sprint_pr_queue|stacked_prs|parallel_wave_prs|trunk_based"  # from Step 2b selection
+model_profile: "frontier|balanced"  # from Step 2c selection; controls deep reviewer + deep-analyst model at dispatch
 ---
 ```
 

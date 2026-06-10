@@ -17,7 +17,7 @@ Only then resume work.
 2a. **Use isolated branches/worktrees.** For sprint-based modes, use `git worktree add .worktrees/sprint-N feat/<feature>-sprint-N`. For `solo_single_pr`, use one `feat/<feature>` branch/worktree for the run. Verify `.worktrees/` is in `.gitignore` before creating.
 3. **Hierarchical dispatch is allowed when configured.** Recommended Codex config is `[agents] max_threads=6, max_depth=2`. With `max_depth>=2`, the orchestrator may dispatch independent sprint supervisors in parallel; each sprint supervisor may spawn implement/review/doc agents for that sprint. If the runtime is still `max_depth=1`, fall back to flat sequential sprints and report that config upgrade is needed for sprint-level parallelism.
 4. **Unified Review before every PR** (2 agents for standard/critical sprints; single Technical reviewer for light-mode sprints):
-   1. Dispatch Claude Fable 5 as product reviewer: `$TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "PRODUCT_REVIEW_PROMPT" 2>&1`
+   1. Dispatch Claude as product reviewer using model from `context.model_profile` (frontier=claude-fable-5, balanced=claude-opus-4-8): `$TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "PRODUCT_REVIEW_PROMPT" 2>&1`
    2. Use spawn_agent tool to dispatch Codex technical reviewer (agent: "standard-code-reviewer")
    3. Wait for both. Fix confirmed issues (NEEDS_FIXES, REQUEST_CHANGES, or FAIL). Re-review only flagging agent.
    4. Run mandatory sprint documentation update (`CLAUDE.md` + `llms.txt`) before PR creation. `llms.txt` must be explicitly checked on every sprint, even if unchanged.
@@ -40,7 +40,10 @@ Only then resume work.
 ## Claude Product Reviewer Invocation
 
 ```bash
+# frontier profile (default):
 $TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "PROMPT" 2>&1
+# balanced profile (read context.model_profile from .superflow-state.json):
+# $TIMEOUT_CMD 600 claude --model claude-opus-4-8 --effort xhigh -p "PROMPT" 2>&1
 # No secondary → two Codex agents with split focus (Product + Technical)
 ```
 
@@ -48,7 +51,7 @@ $TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "PROMPT" 2>&1
 
 | Tier | Codex Agent (spawn_agent) | Claude (secondary) | When |
 |------|---------------------------|---------------------|------|
-| **deep** | deep analyst/implementer/reviewer agents (gpt-5.5, xhigh); deep-doc-writer (gpt-5.5, high) | `claude --model claude-fable-5 --effort xhigh -p` for product lens | Phase 0 audit, Phase 1 spec review, Phase 2 holistic |
+| **deep** | deep analyst/implementer/reviewer agents (gpt-5.5, xhigh); deep-doc-writer (gpt-5.5, high) | `claude --model claude-fable-5 --effort xhigh -p` (frontier) / `claude --model claude-opus-4-8 --effort xhigh -p` (balanced) for product lens | Phase 0 audit, Phase 1 spec review, Phase 2 holistic |
 | **standard** | standard-* agents (gpt-5.5, high) | `claude --model claude-fable-5 --effort xhigh -p` for product lens | Phase 1 plan review, Phase 2 unified review, Phase 3 docs |
 | **fast** | fast-implementer (gpt-5.5, medium) | N/A | Simple implementation tasks |
 

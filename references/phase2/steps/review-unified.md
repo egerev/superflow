@@ -23,7 +23,7 @@ with their original context intact:
 ```
 Agent(
   subagent_type: "standard-product-reviewer",  # deep-product-reviewer for deep tier
-  model: "opus",                               # standard tier; deep tier → model: "fable"
+  model: "opus",                               # standard tier; deep tier → "fable" (frontier) or "opus" (balanced — read context.model_profile)
   name: "sprint-<N>-product-reviewer",
   run_in_background: true,
   prompt: "[SPEC + brief + diff context]"

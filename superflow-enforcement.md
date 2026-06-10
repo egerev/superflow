@@ -44,6 +44,7 @@ $TIMEOUT_CMD 600 $SECONDARY_PROVIDER <non-interactive-flag> "PROMPT" 2>&1       
 ```bash
 $TIMEOUT_CMD 600 claude -p "PROMPT" 2>&1                                                          # general
 $TIMEOUT_CMD 600 claude -p "$(cat prompts/claude/code-reviewer.md) DIFF_CONTEXT" 2>&1             # code review
+# claude-fable-5 = frontier profile (default); claude-opus-4-8 = balanced profile — read context.model_profile
 # No secondary → two Codex agents with split focus via spawn_agent (Product + Technical)
 ```
 See `references/codex-dispatch-patterns.md` for the complete dispatch mapping.
@@ -58,7 +59,7 @@ See `references/codex-dispatch-patterns.md` for the complete dispatch mapping.
 
 Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` during SKILL.md startup (step 4). Agent() does NOT accept inline `effort` — controlled via agent definition files only.
 
-**CRITICAL: Always pass `model:` explicitly in every Agent() call.** Frontmatter `model:` in agent definitions is NOT reliably inherited — a forgotten `model:` now silently inherits the parent frontier model (Fable); the cost of forgetting went UP. Rule: implementers → `model: "sonnet"` (haiku permitted for mechanical Phase 0 file/config checks); standard reviewers + doc-writers → `model: "opus"`; deep reviewers + `deep-analyst` → `model: "fable"`.
+**CRITICAL: Always pass `model:` explicitly in every Agent() call.** Frontmatter `model:` in agent definitions is NOT reliably inherited — a forgotten `model:` now silently inherits the parent frontier model (Fable); the cost of forgetting went UP. Rule: implementers → `model: "sonnet"` (haiku permitted for mechanical Phase 0 file/config checks); standard reviewers + doc-writers → `model: "opus"`; deep reviewers + `deep-analyst` → `"fable"` (model_profile=frontier, default) or `"opus"` (model_profile=balanced — read `context.model_profile` from `.superflow-state.json`).
 
 ## Test & Process Discipline
 

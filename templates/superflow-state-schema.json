@@ -189,6 +189,15 @@
           "default": "sprint_pr_queue",
           "description": "Branch, PR, and merge workflow selected in Phase 1"
         },
+        "model_profile": {
+          "type": "string",
+          "enum": [
+            "frontier",
+            "balanced"
+          ],
+          "default": "frontier",
+          "description": "Model tier for deep judgment roles: frontier=fable (default), balanced=opus-4.8"
+        },
         "runtime": {
           "type": "string",
           "enum": [
