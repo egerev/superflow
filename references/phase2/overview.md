@@ -18,6 +18,27 @@ Report when all sprints are done.
 
 ---
 
+## Phase 2 Launch
+
+At Phase 2 launch — right after plan approval, before the first sprint — PRINT this ready-to-paste
+`/goal` suggestion for the user. `/goal` is a user-only command: the model CANNOT set it; never
+pretend otherwise.
+
+> Optional watchdog for this run — paste:
+> `/goal Superflow Phase 2 complete: all <N> sprints implemented, unified-reviewed, PRs created and CI-green, Completion Report delivered.`
+
+Replace `<N>` with the actual sprint count. Note: the evaluator (Haiku, prompt-based Stop hook)
+judges only what is visible in the transcript, so the orchestrator must keep narrating sprint
+completions (it already does); one goal per session; survives `--resume`; the user clears it with
+`/goal clear`. Subagents do NOT inherit goals — per-sprint goal-direction remains the Autonomy
+Charter injection (already shipped).
+
+For everything Workflow-tool related (saved `/superflow-review` and `/superflow-wave` workflows,
+the `context.use_workflows` opt-in, availability checks, fallbacks), see
+`references/workflow-orchestration.md` — the single authority on Workflow usage inside Superflow.
+
+---
+
 ## Wave Analysis
 
 Independent tasks within a sprint are dispatched in parallel waves:

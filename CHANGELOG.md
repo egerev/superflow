@@ -2,6 +2,23 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [5.5.0] - 2026-06-11
+
+### Added — Hybrid Workflow Acceleration (opt-in)
+- **`references/workflow-orchestration.md`** (202 lines): single authority on Workflow-tool usage inside Superflow — documented facts only (JS script orchestrating subagents in the background, Claude Code ≥ 2.1.154, intermediate results live in script variables, not orchestrator context), opt-in policy with the verbatim plan-approval wording, permission gates table (default: every run; Auto: first launch only; bypass/`-p`/SDK: never) with the Auto-mode recommendation for Phase 2, limits (16 concurrent / 1,000 total / no mid-run input / no script fs-shell access), saved-workflow locations and `/name` invocation, full specs of both saved workflows, the UNDOCUMENTED-API warning, the `/goal` watchdog section, and the Codex/fallback chain. Step files point here instead of re-explaining
+- **Two saved workflow scripts** in `workflows/`, deployed via checksum sync to `~/.claude/workflows/` at startup (SKILL.md step 4, Claude runtime only, `mkdir -p ~/.claude/workflows`) — invocable as `/superflow-review` and `/superflow-wave` in any project:
+  - `workflows/superflow-review.js` (143 lines): unified review fan-out — parallel product reviewer (follows `standard-product-reviewer.md` + charter) and technical reviewer (applies the codex-exec-or-Claude fallback chain itself via Bash); returns `{product, technical, pass}` where `pass` requires both verdicts in APPROVE/ACCEPTED/PASS
+  - `workflows/superflow-wave.js` (96 lines): implementation-only wave (v5.4.0 parallel-wave dispatch rule: implementation-only fan-out; orchestrator runs review/docs/PAR/ship per sprint) — one implementer agent per sprint, worktree-isolated, no review/docs/PAR/PR; returns position-bound `[{sprint, status: "done"|"failed", summary, test_evidence}]`; the orchestrator still runs review → docs → PAR → ship per sprint afterwards
+  - Both: documented API surface only (`agent`, `parallel`, `phase`, `log`, `args`), `export const meta`, LAST-fenced-json extraction via regex + `JSON.parse` in try/catch, FAIL CLOSED on any parse failure or null result (REQUEST_CHANGES / `status: "failed"`), no clock or randomness calls (orchestrator stamps timestamps)
+- **`context.use_workflows` opt-in**: Phase 1 Step 12 plan-approval summary states the workflows opt-in verbatim (incl. the permission-prompt heads-up and the "no-workflows" objection path); the decision is recorded post-approval in `.superflow-state.json` (`context.use_workflows`, boolean, default true; always false on Codex runtime) and in the Autonomy Charter YAML beside `model_profile`. State schema extended accordingly. The recorded opt-in is what justifies the orchestrator invoking saved workflows in Phase 2
+- **`/goal` watchdog suggestion**: at Phase 2 launch the orchestrator PRINTS a ready-to-paste `/goal Superflow Phase 2 complete: all <N> sprints implemented, unified-reviewed, PRs created and CI-green, Completion Report delivered.` template (`references/phase2/overview.md` § Phase 2 Launch). `/goal` is user-only — the model cannot set it; the evaluator (Haiku, prompt-based Stop hook) judges only the transcript; one goal per session, survives `--resume`, cleared with `/goal clear`; subagents do NOT inherit goals — charter injection remains the per-sprint alignment mechanism
+- **`workflow-review` provider**: `.par-evidence.json` provider enum extended to `codex|code-review-skill|split-focus|workflow-review` (enforcement Rule 3 step 7, `par-evidence.md`); workflow returns arrive pre-extracted — skip `extract_verdict` and assemble evidence from `{product, technical, pass}` directly
+
+### Notes
+- **Hybrid, not a rewrite**: the markdown DAG and Agent-based dispatch remain the default path. Workflows accelerate exactly two Phase 2 spots — unified review fan-out (`review-unified.md`) and parallel implementation waves (`impl-dispatch.md`) — both presented as PREFERRED-WHEN-AVAILABLE with explicit fallback to the v5.4.0 Agent flow (no behavior change)
+- **Codex runtime unaffected**: no Workflow tool, no `/goal` — Codex ignores `context.use_workflows` and keeps the spawn_agent paths (new Critical Codex Difference #6 in `references/codex/phase2-execution.md`)
+- **Documented-API-only scripts**: shipped workflow scripts never use undocumented fields (`schema`, `agentType`, `isolation`, `resume-run-id` — observed in some builds, absent from official docs); structured data returns ONLY via the v5.4.0 fenced-JSON verdict contract with fail-closed parsing
+
 ## [5.4.0] - 2026-06-11
 
 ### Fixed — Critical

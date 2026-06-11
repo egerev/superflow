@@ -118,10 +118,14 @@ superflow/
        echo "⚠️  ~/.codex/hooks.json differs from skill copy — not overwritten; merge $SUPERFLOW_SKILL_ROOT/codex/hooks.json manually"
      fi
    else
-     mkdir -p ~/.claude/agents ~/.claude/rules
+     mkdir -p ~/.claude/agents ~/.claude/rules ~/.claude/workflows
      sf_sync "$SUPERFLOW_SKILL_ROOT/superflow-enforcement.md" ~/.claude/rules/superflow-enforcement.md
      for f in "$SUPERFLOW_SKILL_ROOT"/agents/*.md; do
        sf_sync "$f" ~/.claude/agents/"$(basename "$f")"
+     done
+     # Saved workflows → invocable as /superflow-review and /superflow-wave in any project
+     for f in "$SUPERFLOW_SKILL_ROOT"/workflows/*.js; do
+       sf_sync "$f" ~/.claude/workflows/"$(basename "$f")"
      done
    fi
    ```
@@ -191,7 +195,7 @@ superflow/
 9. **Display startup banner** — output immediately after detection, before any phase routing:
    ```
    ╔═══════════════════════════════════╗
-   ║  ⚡ SUPERFLOW v5.4.0              ║
+   ║  ⚡ SUPERFLOW v5.5.0              ║
    ║  Autonomous Dev Workflow          ║
    ╚═══════════════════════════════════╝
    ```

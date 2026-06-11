@@ -593,6 +593,7 @@ Present the complete plan overview:
 - Key files touched per sprint
 - Selected git workflow mode and why it fits this task
 - **Selected model profile** (frontier=fable / balanced=opus-4.8) — can still be changed here before execution starts (e.g. "switch to balanced")
+- **Workflows opt-in** (Claude runtime only — omit this line on Codex runtime). State verbatim: "Autonomous execution will use saved multi-agent workflows for review fan-out and parallel waves (recommended). Heads-up: depending on permission mode, the FIRST workflow launch may show one approval prompt (Auto mode: first launch only; default mode: every launch — consider switching to Auto for Phase 2). Say no-workflows to use plain subagent dispatch." User objection ("no-workflows") → `use_workflows=false`. This recorded opt-in is what justifies the orchestrator invoking saved workflows during Phase 2. See `references/workflow-orchestration.md`.
 - **Sprint wave plan** — show which sprints run in parallel:
   ```
   Wave 1: [Sprint 1, Sprint 2, Sprint 6] — parallel (independent files)
@@ -611,6 +612,12 @@ mcp__plugin_telegram_telegram__reply(chat_id: <chat_id from context>, text: "Imp
 **FINAL GATE:** Ask the user: "Ready to start autonomous execution? Say 'go' when ready."
 - User says "go" / "start" / "давай" / affirmative → proceed to auto-launch flow below
 - User requests changes → update plan, re-present
+
+After approval, record the workflows opt-in decision in state (default `True`; `False` if the user said "no-workflows"; always `False` on Codex runtime):
+```bash
+python3 -c "import json,datetime; s=json.load(open('.superflow-state.json')); s.setdefault('context',{})['use_workflows']=USE_WORKFLOWS; s['last_updated']=datetime.datetime.now(datetime.timezone.utc).isoformat(); json.dump(s,open('.superflow-state.json','w'),indent=2)"
+```
+Replace `USE_WORKFLOWS` with the Python literal `True` or `False`.
 
 ```bash
 sf_emit stage.end stage=user-approval phase:int=1
@@ -636,6 +643,7 @@ success_criteria:
 governance_mode: "light|standard|critical"  # from Step 2 selection
 git_workflow_mode: "solo_single_pr|sprint_pr_queue|stacked_prs|parallel_wave_prs|trunk_based"  # from Step 2b selection
 model_profile: "frontier|balanced"  # from Step 2c selection; controls deep reviewer + deep-analyst model at dispatch
+use_workflows: true|false  # from Step 12 opt-in; allows saved /superflow-review and /superflow-wave workflows in Phase 2 (Claude runtime only)
 ---
 ```
 

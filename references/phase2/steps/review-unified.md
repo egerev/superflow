@@ -6,6 +6,36 @@
 
 ---
 
+## Preferred Path — Saved /superflow-review Workflow (Claude runtime, opt-in)
+
+When ALL hold — RUNTIME:claude, `context.use_workflows=true` in `.superflow-state.json`, and
+workflows available (not `disableWorkflows`, not `CLAUDE_CODE_DISABLE_WORKFLOWS=1`, CLI version
+≥ 2.1.154) — PREFER invoking the saved `/superflow-review` workflow over manual two-agent dispatch:
+
+```
+/superflow-review  args: {sprint: <N>, branch: "<branch>", base: "<base>",
+                          charter_path: "<charter file>",
+                          workdir: "<abs path to sprint worktree>",
+                          product: <true|false>,   (false for light-governance cells)
+                          diff_hint: "<optional scope hint>"}
+```
+
+Light-governance cells (`par_skip_product: true`): pass `product: false` — the workflow runs
+only the technical thunk and returns `{product: null, technical, pass}`. Standard and critical
+cells: pass `product: true` (the default).
+
+The workflow runs the product reviewer and the technical reviewer (which applies the codex-CLI
+fallback chain itself) in parallel and returns `{product, technical, pass}` — verdicts already
+extracted from the fenced JSON blocks, failing closed (REQUEST_CHANGES) on parse failure. Consume
+the returned verdicts directly and assemble `.par-evidence.json` from them with
+`provider: "workflow-review"` (see `par-evidence.md`). If verdicts fail: fix confirmed issues,
+commit, then re-invoke `/superflow-review` (fresh run) or re-review only the flagging lens via the
+Agent-based flow below. Do not re-explain workflow internals here — the single authority is
+`references/workflow-orchestration.md`.
+
+**Fallback:** in every other case (Codex runtime, `use_workflows=false`, workflows disabled or
+unavailable) run the existing Agent-based flow below verbatim — no behavior change.
+
 ## Two-Reviewer Protocol
 
 Principle: **specialize, don't duplicate** — Claude = Product lens, secondary = Technical lens.
