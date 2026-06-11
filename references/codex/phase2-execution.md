@@ -9,6 +9,7 @@
 3. **Sprint-level parallelism follows git workflow mode.** Read `context.git_workflow_mode`; `parallel_wave_prs` and independent `sprint_pr_queue` waves may run concurrently, `solo_single_pr` and dependent `stacked_prs` run sequentially.
 4. **Context budget:** ~258K. Use `/compact` between sequential sprints or after each completed sprint wave. For 4+ sprints, consider session-per-wave.
 5. **No TaskCreate/TaskUpdate.** Use printf for progress tracking.
+6. **No Workflow tool, no /goal.** The saved `/superflow-review` and `/superflow-wave` workflows and the `/goal` watchdog are Claude-runtime-only. On Codex, ignore `context.use_workflows` and use the existing spawn_agent paths in this overlay — no behavior change (see `references/workflow-orchestration.md`).
 
 ## Sprint-Level Parallel Dispatch
 

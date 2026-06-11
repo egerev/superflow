@@ -35,6 +35,24 @@ Independent sprints (non-overlapping files, no `depends_on` links) run concurren
 worktrees. Parse all sprint `files:` and `depends_on:` metadata, build dependency graph, group into
 waves by topological sort. Store wave plan in `.superflow-state.json` under `context.sprint_waves`.
 
+**Preferred when available — saved /superflow-wave workflow (Claude runtime, opt-in).** When
+RUNTIME:claude, `context.use_workflows=true` in `.superflow-state.json`, and workflows are
+available, PREFER invoking the saved `/superflow-wave` workflow for the wave instead of N manual
+`Agent()` calls:
+
+```
+/superflow-wave  args: {sprints: [{id, branch, worktree, task}], charter_path: "<charter file>"}
+```
+
+It fans out one implementer per sprint in parallel (implementation ONLY — code, tests, commit
+inside the given worktree) and returns a per-sprint status array; failed or unparseable results
+are treated as implementation-failed (fail closed). REVIEW IS NOT IN THE WORKFLOW — exactly as
+with manual dispatch, the ORCHESTRATOR runs review → docs → PAR → ship per sprint afterwards.
+Details and availability checks: `references/workflow-orchestration.md`.
+
+**Fallback:** Codex runtime, `use_workflows=false`, or workflows unavailable → the existing
+parallel Agent dispatch below, unchanged.
+
 **Claude runtime — implementation-only parallelism.** Subagents CANNOT dispatch further subagents
 via the Agent tool, so a sprint agent can never run reviews or create PRs itself. A parallel wave
 is N implementers dispatched in parallel — one per sprint, each in its own worktree:

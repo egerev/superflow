@@ -19,7 +19,7 @@ complete before this stage). Required fields:
 - `technical_review` — technical review verdict
 - `docs_update` — `"UPDATED"` or `"UNCHANGED"`
 - `docs_review` — `"PASS"`
-- `provider` — `"codex"`, `"code-review-skill"`, or `"split-focus"`
+- `provider` — `"codex"`, `"code-review-skill"`, `"split-focus"`, or `"workflow-review"`
 - `ts` — ISO timestamp
 
 Standard/critical sprint example:
@@ -93,6 +93,13 @@ jq -n \
 If a reviewer's message has no parseable verdict block, that is not a verdict — re-engage the
 reviewer (SendMessage, see `review-unified.md`) for the block instead of inferring one from prose.
 
+Workflow path: when review ran via the saved `/superflow-review` workflow, `product` and
+`technical` in the return value are full verdict objects (same shape as the fenced-JSON block).
+Evidence fields take the `.verdict` string — e.g. `PRODUCT=$(jq -r '.product.verdict' <<<"$WF_RESULT")`,
+`TECH=$(jq -r '.technical.verdict' <<<"$WF_RESULT")`. Skip `extract_verdict` and record
+`provider: "workflow-review"`. When `product:false` was passed, `product` is `null` — set
+`PRODUCT="SKIPPED"` directly.
+
 ## Verdict Mapping
 
 | Verdict from agent | Meaning | Action |
@@ -117,6 +124,7 @@ Examples:
 - Codex → `{"provider":"codex","claude_product":"ACCEPTED","technical_review":"APPROVE",...}`
 - /code-review skill → `{"provider":"code-review-skill","claude_product":"ACCEPTED","technical_review":"APPROVE",...}`
 - Split-focus → `{"provider":"split-focus","claude_product":"ACCEPTED","technical_review":"APPROVE",...}`
+- /superflow-review workflow → `{"provider":"workflow-review","claude_product":"ACCEPTED","technical_review":"APPROVE",...}`
 
 ## Gate Before `gh pr create`
 

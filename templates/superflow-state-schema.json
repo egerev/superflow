@@ -198,6 +198,11 @@
           "default": "frontier",
           "description": "Model tier for deep judgment roles: frontier=fable (default), balanced=opus-4.8"
         },
+        "use_workflows": {
+          "type": "boolean",
+          "default": true,
+          "description": "Opt-in for saved multi-agent workflows (/superflow-review, /superflow-wave) in Phase 2; Claude runtime only"
+        },
         "runtime": {
           "type": "string",
           "enum": [
