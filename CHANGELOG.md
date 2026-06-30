@@ -2,6 +2,20 @@
 
 All notable changes to superflow will be documented in this file.
 
+## [5.6.0] - 2026-06-30
+
+### Changed — Fable access blocked → Opus everywhere
+- **Deep judgment roles moved `fable` → `opus`**: `deep-spec-reviewer`, `deep-code-reviewer`, `deep-product-reviewer`, and `deep-analyst` frontmatter now pins `model: opus` (effort stays `max`). Fable access is blocked, so every judgment role runs on Opus; depth is differentiated by *effort* (deep = max, standard = high), not by model. Implementers stay on Sonnet (deep/standard/fast = max/high/low) — Sonnet was deliberately NOT pushed into review/judgment roles.
+- **Model-profile selection removed**: Phase 1 Step 2c no longer asks `frontier`/`balanced` (both collapsed to Opus). `context.model_profile` is dropped from the state schema, the Autonomy Charter frontmatter, the pre-execution plan recap, and all dispatch docs. Step 2c is now a fixed "Model Policy" note.
+- **Secondary-model pin**: every Claude secondary invocation `claude --model claude-fable-5` → `claude --model claude-opus-4-8` across SKILL.md, codex/AGENTS.md, codex dispatch patterns, and the codex phase overlays. PAR `provider` strings `claude-fable-5|split-focus` → `claude-opus-4-8|split-focus`. CHANGELOG history entries intentionally untouched.
+- **Stale "inherits Fable" warnings corrected**: a forgotten `model:` now inherits the orchestrator's session model (Opus); the warning text in `superflow-enforcement.md`, `references/phase2/overview.md`, and `references/phase2/steps/impl-dispatch.md` reflects this.
+
+### Fixed — Reviewer context wiring (spec/plan/charter reach the reviewers)
+- **Code reviewer context slots added**: `agents/deep-code-reviewer.md`, `agents/standard-code-reviewer.md`, and the `prompts/code-quality-reviewer.md` mirror gained `<spec_or_plan>` and `<autonomy_charter>` context slots — the Plan-completeness (#11) and Charter-compliance (#12) checks previously had instructions but no structured input.
+- **Product reviewer context slots added**: the three product-reviewer copies gained `<product_brief>` and `<autonomy_charter>` slots (alongside the existing `<original_spec>`), feeding the Product Brief validation (#6) and Charter compliance (#5) checks.
+- **`/superflow-review` workflow passes context**: new optional `spec_path`, `plan_path`, `brief_path` args wired into both the product and technical reviewer prompts (superflow-review.js, 143 → 158 lines); missing inputs are flagged as unverifiable rather than passing silently. The technical lens now receives the plan too — a diff alone cannot reveal a stub.
+- **Dispatch contract made explicit**: `references/phase2/steps/review-unified.md` now states both reviewers receive SPEC/plan + Charter + Brief + diff (pasted verbatim into the dispatch prompt); the codex overlay technical dispatches pass plan + charter for the plan-completeness and charter-compliance checks.
+
 ## [5.5.0] - 2026-06-11
 
 ### Added — Hybrid Workflow Acceleration (opt-in)

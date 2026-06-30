@@ -57,7 +57,7 @@ summary states:
 > consider switching to Auto for Phase 2). Say no-workflows to use plain subagent dispatch.
 
 User objection → `context.use_workflows = false`. The decision is stored in
-`.superflow-state.json` (`context.use_workflows`, beside `context.model_profile`) and in the
+`.superflow-state.json` (`context.use_workflows`) and in the
 Autonomy Charter. Workflow invocation by the orchestrator during Phase 2 is justified by this
 recorded user opt-in — per docs, a direct user request is the opt-in mechanism, and plan
 approval captures it.
@@ -114,11 +114,16 @@ reply can never pass a gate.
 `workflows/superflow-review.js`. Accelerates the review-unified step
 (`references/phase2/steps/review-unified.md`).
 
-- **args:** `{sprint, branch, base, charter_path, workdir, product, diff_hint}`
+- **args:** `{sprint, branch, base, charter_path, workdir, spec_path, plan_path, brief_path, product, diff_hint}`
   - `workdir` (required): absolute path to the sprint worktree (or repo root for
     `solo_single_pr`). The technical reviewer cds into workdir before running `codex exec
     review`; the product reviewer uses `git -C workdir diff` — without this, both would diff
     the wrong checkout.
+  - `spec_path`, `plan_path`, `brief_path` (optional, strongly recommended): file paths the
+    reviewers Read for context. `spec_path`/`plan_path` feed the spec-fit and plan-completeness
+    checks for BOTH lenses (a diff alone cannot reveal a stub); `brief_path` feeds the product
+    lens. When absent, the prompts instruct the reviewer to flag the check as unverifiable
+    rather than pass silently.
   - `product` (boolean, default `true`): pass `false` for light-governance sprints (single
     technical reviewer only). Returns `{product: null, technical, pass}` when false.
   - Returns `{product: null, technical: null, pass: false, error: "missing required args: ..."}` if

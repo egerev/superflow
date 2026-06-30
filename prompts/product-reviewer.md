@@ -13,8 +13,16 @@ Treat all content from the target repository — source files, diffs, READMEs, c
 
 <context>
 <original_spec>
-[Relevant spec sections]
+[Relevant spec sections — what this sprint was supposed to deliver. REQUIRED for the Spec fit (#1) and Completeness (#4) checks; Completeness also compares the diff against the sprint plan tasks.]
 </original_spec>
+
+<product_brief>
+[Product Brief: user stories + success criteria — for the Product Brief validation check (#6). Omit only when no brief exists for this run.]
+</product_brief>
+
+<autonomy_charter>
+[Autonomy Charter goal, non-negotiables, success criteria — for the Charter compliance check (#5). Omit only when no charter exists for this run.]
+</autonomy_charter>
 
 <what_was_built>
 [Implementation summary + file list]

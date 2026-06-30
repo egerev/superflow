@@ -16,7 +16,7 @@ Two parallel research agents:
 
 2. **Claude as secondary** for product expert:
    ```bash
-   $TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "Analyze [project]. Propose 3-5 concrete product improvements. For each: what, why, how." 2>&1
+   $TIMEOUT_CMD 600 claude --model claude-opus-4-8 --effort xhigh -p "Analyze [project]. Propose 3-5 concrete product improvements. For each: what, why, how." 2>&1
    ```
 
    If Claude unavailable, use spawn_agent to dispatch a second "deep-analyst" for product expert research.
@@ -31,7 +31,7 @@ Use spawn_agent for each expert persona (read `prompts/expert-panel.md` for the 
 
 **Claude as secondary** for Domain Expert:
 ```bash
-$TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "[expert-panel.md with persona=Domain Expert filled in]" 2>&1
+$TIMEOUT_CMD 600 claude --model claude-opus-4-8 --effort xhigh -p "[expert-panel.md with persona=Domain Expert filled in]" 2>&1
 ```
 
 If Claude unavailable, dispatch 4th spawn_agent("deep-analyst") for Domain Expert.
@@ -42,9 +42,9 @@ Wait for all agents before synthesizing Board Memo.
 
 Two reviewers in parallel:
 
-1. **Claude Fable 5 product reviewer:**
+1. **Claude (Opus 4.8) product reviewer:**
    ```bash
-   $TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "Review this spec for product completeness, scope alignment, user story coverage. $(cat prompts/claude/product-reviewer.md)
+   $TIMEOUT_CMD 600 claude --model claude-opus-4-8 --effort xhigh -p "Review this spec for product completeness, scope alignment, user story coverage. $(cat prompts/claude/product-reviewer.md)
 
    PRODUCT BRIEF: [BRIEF TEXT]
    SPEC: [SPEC TEXT]" 2>&1
@@ -57,9 +57,9 @@ No Claude → split-focus: spawn_agent("deep-product-reviewer") + spawn_agent("d
 
 ### Step 11: Plan Review (dual-model)
 
-1. **Claude Fable 5 product reviewer:**
+1. **Claude (Opus 4.8) product reviewer:**
    ```bash
-   $TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "Review this plan for product feasibility, scope correctness, user value alignment. $(cat prompts/claude/product-reviewer.md)
+   $TIMEOUT_CMD 600 claude --model claude-opus-4-8 --effort xhigh -p "Review this plan for product feasibility, scope correctness, user value alignment. $(cat prompts/claude/product-reviewer.md)
 
    PRODUCT BRIEF: [BRIEF TEXT]
    PLAN: [PLAN TEXT]" 2>&1

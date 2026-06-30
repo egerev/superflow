@@ -71,9 +71,9 @@ Sprint complexity tag in the plan drives implementer tier:
 **ALWAYS pass `model:` explicitly in every Agent() call** — agent definition frontmatter `model:`
 is NOT reliably inherited. Dispatch rule: implementers → `model: "sonnet"` (haiku permitted for
 mechanical Phase 0 file/config checks); standard reviewers + doc-writers → `model: "opus"`; deep
-reviewers + `deep-analyst` → `"fable"` (model_profile=frontier, default) or `"opus"` (model_profile=balanced
-— read `context.model_profile` from `.superflow-state.json`). A forgotten `model:` now silently inherits
-the parent frontier model (Fable) — the cost of forgetting went UP.
+reviewers + `deep-analyst` → `model: "opus"` (Fable is blocked — depth comes from effort: deep = max,
+standard = high, set in agent frontmatter). A forgotten `model:` silently inherits the orchestrator's
+session model (Opus), which is wrong for implementers — more expensive than the intended Sonnet.
 
 ---
 

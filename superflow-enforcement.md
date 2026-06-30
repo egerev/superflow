@@ -44,7 +44,7 @@ $TIMEOUT_CMD 600 $SECONDARY_PROVIDER <non-interactive-flag> "PROMPT" 2>&1       
 ```bash
 $TIMEOUT_CMD 600 claude -p "PROMPT" 2>&1                                                          # general
 $TIMEOUT_CMD 600 claude -p "$(cat prompts/claude/code-reviewer.md) DIFF_CONTEXT" 2>&1             # code review
-# claude-fable-5 = frontier profile (default); claude-opus-4-8 = balanced profile — read context.model_profile
+# Deep product/research secondary uses claude-opus-4-8 (Fable access is blocked — all judgment roles run on Opus, differentiated by effort)
 # No secondary → two Codex agents with split focus via spawn_agent (Product + Technical)
 ```
 See `references/codex-dispatch-patterns.md` for the complete dispatch mapping.
@@ -53,13 +53,13 @@ See `references/codex-dispatch-patterns.md` for the complete dispatch mapping.
 
 | Tier | Claude Agent (subagent_type) | Codex | When |
 |------|-------------------------------|-------|------|
-| **deep** | `deep-spec-reviewer`, `deep-code-reviewer`, `deep-product-reviewer`, `deep-analyst` (fable, effort: max); `deep-doc-writer` (opus, effort: max); `deep-implementer` (sonnet, effort: max) | `-m gpt-5.5 -c model_reasoning_effort=xhigh` + `prompts/codex/` | Phase 0 audit+security, Phase 1 spec review, Phase 2 final holistic, llms.txt/CLAUDE.md generation |
+| **deep** | `deep-spec-reviewer`, `deep-code-reviewer`, `deep-product-reviewer`, `deep-analyst` (opus, effort: max); `deep-doc-writer` (opus, effort: max); `deep-implementer` (sonnet, effort: max) | `-m gpt-5.5 -c model_reasoning_effort=xhigh` + `prompts/codex/` | Phase 0 audit+security, Phase 1 spec review, Phase 2 final holistic, llms.txt/CLAUDE.md generation |
 | **standard** | `standard-spec-reviewer`, `standard-code-reviewer`, `standard-product-reviewer`, `standard-doc-writer` (opus, effort: high); `standard-implementer` (sonnet, effort: high) | `-m gpt-5.5 -c model_reasoning_effort=high` + `prompts/codex/` | Phase 1 plan review, Phase 2 unified review, Phase 3 doc updates |
 | **fast** | `fast-implementer` (sonnet, effort: low) | `-m gpt-5.5 -c model_reasoning_effort=medium` | Simple implementation tasks |
 
 Agent definitions with effort frontmatter are deployed to `~/.claude/agents/` during SKILL.md startup (step 4). Agent() does NOT accept inline `effort` — controlled via agent definition files only.
 
-**CRITICAL: Always pass `model:` explicitly in every Agent() call.** Frontmatter `model:` in agent definitions is NOT reliably inherited — a forgotten `model:` now silently inherits the parent frontier model (Fable); the cost of forgetting went UP. Rule: implementers → `model: "sonnet"` (haiku permitted for mechanical Phase 0 file/config checks); standard reviewers + doc-writers → `model: "opus"`; deep reviewers + `deep-analyst` → `"fable"` (model_profile=frontier, default) or `"opus"` (model_profile=balanced — read `context.model_profile` from `.superflow-state.json`).
+**CRITICAL: Always pass `model:` explicitly in every Agent() call.** Frontmatter `model:` in agent definitions is NOT reliably inherited — a forgotten `model:` silently inherits the orchestrator's session model (Opus), which is wrong for implementers (more expensive than the intended Sonnet and defeats effort tiering). Rule: implementers → `model: "sonnet"` (haiku permitted for mechanical Phase 0 file/config checks); standard reviewers + doc-writers → `model: "opus"`; deep reviewers + `deep-analyst` → `model: "opus"`. **Fable access is blocked — every judgment role runs on Opus, depth differentiated by effort (deep = max, standard = high) via agent definition frontmatter.**
 
 ## Test & Process Discipline
 

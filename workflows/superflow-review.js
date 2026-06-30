@@ -13,6 +13,9 @@
 // args:    { sprint: N, branch: "feat/x-sprint-N", base: "main",
 //            charter_path: "docs/superflow/specs/...-charter.md",
 //            workdir: "/abs/path/to/sprint-worktree",
+//            spec_path: "...",         (optional — sprint spec/requirements; basis for spec-fit + plan-completeness)
+//            plan_path: "...",         (optional — sprint plan tasks; reviewers verify each is implemented, not stubbed)
+//            brief_path: "...",        (optional — Product Brief: user stories + success criteria)
 //            product: true,            (default true; pass false for light-governance)
 //            diff_hint: "..." }
 // returns: { product: <verdict>|null, technical: <verdict>, pass: <bool> }
@@ -63,9 +66,14 @@ function productPrompt(a) {
   return (
     "You are the PRODUCT reviewer for Superflow sprint " + a.sprint + ".\n" +
     "1. Read ~/.claude/agents/standard-product-reviewer.md and FOLLOW it (role, checks, output format).\n" +
-    "2. Read the Autonomy Charter at " + a.charter_path + " — source of truth for goal, non-negotiables, success criteria.\n" +
+    "2. Read and internalize the review context — compare the implementation against ALL of it:\n" +
+    "   - Autonomy Charter: " + a.charter_path + " (goal, non-negotiables, success criteria)\n" +
+    (a.spec_path ? "   - Spec / sprint requirements: " + a.spec_path + " (basis for the Spec fit check)\n" : "") +
+    (a.plan_path ? "   - Sprint plan: " + a.plan_path + " (Plan completeness — every planned task must be implemented in substance, not stubbed)\n" : "") +
+    (a.brief_path ? "   - Product Brief: " + a.brief_path + " (user stories + success criteria)\n" : "") +
+    "   If a referenced file is missing or an input was not provided, say so explicitly and treat that check as unverifiable — never pass silently.\n" +
     "3. Review the diff of " + a.branch + " against " + a.base + " (git -C " + a.workdir + " diff " + a.base + "..." + a.branch + ") " +
-    "through the product lens ONLY: spec fit, user scenarios, data integrity. " +
+    "through the product lens ONLY: spec fit, user scenarios, data integrity, plan completeness. " +
     "Every finding needs a realistic breakage scenario.\n" +
     (a.diff_hint ? "Diff hint from the orchestrator: " + a.diff_hint + "\n" : "") +
     "Allowed verdicts: ACCEPTED or NEEDS_FIXES.\n" +
@@ -82,7 +90,11 @@ function technicalPrompt(a) {
     "   Wrap its findings honestly into the verdict block below (verdict APPROVE or REQUEST_CHANGES).\n" +
     "2. If codex is absent: act as the Claude technical reviewer — Read ~/.claude/agents/standard-code-reviewer.md and FOLLOW it " +
     "over the diff of " + a.branch + " vs " + a.base + " (git -C " + a.workdir + " diff " + a.base + "..." + a.branch + "; correctness, security, architecture, performance).\n" +
-    "Also read the Autonomy Charter at " + a.charter_path + " for non-negotiables.\n" +
+    "Review context — read and compare the implementation against ALL of it:\n" +
+    "   - Autonomy Charter: " + a.charter_path + " (non-negotiables — violations are critical)\n" +
+    (a.spec_path ? "   - Spec / sprint requirements: " + a.spec_path + "\n" : "") +
+    (a.plan_path ? "   - Sprint plan: " + a.plan_path + " (Plan completeness check #11 — every planned task must be implemented in substance, not stubbed)\n" : "") +
+    "   If a referenced file is missing, say so and treat plan completeness as unverifiable.\n" +
     (a.diff_hint ? "Diff hint from the orchestrator: " + a.diff_hint + "\n" : "") +
     VERDICT_BLOCK
   );
@@ -100,6 +112,9 @@ const a = {
   base: _args.base || "main",
   charter_path: _args.charter_path,
   workdir: _args.workdir || "",
+  spec_path: _args.spec_path || "",
+  plan_path: _args.plan_path || "",
+  brief_path: _args.brief_path || "",
   diff_hint: _args.diff_hint || "",
   product: !(_args.product === false),
 };

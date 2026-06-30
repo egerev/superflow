@@ -16,6 +16,9 @@ workflows available (not `disableWorkflows`, not `CLAUDE_CODE_DISABLE_WORKFLOWS=
 /superflow-review  args: {sprint: <N>, branch: "<branch>", base: "<base>",
                           charter_path: "<charter file>",
                           workdir: "<abs path to sprint worktree>",
+                          spec_path: "<sprint spec/plan file>",   (optional but STRONGLY recommended — enables spec-fit + plan-completeness)
+                          plan_path: "<sprint plan tasks file>",  (optional — reviewers verify each task is implemented, not stubbed)
+                          brief_path: "<product brief file>",     (optional — product lens)
                           product: <true|false>,   (false for light-governance cells)
                           diff_hint: "<optional scope hint>"}
 ```
@@ -45,7 +48,16 @@ First, look up `decision_matrix.review_config[governance_mode+"+"+complexity]` i
 - `reviewers: 2` → Both Product + Technical in parallel
 - `tier` → `standard` or `deep` agent definitions
 
-Both agents receive: the SPEC, the product brief, and the relevant git diff.
+Both agents receive a COMPLETE context bundle — never just the diff:
+- the SPEC / sprint plan tasks (for spec fit AND the plan-completeness check — the **technical** reviewer
+  needs this too, not only the product reviewer; a diff without the plan cannot reveal a stub),
+- the Autonomy Charter (non-negotiables, success criteria),
+- the Product Brief (product lens),
+- the relevant git diff.
+
+Paste these into the dispatch `prompt:` verbatim — do NOT rely on the agent recalling the plan. The agent
+definitions reserve `<spec_or_plan>` + `<autonomy_charter>` (code reviewer) and
+`<original_spec>` + `<product_brief>` + `<autonomy_charter>` (product reviewer) context slots for exactly this.
 
 **Dispatch Claude reviewers as NAMED background agents** so they can be re-engaged after fixes
 with their original context intact:
@@ -53,10 +65,10 @@ with their original context intact:
 ```
 Agent(
   subagent_type: "standard-product-reviewer",  # deep-product-reviewer for deep tier
-  model: "opus",                               # standard tier; deep tier → "fable" (frontier) or "opus" (balanced — read context.model_profile)
+  model: "opus",                               # standard tier; deep tier also "opus" (effort: max via agent definition; Fable blocked)
   name: "sprint-<N>-product-reviewer",
   run_in_background: true,
-  prompt: "[SPEC + brief + diff context]"
+  prompt: "[SPEC/plan tasks + Product Brief + Autonomy Charter + git diff — fill the agent's <original_spec>/<product_brief>/<autonomy_charter> slots verbatim]"
 )
 ```
 
@@ -77,10 +89,10 @@ Agent(
    ```
    a. Agent(subagent_type: "standard-product-reviewer", model: "opus",
             name: "sprint-<N>-product-reviewer", run_in_background: true,
-            prompt: "Focus: spec fit, user scenarios, data integrity")
+            prompt: "Focus: spec fit, user scenarios, data integrity. Context (fill the agent's slots verbatim): SPEC/plan tasks + Product Brief + Autonomy Charter + git diff")
    b. Agent(subagent_type: "standard-code-reviewer", model: "opus",
             name: "sprint-<N>-technical-reviewer", run_in_background: true,
-            prompt: "Focus: correctness, security, architecture, performance")
+            prompt: "Focus: correctness, security, architecture, performance. Context (fill <spec_or_plan>/<autonomy_charter> verbatim): SPEC/plan tasks + Autonomy Charter + git diff")
    ```
    Record `"provider": "split-focus"` in `.par-evidence.json`.
 
