@@ -80,7 +80,7 @@
             },
             "browsers": {
               "type": "array",
-              "description": "Browser names reported by `playwright install --list` as available. Empty when the package is absent or the binary is not executable",
+              "description": "Browser names detected by checking real on-disk binary dirs in the ms-playwright browsers cache (honoring PLAYWRIGHT_BROWSERS_PATH; special value '0' means in-package location under node_modules/playwright-core/.local-browsers/). Read-only — no install is ever triggered. Empty when the package is absent or no browser dirs exist in the cache",
               "items": {
                 "type": "string",
                 "examples": ["chromium", "firefox", "webkit", "chrome"]
@@ -131,7 +131,7 @@
     "project_type": {
       "type": "string",
       "enum": ["web", "backend-only", "library"],
-      "description": "3-way project classifier used to determine which readiness layers are required. 'web': has a frontend framework (next/react/vue/svelte/astro/nuxt/gatsby/remix/vite/preact/solid-js/qwik/eleventy/vuepress/docusaurus/gridsome/@angular/*/@sveltejs/*/@remix-run/*/@builder.io/*/@11ty/*/@docusaurus/*) OR frontend directories (app/, pages/, src/routes/, src/pages/, src/app/) OR index.html OR SSG output dirs (dist/site/_site/out/build) containing *.html. Also 'web' when package.json has a scripts.start/dev/serve entry (ambiguous runnable JS app). 'backend-only': explicit server framework (express/fastify/koa/hapi/fastapi/flask/django) with no frontend signals. 'library': only when a POSITIVE library signal exists — pure npm package (main/module/exports/bin, no serve script), Python packaging project ([build-system]/setup.py/setup.cfg), or a repo with no package.json, no Python app/server signal, and no frontend/backend markers (e.g. a pure-Markdown tool). INVARIANT: ambiguous projects without a positive library signal always classify as 'web' to prevent silently skipping the E2E gate for real web apps"
+      "description": "3-way project classifier used to determine which readiness layers are required. 'web': has a frontend framework (next/react/vue/svelte/astro/nuxt/gatsby/remix/vite/preact/solid-js/qwik/eleventy/vuepress/docusaurus/gridsome/@angular/*/@sveltejs/*/@remix-run/*/@builder.io/*/@11ty/*/@docusaurus/*) OR frontend directories (app/, pages/, src/routes/, src/pages/, src/app/) OR index.html OR SSG output dirs (dist/site/_site/out/build) containing *.html. Also 'web' when no recognized backend is found AND package.json has a scripts.start/dev/serve entry (ambiguous runnable JS app). 'backend-only': recognized server framework with no frontend signals — Node: express/fastify/koa/hapi/@nestjs/*/@adonisjs/*/@hapi/*; Python: fastapi/flask/django. NestJS/Adonis/etc. classify as backend-only even when they have a start script, because the recognized-backend check runs BEFORE the ambiguous-start→web fallback. 'library': only when a POSITIVE library signal exists — pure npm package (main/module/exports/bin, no serve script), Python packaging project ([build-system]/setup.py/setup.cfg), or a repo with no package.json, no Python app/server signal, and no frontend/backend markers (e.g. a pure-Markdown tool). INVARIANT: ambiguous projects without a positive library signal always classify as 'web' to prevent silently skipping the E2E gate for real web apps"
     },
     "readiness": {
       "type": "object",
