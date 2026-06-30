@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Superflow Test Environment",
+  "description": "Output of tools/detect-test-env.sh — read-only snapshot of the project's test infrastructure. Written atomically to .superflow/test-env.json. All fields are idempotent: re-running the script on the same environment produces byte-identical output. Additive-only evolution: new optional fields may be added without a version bump; removing or renaming fields is a breaking change.",
+  "type": "object",
+  "required": ["docker", "node", "python", "with_deps_supported", "project_type", "readiness"],
+  "additionalProperties": false,
+  "properties": {
+    "docker": {
+      "type": "object",
+      "description": "Docker daemon availability and runtime identity",
+      "required": ["present", "runtime", "ryuk_forced_disabled", "exports"],
+      "additionalProperties": false,
+      "properties": {
+        "present": {
+          "type": "boolean",
+          "description": "True when the Docker CLI is found AND the daemon responds to `docker version` within 5 seconds"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": ["desktop", "colima", "rancher", "podman", "none"],
+          "description": "Detected Docker runtime. 'none' when Docker is absent or daemon is unreachable"
+        },
+        "ryuk_forced_disabled": {
+          "type": "boolean",
+          "description": "True only for rootless Podman, which cannot run Ryuk's privileged container. Ryuk stays enabled everywhere else (including CI — see Testcontainers Ryuk policy). When true, callers must export TESTCONTAINERS_RYUK_DISABLED=true before running integration tests"
+        },
+        "exports": {
+          "type": "object",
+          "description": "Environment variables required for Testcontainers to locate the Docker socket on non-Desktop runtimes. Empty object for Docker Desktop (uses the default socket path). On rootless Podman, also contains TESTCONTAINERS_RYUK_DISABLED",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "examples": [
+            {},
+            {
+              "DOCKER_HOST": "unix:///Users/me/.colima/default/docker.sock",
+              "TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE": "/var/run/docker.sock"
+            },
+            {
+              "DOCKER_HOST": "unix:///Users/me/.rd/docker.sock",
+              "TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE": "/var/run/docker.sock"
+            }
+          ]
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "description": "Node.js runtime and JavaScript test tooling",
+      "required": ["present", "version", "runners", "playwright"],
+      "additionalProperties": false,
+      "properties": {
+        "present": {
+          "type": "boolean",
+          "description": "True when `node` is found on PATH"
+        },
+        "version": {
+          "type": "string",
+          "description": "Raw output of `node --version` (e.g. 'v20.11.0'), or 'unknown' if the command timed out"
+        },
+        "runners": {
+          "type": "array",
+          "description": "Test runners detected in package.json dependencies/devDependencies",
+          "items": {
+            "type": "string",
+            "enum": ["playwright", "vitest", "jest", "cypress"]
+          },
+          "uniqueItems": true
+        },
+        "playwright": {
+          "type": "object",
+          "description": "Playwright JS package and browser availability",
+          "required": ["installed", "browsers"],
+          "additionalProperties": false,
+          "properties": {
+            "installed": {
+              "type": "boolean",
+              "description": "True when node_modules/.bin/playwright exists (package is present in this project). Detection is read-only — no npx/auto-install is ever triggered"
+            },
+            "browsers": {
+              "type": "array",
+              "description": "Browser names reported by `playwright install --list` as available. Empty when the package is absent or the binary is not executable",
+              "items": {
+                "type": "string",
+                "examples": ["chromium", "firefox", "webkit", "chrome"]
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      }
+    },
+    "python": {
+      "type": "object",
+      "description": "Python 3 runtime and Python test tooling",
+      "required": ["present", "version", "runners", "testcontainers", "playwright"],
+      "additionalProperties": false,
+      "properties": {
+        "present": {
+          "type": "boolean",
+          "description": "True when `python3` is found on PATH"
+        },
+        "version": {
+          "type": "string",
+          "description": "Python version string without the 'Python ' prefix (e.g. '3.11.7'), or 'unknown' on timeout"
+        },
+        "runners": {
+          "type": "array",
+          "description": "Python test runners detected in pyproject.toml or requirements*.txt",
+          "items": {
+            "type": "string",
+            "enum": ["pytest"]
+          },
+          "uniqueItems": true
+        },
+        "testcontainers": {
+          "type": "boolean",
+          "description": "True when the testcontainers Python package is declared in pyproject.toml or any requirements*.txt"
+        },
+        "playwright": {
+          "type": "boolean",
+          "description": "True when the playwright Python package is declared in requirements files OR `import playwright` succeeds at detection time"
+        }
+      }
+    },
+    "with_deps_supported": {
+      "type": "boolean",
+      "description": "True when the host OS supports `playwright install --with-deps` (Debian/Ubuntu with sudo available). False on macOS and other distributions — use `playwright install <browser>` (binaries only) instead"
+    },
+    "project_type": {
+      "type": "string",
+      "enum": ["web", "backend-only", "library"],
+      "description": "3-way project classifier used to determine which readiness layers are required. 'web': has a frontend framework (next/react/vue/svelte/angular) or frontend directories (app/, pages/, src/routes/) or index.html. 'backend-only': has a server framework (express/fastify/fastapi/flask/django) with no frontend signals. 'library': no runnable app detected. Ambiguous projects default to 'web' (conservative — never skips the gate)"
+    },
+    "readiness": {
+      "type": "object",
+      "description": "Machine-checkable verdict on testing layer availability, scoped to the detected project_type",
+      "required": ["unit", "integration", "e2e_tooling", "app_boot_smoke", "verdict", "missing", "recommendations"],
+      "additionalProperties": false,
+      "properties": {
+        "unit": {
+          "type": "boolean",
+          "description": "True when at least one unit test runner is detected (vitest/jest/pytest/cypress)"
+        },
+        "integration": {
+          "type": "boolean",
+          "description": "True when unit=true AND docker.present=true (Testcontainers-style integration tests are possible)"
+        },
+        "e2e_tooling": {
+          "type": "boolean",
+          "description": "True when the Playwright package is installed AND at least one browser is available locally. Does NOT verify the app starts — that is app_boot_smoke / P3 Release Gate territory"
+        },
+        "app_boot_smoke": {
+          "type": "string",
+          "enum": ["pass", "fail", "skipped"],
+          "description": "Result of a best-effort app boot check. In Sprint A1 this is always 'skipped' — real boot verification is the P3 Release Gate's job"
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["ready", "partial", "blocked"],
+          "description": "Overall readiness verdict scoped to project_type. 'ready': all required layers are available. 'partial': unit layer present but some layers missing. 'blocked': no unit runner found (cannot run any tests at all)"
+        },
+        "missing": {
+          "type": "array",
+          "description": "Identifiers of missing layers / tools. Each item corresponds to an entry in recommendations",
+          "items": {
+            "type": "string",
+            "examples": ["unit-runner", "docker", "playwright", "playwright-browsers"]
+          }
+        },
+        "recommendations": {
+          "type": "array",
+          "description": "Idempotent install commands that resolve each item in missing, in the same order. Run by the developer — never auto-executed by Superflow. On macOS (with_deps_supported=false), Playwright browser installs omit --with-deps",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

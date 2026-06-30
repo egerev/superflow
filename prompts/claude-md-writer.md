@@ -134,6 +134,69 @@ Numbers help the AI gauge project scale and find coverage gaps.
 - Known issues reference specific files, not vague areas.
 </constraints>
 
+<testing_section>
+## Testing Recommendations Section
+
+When `.superflow/test-env.json` exists in the target project (written by `tools/detect-test-env.sh`
+during Phase 0 Stage 1), read it and emit a **Testing** section into CLAUDE.md.
+
+### Rules for the Testing section
+
+1. **Idempotent:** Check for an existing `## Testing` section before writing.
+   If one is already present and marked with `<!-- superflow:testing -->`, UPDATE it in-place.
+   Never create a duplicate section.
+
+2. **Verified commands only:** Every command you include must be the actual runner detected in
+   `test-env.json` (e.g. `vitest`, `pytest`, `npx playwright test`). Never invent commands.
+
+3. **Non-Desktop Docker exports:** If `docker.runtime` is not `"desktop"` and `docker.exports`
+   is non-empty, include an "Integration test setup" subsection with the required exports
+   (DOCKER_HOST, TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE, and TESTCONTAINERS_RYUK_DISABLED
+   when present). Explain that these must be exported before running integration tests.
+
+4. **Playwright recommendations:** If `readiness.missing` contains `"playwright-browsers"`,
+   include the exact command from `readiness.recommendations` (respects `with_deps_supported`).
+   If `"playwright"` is missing, include the npm/pip install command.
+
+5. **Mark with `<!-- superflow:testing -->`** on the section heading line so the idempotency
+   check can find it on re-run.
+
+### Section template
+
+```markdown
+## Testing <!-- superflow:testing -->
+
+**Readiness:** [verdict from readiness.verdict] — [project_type]
+
+### Run tests
+```bash
+# Unit
+[detected unit runner command, e.g. npx vitest run / pytest]
+
+# E2E (if e2e_tooling=true)
+[detected e2e command, e.g. npx playwright test]
+```
+
+### Integration test setup (non-Desktop Docker only — omit for Desktop)
+Export before running integration tests:
+```bash
+export DOCKER_HOST="[value from docker.exports.DOCKER_HOST]"
+export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="[value]"
+# (if ryuk_forced_disabled=true)
+export TESTCONTAINERS_RYUK_DISABLED=true
+```
+
+### Recommendations (only include when readiness.missing is non-empty)
+Missing: [comma-separated list from readiness.missing]
+```bash
+[one command per item in readiness.recommendations]
+```
+```
+
+Omit any subsection whose content would be empty (e.g. no Integration setup block when
+docker.runtime==="desktop", no Recommendations block when readiness.missing is empty).
+</testing_section>
+
 <verification>
 Before finalizing, confirm each item:
 
@@ -144,6 +207,8 @@ Before finalizing, confirm each item:
 - [ ] Total length is under 200 lines (concise = actually consumed by the AI)
 - [ ] Each convention has evidence (grep output, file listing)
 - [ ] Known issues reference specific files, not vague areas
+- [ ] Testing section present when .superflow/test-env.json exists, marked with `<!-- superflow:testing -->`
+- [ ] Testing section is idempotent (check for existing section before writing; update in-place on re-run)
 - [ ] Last line of the file is the Superflow marker: `<!-- updated-by-superflow:YYYY-MM-DD -->` (use today's date)
 </verification>
 ```
