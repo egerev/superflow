@@ -1,7 +1,7 @@
 ---
 name: deep-spec-reviewer
 description: "Deep spec compliance and security review for critical reviews (Phase 1 spec review, Phase 2 final holistic)"
-model: fable
+model: opus
 effort: max
 ---
 

@@ -195,7 +195,7 @@ superflow/
 9. **Display startup banner** — output immediately after detection, before any phase routing:
    ```
    ╔═══════════════════════════════════╗
-   ║  ⚡ SUPERFLOW v5.5.0              ║
+   ║  ⚡ SUPERFLOW v5.6.0              ║
    ║  Autonomous Dev Workflow          ║
    ╚═══════════════════════════════════╝
    ```
@@ -232,7 +232,7 @@ When RUNTIME=codex, the following differences apply throughout all phases:
 
 - **Dispatch**: use spawn_agent tool with agent name from .toml definitions in `~/.codex/agents/`
 - **Parallelism**: implicit (max_threads=6), no run_in_background needed. Recommended `max_depth=2` enables sprint supervisors to spawn per-sprint implement/review/doc agents.
-- **Claude product/research secondary**: Claude CLI — `$TIMEOUT_CMD 600 claude --model claude-fable-5 --effort xhigh -p "PROMPT" 2>&1`
+- **Claude product/research secondary**: Claude CLI — `$TIMEOUT_CMD 600 claude --model claude-opus-4-8 --effort xhigh -p "PROMPT" 2>&1` (Fable access is blocked — secondary runs on Opus)
 - **Durable rules**: `codex/AGENTS.md` — re-read after ANY `/compact`
 - **Progress tracking**: printf (no TaskCreate/TaskUpdate available)
 - **Hooks**: `~/.codex/hooks.json` (SessionStart + Stop), no PreCompact/PostCompact

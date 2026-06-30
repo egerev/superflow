@@ -92,8 +92,8 @@ Sprint complexity tag in the plan drives implementer tier:
 | complex | deep-implementer | sonnet | max | 5+ files, new architecture, security-sensitive |
 
 **ALWAYS pass `model: "sonnet"` explicitly for implementers** — frontmatter `model:` is NOT
-reliably inherited. A forgotten `model:` now silently inherits the parent frontier model (Fable) —
-the cost of forgetting went UP.
+reliably inherited. A forgotten `model:` silently inherits the orchestrator's session model (Opus),
+more expensive than the intended Sonnet.
 
 Include `llms.txt` content in agent context (if file exists).
 Extract and paste the exact task list, file paths, and expected behaviors verbatim into the
