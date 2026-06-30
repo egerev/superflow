@@ -88,7 +88,14 @@ sf_emit stage.start stage=detect phase:int=0
 
 ## Step 2: Parallel Preflight Detection
 
-Run ALL detection commands simultaneously via Bash (no sequential waits):
+Run ALL detection commands simultaneously via Bash (no sequential waits). Include the test-infra detection helper as one of the parallel commands:
+
+```bash
+# Test-infra detection — run in parallel with the other probes below.
+# Writes .superflow/test-env.json (atomic, idempotent, read-only).
+# Requires: bash, jq. Never installs anything.
+bash tools/detect-test-env.sh 2>/dev/null || true
+```
 
 ```bash
 # Markers (check local first, then main branch as fallback)

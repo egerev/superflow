@@ -62,6 +62,14 @@ todos: ["Generate health report", "Save to docs/", "Show summary to user", "Pres
 
 Synthesize results from Stage 2 agents into a full report. Save to `docs/superflow/project-health-report.md` (create directory if needed). **All claims must have evidence** (file path, count, line number).
 
+Before generating the report, read `.superflow/test-env.json` (written by Stage 1):
+
+```bash
+TEST_ENV=$(cat .superflow/test-env.json 2>/dev/null) || TEST_ENV='{}'
+```
+
+Use `$TEST_ENV` to populate the Testing Infrastructure section of the report.
+
 ```markdown
 # Project Health Report
 <!-- updated-by-superflow:YYYY-MM-DD -->
@@ -99,6 +107,25 @@ Synthesize results from Stage 2 agents into a full report. Save to `docs/superfl
 - Deploy: [migrations?, rollback?, health checks?]
 - Security scanning: [dependabot?, CodeQL?]
 - Backups: [strategy or "none detected"]
+
+## Testing Infrastructure
+<!-- Populated from .superflow/test-env.json — see tools/detect-test-env.sh -->
+- **Project type:** [web / backend-only / library] (from `project_type` field)
+- **Docker runtime:** [desktop / colima / rancher / podman / none] — integration tests [possible / not possible]
+  - If non-Desktop runtime: required exports listed in `docker.exports` (must be set before running integration tests)
+  - Ryuk forced-disabled: [true / false] (rootless Podman only)
+- **Node runners:** [vitest / jest / playwright / cypress / none detected]
+- **Python runners:** [pytest / none detected]
+- **Playwright browsers:** [chromium / firefox / webkit / none installed]
+- **Readiness verdict:** [ready / partial / blocked]
+  - Unit tests: [✓ / ✗]
+  - Integration tests: [✓ / ✗]
+  - E2E tooling: [✓ / ✗]
+  - App boot smoke: [pass / fail / skipped]
+- **Missing / Recommendations:** [list from `readiness.missing` + `readiness.recommendations`]
+
+If `readiness.verdict` is `partial` or `blocked`, surface each recommendation as an actionable
+callout — never omit them. The user may act on them before Phase 2 starts.
 
 ## Documentation Freshness
 | Doc | Last Updated | Status |
