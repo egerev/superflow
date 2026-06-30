@@ -51,17 +51,28 @@ _cleanup() {
 }
 trap '_cleanup' EXIT
 
-# ── Playwright browser cache detection (read-only, no install) ─────────────────
-# Verifies ACTUAL browser binaries on disk — not install --list, which reports
-# installable names even when binaries were never downloaded.
+# ── Playwright browser cache detection (read-only, timeout-wrapped) ────────────
+# Verifies ACTUAL browser binaries on disk — a browser counts only when a
+# <browser>-* cache subdir exists. Timeout-wrapped: a stuck/networked FS must
+# not block the probe.
 _detect_playwright_browsers() {
   local cache_dir=""
   local browser=""
   local found=()
   local found_json="[]"
+  local found_one=""
 
-  # Honor PLAYWRIGHT_BROWSERS_PATH override, then fall back to OS default
-  if [ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ]; then
+  # Resolve the browsers cache directory, honouring PLAYWRIGHT_BROWSERS_PATH.
+  # Special value "0" means browsers are co-located with playwright-core (in
+  # node_modules), NOT in the shared OS cache dir.
+  if [ "${PLAYWRIGHT_BROWSERS_PATH:-}" = "0" ]; then
+    # Playwright package-local install: browsers live next to playwright-core
+    cache_dir="node_modules/playwright-core/.local-browsers"
+    if [ ! -d "${cache_dir}" ]; then
+      # Fallback for alternative layouts (pnpm, yarn workspaces)
+      cache_dir="node_modules/.cache/ms-playwright"
+    fi
+  elif [ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ]; then
     cache_dir="${PLAYWRIGHT_BROWSERS_PATH}"
   elif [ "$(uname 2>/dev/null)" = "Darwin" ]; then
     cache_dir="${HOME}/Library/Caches/ms-playwright"
@@ -74,10 +85,15 @@ _detect_playwright_browsers() {
     return 0
   fi
 
-  # A browser is installed only when a cache subdir named <browser>-* exists
+  # A browser is installed only when a cache subdir named <browser>-* exists.
+  # Use head -1 + || true to handle pipefail SIGPIPE from find correctly: find
+  # may exit non-zero (SIGPIPE) after head reads the first match, but the path
+  # is already captured before that happens.
   for browser in chromium firefox webkit; do
-    if find "${cache_dir}" -maxdepth 1 -type d -name "${browser}-*" \
-       2>/dev/null | grep -q .; then
+    found_one=""
+    found_one=$(_timeout 5 find "${cache_dir}" -maxdepth 1 -type d \
+      -name "${browser}-*" 2>/dev/null | head -1) || true
+    if [ -n "${found_one}" ]; then
       found+=("${browser}")
     fi
   done
@@ -102,7 +118,8 @@ _detect_docker() {
   local ctx=""
   local docker_info=""
   local colima_profile=""
-  local colima_status=""
+  local ctx_endpoint=""
+  local sock_target=""
   local exports_json="{}"
 
   if ! command -v docker >/dev/null 2>&1; then
@@ -151,26 +168,45 @@ _detect_docker() {
       fi
       ;;
     *)
-      # Docker Desktop (context "default"/"desktop-linux") or plain Linux docker.
-      # Colima fallback: context may be generic but colima is the actual runtime.
+      # Context is generic ("default", "desktop-linux", etc.) — assume Docker Desktop.
+      # Colima fallback: only reclassify when we can POSITIVELY prove the ACTIVE
+      # docker endpoint is colima. A false desktop is SAFER than a false colima that
+      # points at the wrong daemon (e.g. Docker Desktop + colima both running).
       runtime="desktop"
-      colima_status=""
-      if command -v colima >/dev/null 2>&1; then
-        colima_status=$(_timeout 5 colima status 2>/dev/null) || colima_status=""
-        if printf '%s\n' "${colima_status}" | grep -qi "running"; then
+
+      # Proof 1: DOCKER_HOST env var already set to a colima socket
+      if [ -n "${DOCKER_HOST:-}" ] && \
+         printf '%s' "${DOCKER_HOST}" | grep -q '\.colima/'; then
+        runtime="colima"
+        colima_profile="default"
+        docker_host="${DOCKER_HOST}"
+        tc_socket_override="/var/run/docker.sock"
+      fi
+
+      # Proof 2: active context endpoint contains .colima (docker context inspect)
+      if [ "${runtime}" = "desktop" ]; then
+        ctx_endpoint=""
+        ctx_endpoint=$(_timeout 5 docker context inspect "${ctx}" \
+          --format '{{(index .Endpoints "docker").Host}}' \
+          2>/dev/null) || ctx_endpoint=""
+        if printf '%s' "${ctx_endpoint}" | grep -q '\.colima/'; then
+          runtime="colima"
+          colima_profile="default"
+          docker_host="${ctx_endpoint}"
+          tc_socket_override="/var/run/docker.sock"
+        fi
+      fi
+
+      # Proof 3: /var/run/docker.sock is a symlink whose target is under $HOME/.colima/
+      if [ "${runtime}" = "desktop" ] && [ -L "/var/run/docker.sock" ]; then
+        sock_target=""
+        sock_target=$(readlink "/var/run/docker.sock" 2>/dev/null) || sock_target=""
+        if printf '%s' "${sock_target}" | grep -q '\.colima/'; then
           runtime="colima"
           colima_profile="default"
           docker_host="unix://${HOME}/.colima/default/docker.sock"
           tc_socket_override="/var/run/docker.sock"
         fi
-      fi
-      # Also match if the default colima socket file exists (daemon running, context misconfigured)
-      if [ "${runtime}" = "desktop" ] && \
-         [ -S "${HOME}/.colima/default/docker.sock" ]; then
-        runtime="colima"
-        colima_profile="default"
-        docker_host="unix://${HOME}/.colima/default/docker.sock"
-        tc_socket_override="/var/run/docker.sock"
       fi
       ;;
   esac
@@ -353,11 +389,16 @@ _classify_project() {
       frontend_detected=true
     fi
 
-    # Node backend frameworks
+    # Recognized Node backend frameworks. Check BEFORE the ambiguous start/dev/serve
+    # fallback so NestJS/Adonis/etc. classify as backend-only even when they have
+    # a start script. Unknown frameworks still fall through to the ambiguous→web path.
     if jq -e '
       ((.dependencies // {}) + (.devDependencies // {})) as $d |
-      ($d | has("express")) or ($d | has("fastify")) or
-      ($d | has("koa"))     or ($d | has("hapi"))
+      ($d | has("express"))  or ($d | has("fastify")) or
+      ($d | has("koa"))      or ($d | has("hapi"))    or
+      ($d | keys | any(startswith("@nestjs/")))       or
+      ($d | keys | any(startswith("@adonisjs/")))     or
+      ($d | keys | any(startswith("@hapi/")))
     ' package.json >/dev/null 2>&1; then
       backend_detected=true
     fi
