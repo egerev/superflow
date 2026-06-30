@@ -621,6 +621,21 @@ sf_emit stage.start stage=charter phase:int=1
 
 After user approval and before auto-launch, generate an Autonomy Charter from the brief, spec, and plan. Include the selected governance mode from Step 2 and git workflow mode from Step 2b:
 
+### Step 13a: Build the Test Strategy
+
+Before writing the charter YAML, derive the Test Strategy using `prompts/test-strategy.md`.
+
+Read `.superflow/test-env.json` (written by Phase 0 `tools/detect-test-env.sh`). If the file is absent (Phase 0 was skipped or detection failed), treat `project_type` as `web` and all readiness flags as `false`.
+
+Use `project_type` and the readiness flags to determine which levels apply and whether journeys are required:
+- **`web`**: unit + integration + E2E levels; ≥1 critical journey per major user-facing flow.
+- **`backend-only`**: unit + integration levels; no browser journeys.
+- **`library`**: unit level only; coverage threshold + runtime-version matrix; no journeys.
+
+**Critical constraint — owning sprint assignment:** Every journey MUST be assigned to exactly one `owning_sprint`. That sprint's plan acceptance (from Step 10) must explicitly require authoring the journey's executable spec (`*.spec.ts` / `test_*.py`). A charter with an unowned journey — or a journey whose owning sprint has no spec-authoring acceptance clause — is incomplete and will cause the Phase 3 Release Gate to report FAIL vacuously.
+
+The computed `test_strategy` block is included in the charter YAML frontmatter (see template below) and a narrative "## Test Strategy" section is included in the charter body.
+
 **Charter structure** (YAML frontmatter + Markdown body):
 
 ```yaml
@@ -635,10 +650,35 @@ success_criteria:
 governance_mode: "light|standard|critical"  # from Step 2 selection
 git_workflow_mode: "solo_single_pr|sprint_pr_queue|stacked_prs|parallel_wave_prs|trunk_based"  # from Step 2b selection
 use_workflows: true|false  # from Step 12 opt-in; allows saved /superflow-review and /superflow-wave workflows in Phase 2 (Claude runtime only)
+test_strategy:             # built in Step 13a; see prompts/test-strategy.md
+  levels:
+    unit: "<runner + test directory — e.g. 'vitest (tests/unit/)'>"
+    integration: "<runner + Docker requirement — write 'N/A' for library/e2e-only>"
+    e2e: "<Playwright or Cypress + browser — omit field for library and backend-only>"
+  journeys:                # web projects only; [] for library and backend-only; ≥1 per major user flow
+    - id: "J1-<slug>"     # stable kebab ID — NEVER rename after assignment (Release Gate matches on this)
+      title: "<Short journey name>"
+      steps:
+        - "<Step 1 — what user clicks or types>"
+        - "<Step 2>"
+        - "<Step 3>"
+      expected_outcome: "<Observable result when all steps succeed>"
+      spec_path: "<relative path — e.g. e2e/checkout.spec.ts>"
+      spec_title: "<describe/test title inside that file that covers this journey>"
+      owning_sprint: 0     # sprint number from Step 10 plan that must author spec_path
+  coverage:                # library path only — omit for web and backend-only
+    threshold: 80          # minimum line coverage %
+    tool: "<vitest --coverage (v8) / pytest-cov>"
+  runtime_matrix:          # library path only — omit for web and backend-only
+    - label: "<Node 18 LTS>"
+      version: "<18>"
+    - label: "<Node 20 LTS>"
+      version: "<20>"
+  per_sprint_acceptance: "<Per-sprint evidence: unit sprints paste runner output; journey-owning sprints paste playwright test <spec_path> output confirming journey covered; library sprints paste coverage % >= threshold>"
 ---
 ```
 
-**Body:** Free-form notes on scope boundaries, forbidden approaches, risk areas, and branch/PR policy for the selected git workflow mode.
+**Body:** Free-form notes on scope boundaries, forbidden approaches, risk areas, and branch/PR policy for the selected git workflow mode. Include a **## Test Strategy** section that narrates the active test levels, lists each journey with its steps and sprint ownership, states per-sprint acceptance for journey specs, and (for libraries) states the coverage threshold and runtime matrix.
 
 Save to `docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`. Update `.superflow-state.json` context with `charter_file` path.
 
