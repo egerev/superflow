@@ -60,7 +60,6 @@ _detect_playwright_browsers() {
   local browser=""
   local found=()
   local found_json="[]"
-  local found_one=""
 
   # Resolve the browsers cache directory, honouring PLAYWRIGHT_BROWSERS_PATH.
   # Special value "0" means browsers are co-located with playwright-core (in
@@ -86,14 +85,17 @@ _detect_playwright_browsers() {
   fi
 
   # A browser is installed only when a cache subdir named <browser>-* exists.
-  # Use head -1 + || true to handle pipefail SIGPIPE from find correctly: find
-  # may exit non-zero (SIGPIPE) after head reads the first match, but the path
-  # is already captured before that happens.
+  # Status-aware, pipe-free: -print -quit stops at the first match (no SIGPIPE),
+  # and we check rc explicitly so any non-zero exit (including 124 timeout) →
+  # absent. `|| true` is NOT used — that would mask the timeout and falsely
+  # report a browser present if find already emitted output before timing out.
+  local _br_out _br_rc
   for browser in chromium firefox webkit; do
-    found_one=""
-    found_one=$(_timeout 5 find "${cache_dir}" -maxdepth 1 -type d \
-      -name "${browser}-*" 2>/dev/null | head -1) || true
-    if [ -n "${found_one}" ]; then
+    _br_out=""
+    _br_rc=0
+    _br_out=$(_timeout 5 find "${cache_dir}" -maxdepth 1 -type d \
+      -name "${browser}-*" -print -quit 2>/dev/null) || _br_rc=$?
+    if [ "${_br_rc}" -eq 0 ] && [ -n "${_br_out}" ]; then
       found+=("${browser}")
     fi
   done
@@ -198,13 +200,13 @@ _detect_docker() {
       fi
 
       # Proof 3: /var/run/docker.sock is a symlink whose target is under $HOME/.colima/
+      # Export the ACTUAL resolved path — never the hard-coded "default" profile.
       if [ "${runtime}" = "desktop" ] && [ -L "/var/run/docker.sock" ]; then
         sock_target=""
         sock_target=$(readlink "/var/run/docker.sock" 2>/dev/null) || sock_target=""
         if printf '%s' "${sock_target}" | grep -q '\.colima/'; then
           runtime="colima"
-          colima_profile="default"
-          docker_host="unix://${HOME}/.colima/default/docker.sock"
+          docker_host="unix://${sock_target}"
           tc_socket_override="/var/run/docker.sock"
         fi
       fi
@@ -415,12 +417,17 @@ _classify_project() {
     frontend_detected=true
   fi
 
-  # SSG output directories (dist/site/_site/out/build with *.html — weak frontend signal)
+  # SSG output directories (dist/site/_site/out/build with *.html — weak frontend signal).
+  # Timeout-wrapped + -print -quit (no pipe): a huge/networked output dir must not hang.
+  # On timeout or error the signal is absent — web-bias applies only when the probe fires.
+  local _ssg_out _ssg_rc
   for ssg_dir in dist site _site out build; do
     if [ -d "${ssg_dir}" ]; then
-      ssg_check=$(find "${ssg_dir}" -maxdepth 1 -name "*.html" 2>/dev/null | head -1) \
-        || ssg_check=""
-      if [ -n "${ssg_check}" ]; then
+      _ssg_out=""
+      _ssg_rc=0
+      _ssg_out=$(_timeout 5 find "${ssg_dir}" -maxdepth 1 -name "*.html" \
+        -print -quit 2>/dev/null) || _ssg_rc=$?
+      if [ "${_ssg_rc}" -eq 0 ] && [ -n "${_ssg_out}" ]; then
         frontend_detected=true
         break
       fi
