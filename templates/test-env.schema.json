@@ -131,7 +131,7 @@
     "project_type": {
       "type": "string",
       "enum": ["web", "backend-only", "library"],
-      "description": "3-way project classifier used to determine which readiness layers are required. 'web': has a frontend framework (next/react/vue/svelte/angular) or frontend directories (app/, pages/, src/routes/) or index.html. 'backend-only': has a server framework (express/fastify/fastapi/flask/django) with no frontend signals. 'library': no runnable app detected. Ambiguous projects default to 'web' (conservative — never skips the gate)"
+      "description": "3-way project classifier used to determine which readiness layers are required. 'web': has a frontend framework (next/react/vue/svelte/astro/nuxt/gatsby/remix/vite/preact/solid-js/qwik/eleventy/vuepress/docusaurus/gridsome/@angular/*/@sveltejs/*/@remix-run/*/@builder.io/*/@11ty/*/@docusaurus/*) OR frontend directories (app/, pages/, src/routes/, src/pages/, src/app/) OR index.html OR SSG output dirs (dist/site/_site/out/build) containing *.html. Also 'web' when package.json has a scripts.start/dev/serve entry (ambiguous runnable JS app). 'backend-only': explicit server framework (express/fastify/koa/hapi/fastapi/flask/django) with no frontend signals. 'library': only when a POSITIVE library signal exists — pure npm package (main/module/exports/bin, no serve script), Python packaging project ([build-system]/setup.py/setup.cfg), or a repo with no package.json, no Python app/server signal, and no frontend/backend markers (e.g. a pure-Markdown tool). INVARIANT: ambiguous projects without a positive library signal always classify as 'web' to prevent silently skipping the E2E gate for real web apps"
     },
     "readiness": {
       "type": "object",
@@ -141,7 +141,7 @@
       "properties": {
         "unit": {
           "type": "boolean",
-          "description": "True when at least one unit test runner is detected (vitest/jest/pytest/cypress)"
+          "description": "True when at least one UNIT test runner is detected: vitest or jest (Node) or pytest (Python). Playwright and Cypress are E2E tools and are explicitly excluded from this count — a project whose only runner is @playwright/test or cypress must still show unit=false"
         },
         "integration": {
           "type": "boolean",

@@ -16,7 +16,7 @@ set -euo pipefail
 
 # ── Timeout helper ─────────────────────────────────────────────────────────────
 # Priority: gtimeout (coreutils, macOS brew) → timeout (GNU coreutils, Linux)
-# → perl alarm → bare exec (last resort when nothing is available)
+# → perl alarm → FAIL CLOSED (never run unbounded — a dead socket must not hang).
 _TIMEOUT_CMD=""
 if command -v gtimeout >/dev/null 2>&1; then
   _TIMEOUT_CMD="gtimeout"
@@ -25,8 +25,9 @@ elif command -v timeout >/dev/null 2>&1; then
 fi
 
 # _timeout SECS CMD [ARGS...]
-# Runs CMD with a wall-clock limit. Propagates CMD's exit code on success;
-# returns non-zero on timeout. Callers must handle non-zero (|| fallback).
+# Runs CMD with a wall-clock limit. Returns CMD's exit code on success, non-zero on
+# timeout. When no timeout implementation exists, returns 1 (fail-closed) rather than
+# running the command unbounded — a mandatory requirement for non-blocking probes.
 _timeout() {
   local secs="$1"; shift
   if [ -n "${_TIMEOUT_CMD}" ]; then
@@ -35,8 +36,9 @@ _timeout() {
     # Perl SIGALRM: replaces perl process via exec, so alarm fires against CMD
     perl -e 'alarm shift; exec @ARGV' "${secs}" "$@"
   else
-    # No timeout utility found — run directly (rare; all major systems have one)
-    "$@"
+    # No timeout utility found — fail closed. Probes treat this as "unavailable".
+    # All major systems (macOS/Linux) provide gtimeout or timeout via coreutils.
+    return 1
   fi
 }
 
@@ -49,6 +51,47 @@ _cleanup() {
 }
 trap '_cleanup' EXIT
 
+# ── Playwright browser cache detection (read-only, no install) ─────────────────
+# Verifies ACTUAL browser binaries on disk — not install --list, which reports
+# installable names even when binaries were never downloaded.
+_detect_playwright_browsers() {
+  local cache_dir=""
+  local browser=""
+  local found=()
+  local found_json="[]"
+
+  # Honor PLAYWRIGHT_BROWSERS_PATH override, then fall back to OS default
+  if [ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ]; then
+    cache_dir="${PLAYWRIGHT_BROWSERS_PATH}"
+  elif [ "$(uname 2>/dev/null)" = "Darwin" ]; then
+    cache_dir="${HOME}/Library/Caches/ms-playwright"
+  else
+    cache_dir="${HOME}/.cache/ms-playwright"
+  fi
+
+  if [ ! -d "${cache_dir}" ]; then
+    echo "[]"
+    return 0
+  fi
+
+  # A browser is installed only when a cache subdir named <browser>-* exists
+  for browser in chromium firefox webkit; do
+    if find "${cache_dir}" -maxdepth 1 -type d -name "${browser}-*" \
+       2>/dev/null | grep -q .; then
+      found+=("${browser}")
+    fi
+  done
+
+  if [ "${#found[@]}" -eq 0 ]; then
+    echo "[]"
+    return 0
+  fi
+
+  found_json=$(printf '%s\n' "${found[@]}" | jq -Rn '[inputs]' 2>/dev/null) \
+    || found_json="[]"
+  echo "${found_json}"
+}
+
 # ── Docker detection ───────────────────────────────────────────────────────────
 _detect_docker() {
   local present=false
@@ -59,6 +102,7 @@ _detect_docker() {
   local ctx=""
   local docker_info=""
   local colima_profile=""
+  local colima_status=""
   local exports_json="{}"
 
   if ! command -v docker >/dev/null 2>&1; then
@@ -101,15 +145,33 @@ _detect_docker() {
       docker_host="unix://${HOME}/.local/share/containers/podman/machine/podman.sock"
       tc_socket_override="/var/run/docker.sock"
       # Rootless Podman requires Ryuk to be disabled (no privileged container access)
-      docker_info=""
       docker_info=$(_timeout 5 docker info 2>/dev/null) || docker_info=""
       if printf '%s\n' "${docker_info}" | grep -qi "rootless"; then
         ryuk_forced_disabled=true
       fi
       ;;
     *)
-      # Docker Desktop (context "default" or "desktop-linux") or plain Linux docker
+      # Docker Desktop (context "default"/"desktop-linux") or plain Linux docker.
+      # Colima fallback: context may be generic but colima is the actual runtime.
       runtime="desktop"
+      colima_status=""
+      if command -v colima >/dev/null 2>&1; then
+        colima_status=$(_timeout 5 colima status 2>/dev/null) || colima_status=""
+        if printf '%s\n' "${colima_status}" | grep -qi "running"; then
+          runtime="colima"
+          colima_profile="default"
+          docker_host="unix://${HOME}/.colima/default/docker.sock"
+          tc_socket_override="/var/run/docker.sock"
+        fi
+      fi
+      # Also match if the default colima socket file exists (daemon running, context misconfigured)
+      if [ "${runtime}" = "desktop" ] && \
+         [ -S "${HOME}/.colima/default/docker.sock" ]; then
+        runtime="colima"
+        colima_profile="default"
+        docker_host="unix://${HOME}/.colima/default/docker.sock"
+        tc_socket_override="/var/run/docker.sock"
+      fi
       ;;
   esac
 
@@ -141,7 +203,6 @@ _detect_node() {
   local pw_installed=false
   local pw_browsers_json="[]"
   local pw_json="{}"
-  local pw_list=""
 
   if ! command -v node >/dev/null 2>&1; then
     jq -cn '{"present":false,"version":"","runners":[],"playwright":{"installed":false,"browsers":[]}}'
@@ -164,19 +225,12 @@ _detect_node() {
     ' package.json 2>/dev/null) || runners_json="[]"
   fi
 
-  # Playwright browser check — NEVER run bare npx (auto-download risk).
-  # Confirm local binary exists first; only then run it to enumerate browsers.
-  if [ -x "node_modules/.bin/playwright" ]; then
+  # Playwright browser check — confirm local binary exists first (never bare npx).
+  # Then verify ACTUAL installed binaries in the browser cache (not install --list,
+  # which can enumerate installable names even when binaries were never downloaded).
+  if [ -e "node_modules/.bin/playwright" ]; then
     pw_installed=true
-    pw_list=$(_timeout 15 node_modules/.bin/playwright install --list 2>/dev/null) || pw_list=""
-    if [ -n "${pw_list}" ]; then
-      pw_browsers_json=$(printf '%s\n' "${pw_list}" | \
-        jq -Rn '[inputs | scan("chromium|firefox|webkit|chrome")] | unique' \
-        2>/dev/null) || pw_browsers_json="[]"
-    fi
-  elif [ -e "node_modules/.bin/playwright" ]; then
-    # Package present but binary not executable — mark installed, browsers unknown
-    pw_installed=true
+    pw_browsers_json=$(_detect_playwright_browsers)
   fi
 
   pw_json=$(jq -cn \
@@ -228,7 +282,8 @@ _detect_python() {
   done
 
   # Verify playwright is actually importable (read-only; never installs)
-  py_pw_check=$(_timeout 5 python3 -c "import playwright; print('ok')" 2>/dev/null) || py_pw_check=""
+  py_pw_check=$(_timeout 5 python3 -c "import playwright; print('ok')" 2>/dev/null) \
+    || py_pw_check=""
   [ "${py_pw_check}" = "ok" ] && has_pw=true || true
 
   local runners_json
@@ -265,40 +320,52 @@ _detect_with_deps() {
 
 # ── Project type classifier ────────────────────────────────────────────────────
 # 3-way: web | backend-only | library
-# Ambiguous → web (never silently skip the gate).
+# Explicit frontend signals → web; explicit backend (no frontend) → backend-only.
+# Ambiguous / unrecognized runnable project → web (never silently skip the gate).
+# Positive library signal required to emit library; otherwise default is web.
 _classify_project() {
   local frontend_detected=false
   local backend_detected=false
   local req_f=""
+  local ssg_dir=""
+  local ssg_check=""
 
-  # ── Frontend signals ──────────────────────────────────────────────────────
+  # ── Explicit frontend signals ──────────────────────────────────────────────
   if [ -f "package.json" ]; then
-    # Frontend frameworks in dependencies / devDependencies
+    # Extended list: traditional + modern meta-frameworks and SSG tools
     if jq -e '
       ((.dependencies // {}) + (.devDependencies // {})) as $d |
-      ($d | has("next"))    or
-      ($d | has("react"))   or
-      ($d | has("vue"))     or
-      ($d | has("svelte"))  or
-      ($d | keys | any(startswith("@angular/")))
+      ($d | has("next"))         or ($d | has("react"))     or
+      ($d | has("vue"))          or ($d | has("svelte"))    or
+      ($d | has("astro"))        or ($d | has("nuxt"))      or
+      ($d | has("gatsby"))       or ($d | has("remix"))     or
+      ($d | has("vite"))         or ($d | has("preact"))    or
+      ($d | has("solid-js"))     or ($d | has("qwik"))      or
+      ($d | has("eleventy"))     or ($d | has("vuepress"))  or
+      ($d | has("gridsome"))     or ($d | has("docusaurus")) or
+      ($d | keys | any(startswith("@angular/")))     or
+      ($d | keys | any(startswith("@sveltejs/")))    or
+      ($d | keys | any(startswith("@remix-run/")))   or
+      ($d | keys | any(startswith("@builder.io/")))  or
+      ($d | keys | any(startswith("@11ty/")))        or
+      ($d | keys | any(startswith("@docusaurus/")))
     ' package.json >/dev/null 2>&1; then
       frontend_detected=true
     fi
 
-    # Node backend frameworks (express/fastify/koa/hapi — no frontend framework)
+    # Node backend frameworks
     if jq -e '
       ((.dependencies // {}) + (.devDependencies // {})) as $d |
-      ($d | has("express")) or
-      ($d | has("fastify")) or
-      ($d | has("koa"))     or
-      ($d | has("hapi"))
+      ($d | has("express")) or ($d | has("fastify")) or
+      ($d | has("koa"))     or ($d | has("hapi"))
     ' package.json >/dev/null 2>&1; then
       backend_detected=true
     fi
   fi
 
-  # Common frontend directory markers
-  if [ -d "app" ] || [ -d "pages" ] || [ -d "src/routes" ]; then
+  # Frontend directory markers (including src/pages for Astro, src/app for Next.js App Router)
+  if [ -d "app" ] || [ -d "pages" ] || [ -d "src/routes" ] || \
+     [ -d "src/pages" ] || [ -d "src/app" ]; then
     frontend_detected=true
   fi
 
@@ -306,6 +373,18 @@ _classify_project() {
   if [ -f "index.html" ] || [ -f "src/index.html" ] || [ -f "public/index.html" ]; then
     frontend_detected=true
   fi
+
+  # SSG output directories (dist/site/_site/out/build with *.html — weak frontend signal)
+  for ssg_dir in dist site _site out build; do
+    if [ -d "${ssg_dir}" ]; then
+      ssg_check=$(find "${ssg_dir}" -maxdepth 1 -name "*.html" 2>/dev/null | head -1) \
+        || ssg_check=""
+      if [ -n "${ssg_check}" ]; then
+        frontend_detected=true
+        break
+      fi
+    fi
+  done
 
   # ── Python backend signals ─────────────────────────────────────────────────
   if [ -f "pyproject.toml" ] && grep -qE "fastapi|flask|django" "pyproject.toml" 2>/dev/null; then
@@ -321,12 +400,47 @@ _classify_project() {
   # ── Classification ─────────────────────────────────────────────────────────
   if [ "${frontend_detected}" = "true" ]; then
     echo "web"
-  elif [ "${backend_detected}" = "true" ]; then
-    echo "backend-only"
-  else
-    # Pure package / script library: no runnable app found
-    echo "library"
+    return 0
   fi
+
+  if [ "${backend_detected}" = "true" ]; then
+    echo "backend-only"
+    return 0
+  fi
+
+  # No explicit signals — check for ambiguous runnable app vs confirmed library.
+  # Ambiguous runnable app: package.json with start/dev/serve script → web
+  # (never silently skip the E2E gate for a project that runs an app server).
+  if [ -f "package.json" ]; then
+    if jq -e '
+      (.scripts // {}) as $s |
+      ($s | has("start")) or ($s | has("dev")) or ($s | has("serve"))
+    ' package.json >/dev/null 2>&1; then
+      echo "web"
+      return 0
+    fi
+    # Pure package library: has main/module/exports/bin and no runnable scripts
+    if jq -e 'has("main") or has("module") or has("exports") or has("bin")' \
+       package.json >/dev/null 2>&1; then
+      echo "library"
+      return 0
+    fi
+  fi
+
+  # Python packaging project (build-system/setup.py/setup.cfg, no app signal)
+  if [ -f "setup.py" ] || [ -f "setup.cfg" ]; then
+    echo "library"
+    return 0
+  fi
+  if [ -f "pyproject.toml" ] && grep -q '\[build-system\]' "pyproject.toml" 2>/dev/null; then
+    echo "library"
+    return 0
+  fi
+
+  # Nothing runnable detected — emit library (pure tools/scripts/docs repos).
+  # Invariant: a repo with no package.json, no Python packaging signals, and no
+  # frontend/backend directories is unambiguously a non-app project.
+  echo "library"
 }
 
 # ── Readiness verdict ──────────────────────────────────────────────────────────
@@ -339,18 +453,22 @@ _compute_readiness() {
 
   # Extract scalar flags from detection JSON
   local docker_present node_present pw_installed has_pw_browsers
-  local node_runners_count py_runners_count
+  local unit_node_count unit_py_count
   docker_present=$(printf '%s' "${docker_j}" | jq -r '.present')
-  node_present=$(printf '%s' "${node_j}"   | jq -r '.present')
-  pw_installed=$(printf '%s' "${node_j}"   | jq -r '.playwright.installed')
+  node_present=$(printf '%s' "${node_j}"    | jq -r '.present')
+  pw_installed=$(printf '%s' "${node_j}"    | jq -r '.playwright.installed')
   has_pw_browsers=$(printf '%s' "${node_j}" | \
     jq -r '.playwright.browsers | length > 0')
-  node_runners_count=$(printf '%s' "${node_j}"    | jq -r '.runners | length')
-  py_runners_count=$(printf '%s' "${python_j}" | jq -r '.runners | length')
+
+  # Unit runners: vitest + jest (Node) and pytest (Python) only.
+  # Playwright and Cypress are E2E tools — excluded from unit count.
+  unit_node_count=$(printf '%s' "${node_j}" | \
+    jq -r '[.runners[] | select(. == "vitest" or . == "jest")] | length')
+  unit_py_count=$(printf '%s' "${python_j}" | jq -r '.runners | length')
 
   # ── Layer readiness ──────────────────────────────────────────────────────
   local has_unit=false
-  if [ "${node_runners_count}" -gt 0 ] || [ "${py_runners_count}" -gt 0 ]; then
+  if [ "${unit_node_count}" -gt 0 ] || [ "${unit_py_count}" -gt 0 ]; then
     has_unit=true
   fi
 
@@ -444,10 +562,11 @@ _compute_readiness() {
       fi
       ;;
     library)
+      # No unit runner = cannot run any tests (blocked, not merely partial)
       if [ "${has_unit}" = "true" ]; then
         verdict="ready"
       else
-        verdict="partial"
+        verdict="blocked"
       fi
       ;;
   esac
