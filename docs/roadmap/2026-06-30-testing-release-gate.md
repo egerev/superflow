@@ -90,9 +90,9 @@ Deep-research run: 6 angles → 27 sources → 128 claims → 25 adversarially v
 
 ## 7. Status Tracker
 
-- [ ] Roadmap approved
-- [ ] Wave A — Phase 1 discovery + spec/charter
-- [ ] Wave A — Sprint A1 (Phase-0 detection)
+- [x] Roadmap approved
+- [x] Wave A — Phase 1 discovery + spec/charter (governance=standard, git=solo_single_pr; spec+plan passed 2-round dual-model review, vacuous-gate blocker closed; charter generated)
+- [ ] Wave A — Sprint A1 (Phase-0 detection)  ← in progress
 - [ ] Wave A — Sprint A2 (Test Strategy artifact)
 - [ ] Wave A — Sprint A3 (Release Gate)
 - [ ] Wave A — Sprint A4 (wiring + docs)
