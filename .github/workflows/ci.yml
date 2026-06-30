@@ -36,7 +36,11 @@ jobs:
           set -euo pipefail
           EXCLUDE=(':!CHANGELOG.md' ':!.github/workflows/ci.yml')
           if git grep -nI -e 'claude-opus-4-7' -- "${EXCLUDE[@]}"; then
-            echo 'FAIL: claude-opus-4-7 found outside CHANGELOG.md (pin is claude-fable-5)' >&2
+            echo 'FAIL: claude-opus-4-7 found outside CHANGELOG.md (pin is claude-opus-4-8)' >&2
+            exit 1
+          fi
+          if git grep -nI -e 'claude-fable-5' -- "${EXCLUDE[@]}"; then
+            echo 'FAIL: claude-fable-5 found outside CHANGELOG.md (Fable access is blocked — pin is claude-opus-4-8)' >&2
             exit 1
           fi
           if git grep -nIP -e '(?<!TESTCONTAINERS_)RYUK_DISABLED' -- "${EXCLUDE[@]}"; then
