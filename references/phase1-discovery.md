@@ -636,6 +636,12 @@ Use `project_type` and the readiness flags to determine which levels apply and w
 
 **MUST — validate before writing the charter file:** Verify every journey's `owning_sprint` is a positive integer (≥1) matching an existing sprint in the Step 10 plan. No journey may keep `owning_sprint: 0` (placeholder) or reference a non-existent sprint. If any remain, fix them now in Phase 1 — an unsubstituted placeholder will only surface as a very-late, expensive FAIL at the Phase 3 Release Gate.
 
+**Journeys → scenarios handoff chain (end-to-end):**
+1. **Phase 1 (here):** each journey gets a stable `spec_tag` (e.g. `J1-login`) and an `owning_sprint` pointing to the sprint that will author the executable spec.
+2. **Phase 2 sprint execution:** the `owning_sprint` implementer MUST author the spec file at `spec_path` and annotate the test with the exact `spec_tag` (e.g. `test('user signs in @J1-login', ...)`). The sprint's acceptance criteria must explicitly require this. A sprint that owns a journey but delivers no spec file will cause the Release Gate to FAIL for that journey.
+3. **Phase 2 Release Gate (post-sprint-loop):** the orchestrator reads the charter's `test_strategy.journeys` block, emits `journeys.json` (keyed by `spec_tag`), runs Playwright with `--reporter=json`, extracts per-spec `spec_tag` from `spec.tags[]` (or title fallback), and checks that every journey's `spec_tag` appears in the covered (green) set. A journey with no matching green spec → FAIL. All journeys green → PASS.
+4. **Phase 3 pre-merge:** refuses merge unless `verdict.json` holds `verdict=PASS` (or `SKIPPED` for library). See `references/phase3-merge.md`.
+
 The computed `test_strategy` block is included in the charter YAML frontmatter (see template below) and a narrative "## Test Strategy" section is included in the charter body.
 
 **Charter structure** (YAML frontmatter + Markdown body):

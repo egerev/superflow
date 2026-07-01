@@ -244,6 +244,55 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
+# Check 7: phase_gates.release_gate — node exists, step_files entry, file on disk
+# ---------------------------------------------------------------------------
+echo "[ Check 7: phase_gates.release_gate — node, step_files entry, file on disk ]"
+
+RG_NODE="$(jq -r '.phase_gates.release_gate // empty' "$WORKFLOW_JSON")"
+if [ -z "$RG_NODE" ]; then
+  fail "phase_gates.release_gate node is missing from workflow.json"
+else
+  pass "phase_gates.release_gate node exists"
+
+  # Verify step_files has an entry keyed "release_gate"
+  RG_STEP_FILE="$(jq -r '.step_files.release_gate // empty' "$WORKFLOW_JSON")"
+  if [ -z "$RG_STEP_FILE" ]; then
+    fail "step_files[\"release_gate\"] is missing (release_gate node exists but has no step_files entry)"
+  else
+    pass "step_files[\"release_gate\"] = \"${RG_STEP_FILE}\""
+
+    # Verify the step file exists on disk
+    RG_FILE_PATH="${STEPS_DIR}/${RG_STEP_FILE}"
+    if [ ! -f "$RG_FILE_PATH" ]; then
+      fail "release_gate step file not found on disk: ${RG_STEP_FILE} (expected at ${RG_FILE_PATH})"
+    else
+      pass "release_gate step file exists on disk: ${RG_STEP_FILE}"
+    fi
+  fi
+
+  # Verify mandatory node fields
+  RG_WHEN="$(echo "$RG_NODE" | jq -r '.when // empty')"
+  RG_MANDATORY="$(echo "$RG_NODE" | jq -r '.mandatory_for // empty')"
+  RG_SKIPPED="$(echo "$RG_NODE" | jq -r '.skipped_for // empty')"
+  if [ -z "$RG_WHEN" ]; then
+    fail "phase_gates.release_gate is missing 'when' field"
+  else
+    pass "release_gate.when = \"${RG_WHEN}\""
+  fi
+  if [ -z "$RG_MANDATORY" ]; then
+    fail "phase_gates.release_gate is missing 'mandatory_for' field"
+  else
+    pass "release_gate.mandatory_for is present"
+  fi
+  if [ -z "$RG_SKIPPED" ]; then
+    fail "phase_gates.release_gate is missing 'skipped_for' field"
+  else
+    pass "release_gate.skipped_for is present"
+  fi
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
 # Section: Per-combination step sequences (9 cells × walkthrough)
 # ---------------------------------------------------------------------------
 echo "================================================================"

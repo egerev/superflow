@@ -21,8 +21,9 @@ complete before this stage). Required fields:
 - `docs_review` — `"PASS"`
 - `provider` — `"codex"`, `"code-review-skill"`, `"split-focus"`, or `"workflow-review"`
 - `ts` — ISO timestamp
+- `release_gate` — (optional per sprint; **required in the final pre-Phase-3 evidence**) — `"PASS"`, `"SKIPPED"`, or `"FAIL"`. Copied from `.superflow/release-gate/verdict.json` after the gate runs (post-sprint-loop, pre-completion-report). Per-sprint PAR may omit this field; the Phase 3 gate reads `verdict.json` directly (authoritative) and expects `release_gate` in the final `.par-evidence.json` as an audit trail.
 
-Standard/critical sprint example:
+Standard/critical sprint example (mid-run — no release_gate yet):
 
 ```json
 {
@@ -35,6 +36,24 @@ Standard/critical sprint example:
   "docs_update": "UPDATED",
   "docs_review": "PASS",
   "provider": "codex",
+  "ts": "2026-01-01T00:00:00Z"
+}
+```
+
+Final pre-Phase-3 evidence (after release gate runs — `release_gate` required):
+
+```json
+{
+  "sprint": 3,
+  "governance": "standard",
+  "complexity": "medium",
+  "par_skip_product": false,
+  "claude_product": "ACCEPTED",
+  "technical_review": "APPROVE",
+  "docs_update": "UPDATED",
+  "docs_review": "PASS",
+  "provider": "codex",
+  "release_gate": "PASS",
   "ts": "2026-01-01T00:00:00Z"
 }
 ```

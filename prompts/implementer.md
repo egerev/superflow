@@ -63,7 +63,7 @@ If you wrote production code before the test: set it aside and restart from the 
 ## Testcontainers Hygiene
 
 If the task involves integration tests with testcontainers (Postgres, Redis, MySQL, etc.):
-- Set `TESTCONTAINERS_RYUK_DISABLED` ONLY behind `if (process.env.CI === 'true')` — never unconditionally.
+- Set `TESTCONTAINERS_RYUK_DISABLED=true` ONLY in two cases: (a) `process.env.CI === 'true'` (CI environments), or (b) `docker.ryuk_forced_disabled=true` in `.superflow/test-env.json` (rootless Podman — detected by Phase 0). In case (b), run `tools/cleanup-testcontainers.sh` as a mandatory backstop before and after integration tests. Never disable Ryuk unconditionally.
 - Write a teardown helper (or rely on Ryuk locally) that is idempotent.
 - Document in the commit body if Ryuk is intentionally disabled and why.
 

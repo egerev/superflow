@@ -119,6 +119,32 @@ sf_emit stage.start stage=pre-merge phase:int=3
 <!-- Stage 1: Pre-merge -->
 
 Before merging any PR:
+0a. **Release gate precondition (COMPACTION-SURVIVING — check first)** — refuse merge unless
+    `.superflow/release-gate/verdict.json` exists with `verdict=PASS` or `verdict=SKIPPED`:
+   ```bash
+   jq -e '.verdict == "PASS" or .verdict == "SKIPPED"' .superflow/release-gate/verdict.json \
+     && echo "Release gate: OK" \
+     || { echo "BLOCKED: release gate verdict is not PASS/SKIPPED — run the gate first"; exit 1; }
+   ```
+   Permitted values:
+   - `PASS` — all journeys covered green + integration passed (web/backend-only)
+   - `SKIPPED` — project is `library` (coverage threshold is the gate) OR environment blocked
+     the run (Docker/browsers absent) with an explicit recorded reason
+
+   If the file is absent or the verdict is `FAIL`, **STOP**. Fix the failing journeys or
+   integration tests in the current branch, re-run `bash tools/release-gate.sh`, wait for
+   `verdict=PASS`, then proceed.
+
+   The verdict is also folded into `.par-evidence.json` as `"release_gate"` field:
+   ```bash
+   # After release gate runs — merge the verdict into par-evidence.json
+   GATE_VERDICT=$(jq -r '.verdict' .superflow/release-gate/verdict.json)
+   jq --arg rg "$GATE_VERDICT" '. + {release_gate: $rg}' .par-evidence.json > .par-evidence.json.tmp \
+     && mv .par-evidence.json.tmp .par-evidence.json
+   ```
+   This makes the existing PAR gate carry the release verdict. The Phase 3 merge check above
+   reads directly from `verdict.json` (authoritative); `par-evidence.json` is the audit trail.
+
 0. **Read completion data** — load `context.completion_data_file` from `.superflow-state.json`:
    ```bash
    python3 -c "import json; s=json.load(open('.superflow-state.json')); p=s.get('context',{}).get('completion_data_file'); print(open(p).read() if p else 'No completion data')"
