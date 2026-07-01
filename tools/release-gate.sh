@@ -17,29 +17,35 @@
 #     --results       <path/to/results.json>            \
 #     [--evidence-dir <path/to/evidence/directory>]
 #
-# --journeys format (JSON array — orchestrator extracts from charter test_strategy.journeys):
+# --journeys format (JSON array — orchestrator emits from charter test_strategy.journeys):
 #   [{"id":"J1-login","spec_tag":"J1-login","spec_path":"e2e/auth.spec.ts",
 #     "spec_title":"user can sign in @J1-login","owning_sprint":2}, ...]
-#   Required keys: id, spec_tag. Pass [] for library/backend-only projects.
+#   Required keys per element: id (string), spec_tag (non-empty string).
+#   Pass [] for library and backend-only projects (no journeys expected).
+#   Web projects MUST supply ≥1 journey — [] on web → FAIL (no-vacuous-pass).
 #
 # --results format:
 #   {
 #     "specs_ran":         bool,    # false = zero specs executed (no-vacuous-pass trigger)
-#     "integration":       string,  # "pass" | "fail" | "skipped"
-#     "e2e_covered_tags":  [str],   # spec_tags of journeys whose spec ran and passed green
+#     "integration":       string,  # "pass" | "skipped" | anything else = FAIL
+#     "e2e_covered_tags":  [str],   # spec_tags of journeys whose spec passed green
 #     "e2e_failed_tags":   [str],   # spec_tags of journeys whose spec ran but failed
 #     "browsers_present":  bool,    # false = playwright browser binaries not installed
 #     "docker_present":    bool     # false = Docker unavailable (integration degrades)
 #   }
+#   e2e_covered_tags and e2e_failed_tags MUST be JSON arrays of strings.
+#   Any other type (e.g. a comma-separated string) → FAIL (fail-closed, never PASS).
 #
 # Verdict matrix:
 #   library     → SKIPPED, exit 0 (E2E gate not applicable; coverage threshold substitutes)
-#   web         → FAIL when: browsers absent | specs_ran=false + journeys defined |
-#                            any journey missing from covered or present in failed |
-#                            integration=fail.
-#                 docker absent on web = LOUD note in reason, non-blocking when all E2E passed.
-#                 PASS when all journeys green + integration not failing.
-#   backend-only → FAIL when: docker absent | integration=fail | integration=skipped (conservative).
+#   web         → FAIL when: zero journeys supplied | browsers absent |
+#                            specs_ran=false | any journey not in covered or in failed |
+#                            integration not in {pass, skipped} (fail-closed on unknown).
+#                 integration=skipped on web = LOUD note in reason, non-blocking
+#                 (E2E journey coverage is the primary gate for web projects).
+#                 PASS when all journeys green + integration in {pass, skipped}.
+#   backend-only → FAIL when: docker absent | integration=fail | integration=skipped
+#                             (conservative: cannot verify without running tests).
 #                  PASS when integration=pass.
 #
 # Output (.superflow/release-gate/verdict.json — always written, even on FAIL):
@@ -141,6 +147,45 @@ _DOCKER_PRESENT=$( jq -r '.docker_present     // false'    "${_RESULTS_FILE}")
 _E2E_COVERED=$(    jq -c '.e2e_covered_tags   // []'       "${_RESULTS_FILE}")
 _E2E_FAILED=$(     jq -c '.e2e_failed_tags    // []'       "${_RESULTS_FILE}")
 
+# ── Input schema validation (FIX 2) ───────────────────────────────────────────
+# Fail-closed: malformed JSON types must never produce a false PASS.
+# Any field with the wrong type → FAIL verdict (see dispatch section).
+_validate_inputs() {
+  # journeys file must be a JSON array
+  if ! jq -e 'type == "array"' "${_JOURNEYS_FILE}" >/dev/null 2>&1; then
+    printf 'release-gate: --journeys must be a JSON array\n' >&2
+    return 1
+  fi
+
+  # Every journey element must have a non-empty string spec_tag
+  local _bad
+  _bad=$(jq -r '
+    .[] | select(
+      (.spec_tag // "") | (type != "string" or length == 0)
+    ) | .id // "(unknown id)"
+  ' "${_JOURNEYS_FILE}" 2>/dev/null) || _bad=""
+  if [ -n "${_bad}" ]; then
+    printf 'release-gate: journey(s) missing non-empty spec_tag: %s\n' "${_bad}" >&2
+    return 1
+  fi
+
+  # e2e_covered_tags must be a JSON array of strings (not a comma-joined string etc.)
+  if ! printf '%s' "${_E2E_COVERED}" | \
+       jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null 2>&1; then
+    printf 'release-gate: results.e2e_covered_tags must be a JSON array of strings (got type=%s)\n' \
+      "$(printf '%s' "${_E2E_COVERED}" | jq -r 'type' 2>/dev/null || echo '?')" >&2
+    return 1
+  fi
+
+  # e2e_failed_tags must be a JSON array of strings
+  if ! printf '%s' "${_E2E_FAILED}" | \
+       jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null 2>&1; then
+    printf 'release-gate: results.e2e_failed_tags must be a JSON array of strings (got type=%s)\n' \
+      "$(printf '%s' "${_E2E_FAILED}" | jq -r 'type' 2>/dev/null || echo '?')" >&2
+    return 1
+  fi
+}
+
 # ── Collect evidence paths ─────────────────────────────────────────────────────
 # Timeout-wrapped: a slow/networked evidence directory must not block verdict write.
 _collect_evidence_paths() {
@@ -184,40 +229,51 @@ _compute_verdict_library() {
 
 # ── Web verdict ────────────────────────────────────────────────────────────────
 # Per-journey coverage by spec_tag is the primary gate. Integration is secondary.
-# Docker absent = LOUD note in reason but non-blocking when all E2E journeys pass.
+# Fail-closed on: zero journeys, absent browsers, zero specs ran, uncovered journeys,
+# and unrecognized integration values.
 _compute_verdict_web() {
   local journey_count
   journey_count=$(jq 'length' "${_JOURNEYS_FILE}")
 
-  # 1. Browsers absent → FAIL immediately (E2E is mandatory for web projects).
-  if [ "${_BROWSERS_PRESENT}" = "false" ]; then
+  # FIX 1: Web must supply ≥1 journey — empty journeys array → FAIL.
+  # A web charter without journeys has no coverage definition; the gate cannot verify
+  # anything and must never pass vacuously. Ensure charter defines journeys before
+  # running the gate.
+  if [ "${journey_count}" -eq 0 ]; then
     _VERDICT="FAIL"
-    _REASON="browsers absent — E2E cannot run on a web project; install Playwright browsers: npx playwright install chromium"
-    if [ "${journey_count}" -gt 0 ]; then
-      _JOURNEYS_MISSING_JSON=$(jq -c '[.[].spec_tag]' "${_JOURNEYS_FILE}")
-    fi
+    _REASON="web project but zero journeys supplied — charter must define ≥1 journey; per-journey coverage requires at least one journey to verify"
     return
   fi
 
-  # 2. No-vacuous-pass: journeys are defined but zero specs ran.
-  #    "Nothing ran, nothing failed" is NOT a pass when journeys exist.
-  if [ "${_SPECS_RAN}" = "false" ] && [ "${journey_count}" -gt 0 ]; then
+  # Browsers absent → FAIL immediately (E2E is mandatory for web projects).
+  if [ "${_BROWSERS_PRESENT}" = "false" ]; then
+    _VERDICT="FAIL"
+    _REASON="browsers absent — E2E cannot run on a web project; install Playwright browsers: npx playwright install chromium"
+    _JOURNEYS_MISSING_JSON=$(jq -c '[.[].spec_tag]' "${_JOURNEYS_FILE}")
+    return
+  fi
+
+  # No-vacuous-pass: specs must have executed. journey_count > 0 guaranteed above.
+  # "Nothing ran, nothing failed" is NOT a pass when journeys exist.
+  if [ "${_SPECS_RAN}" = "false" ]; then
     _VERDICT="FAIL"
     _REASON="no-vacuous-pass: specs_ran=false — per-journey coverage cannot be verified (${journey_count} journey(s) defined but no specs executed)"
     _JOURNEYS_MISSING_JSON=$(jq -c '[.[].spec_tag]' "${_JOURNEYS_FILE}")
     return
   fi
 
-  # 3. Per-journey coverage: every journey spec_tag must appear in e2e_covered_tags
-  #    AND must NOT appear in e2e_failed_tags. Coverage is per stable ID, not by count.
+  # Per-journey coverage: EXACT set-membership (FIX 2).
+  # any($arr[]; . == $t) uses strict element equality — never substring matching.
+  # A journey is covered iff its spec_tag is an exact element of e2e_covered_tags
+  # AND is NOT an exact element of e2e_failed_tags.
   _JOURNEYS_COVERED_JSON=$(jq -c \
     --argjson covered "${_E2E_COVERED}" \
     --argjson failed  "${_E2E_FAILED}" \
     '[.[] |
       .spec_tag as $t |
       select(
-        (($covered | index($t)) != null) and
-        (($failed  | index($t)) == null)
+        any($covered[]; . == $t) and
+        (any($failed[]; . == $t) | not)
       ) | .spec_tag]' \
     "${_JOURNEYS_FILE}")
 
@@ -227,8 +283,8 @@ _compute_verdict_web() {
     '[.[] |
       .spec_tag as $t |
       select(
-        (($covered | index($t)) == null) or
-        (($failed  | index($t)) != null)
+        (any($covered[]; . == $t) | not) or
+        any($failed[]; . == $t)
       ) | .spec_tag]' \
     "${_JOURNEYS_FILE}")
 
@@ -243,38 +299,50 @@ _compute_verdict_web() {
     return
   fi
 
-  # 4. Integration failure blocks even when all E2E journeys pass.
-  if [ "${_INTEGRATION}" = "fail" ]; then
-    _VERDICT="FAIL"
-    _REASON="integration tests FAILED (E2E journeys all passed)"
-    return
-  fi
+  # Integration gate — fail-closed on unrecognised values (FIX 3).
+  # Whitelist: {pass, skipped}. Anything else (fail, failed, error, fatal, unknown) → FAIL.
+  # Rationale: "skipped" is the only legitimate non-pass: docker absent or no integration
+  # suite. On web, E2E journey coverage is the primary gate so a LOUD skipped is
+  # non-blocking. Any other value that is not "pass" must be treated as a failure —
+  # never let an unknown string silently pass the gate.
+  local docker_note=""
+  case "${_INTEGRATION}" in
+    pass)
+      # Integration ran and passed cleanly — no additional note needed.
+      ;;
+    skipped)
+      # Legitimate degrade: docker absent or no integration suite configured.
+      # Non-blocking for web (E2E is the primary gate) but surfaced loudly in reason.
+      if [ "${_DOCKER_PRESENT}" = "false" ]; then
+        docker_note=" [LOUD: integration skipped — docker absent; no integration tests ran]"
+      else
+        docker_note=" [LOUD: integration skipped — docker present but suite did not run; confirm expected]"
+      fi
+      ;;
+    *)
+      # Fail-closed: "fail", "failed", "error", "fatal", or any unrecognised value.
+      # Only "pass" and "skipped" are recognised non-failure values.
+      _VERDICT="FAIL"
+      _REASON="integration result '${_INTEGRATION}' treated as failure (fail-closed: only 'pass' and 'skipped' are recognised non-failure values)"
+      return
+      ;;
+  esac
 
-  # 5. Docker absent = LOUD note in reason (non-blocking for web when E2E passed).
-  #    Integration tests simply didn't run — this is surfaced prominently but does
-  #    not override a green E2E gate for web projects (integration is a secondary gate).
   local covered_count
   covered_count=$(printf '%s' "${_JOURNEYS_COVERED_JSON}" | jq 'length')
-  local docker_note=""
-  if [ "${_DOCKER_PRESENT}" = "false" ]; then
-    docker_note=" [LOUD: integration skipped — docker absent; no integration tests ran]"
-  fi
-
   _VERDICT="PASS"
   _REASON="all ${covered_count} journey(s) covered green; integration=${_INTEGRATION}${docker_note}"
 }
 
 # ── Backend-only verdict ───────────────────────────────────────────────────────
 # Integration is the sole gate — no browser journeys required.
-# Conservative on ambiguous states: docker absent → FAIL (can't verify without Docker).
+# Conservative: docker absent or non-pass result → FAIL (cannot verify without running).
 _compute_verdict_backend_only() {
   _JOURNEYS_COVERED_JSON="[]"
   _JOURNEYS_MISSING_JSON="[]"
 
   # Docker absent: integration cannot run → conservative FAIL.
-  # Rule: PASS only if there was genuinely nothing runnable. Since the project_type
-  # is backend-only, integration tests ARE expected — their absence without Docker is
-  # a FAIL, not a silent skip.
+  # Backend-only projects depend entirely on integration tests; Docker is required.
   if [ "${_DOCKER_PRESENT}" = "false" ]; then
     _VERDICT="FAIL"
     _REASON="[LOUD: INTEGRATION SKIPPED — docker absent] backend-only project requires integration tests; conservative FAIL (Docker needed to verify)"
@@ -291,7 +359,8 @@ _compute_verdict_backend_only() {
       _REASON="integration tests FAILED"
       ;;
     skipped)
-      # Docker is present but no integration tests ran — something is misconfigured.
+      # Unlike web, backend-only has no E2E fallback gate. Docker present but tests
+      # didn't run = conservative FAIL (something is misconfigured or missing).
       _VERDICT="FAIL"
       _REASON="integration tests skipped (docker present but integration suite did not run) — conservative FAIL; add integration tests or investigate"
       ;;
@@ -303,11 +372,18 @@ _compute_verdict_backend_only() {
 }
 
 # ── Dispatch ───────────────────────────────────────────────────────────────────
-case "${_PROJECT_TYPE}" in
-  library)      _compute_verdict_library ;;
-  web)          _compute_verdict_web ;;
-  backend-only) _compute_verdict_backend_only ;;
-esac
+# Run input validation first; a malformed input must never produce PASS.
+if _validate_inputs; then
+  case "${_PROJECT_TYPE}" in
+    library)      _compute_verdict_library ;;
+    web)          _compute_verdict_web ;;
+    backend-only) _compute_verdict_backend_only ;;
+  esac
+else
+  # Schema validation failed — fail closed. Reason surfaced in stderr by _validate_inputs.
+  _VERDICT="FAIL"
+  _REASON="malformed results/journeys input — schema validation failed (see stderr for details)"
+fi
 
 # ── Write verdict.json atomically ──────────────────────────────────────────────
 # mkdir -p + mktemp + mv: a partial write never lands at the final path.
