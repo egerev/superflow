@@ -105,10 +105,14 @@ if [ "${CI:-false}" = "true" ] || \
 fi
 ```
 
-Run tests with timeout:
+Run tests with timeout — capture the command exit code, not the `tee` exit (FIX 4):
 ```bash
-timeout 300 npm run test:integration 2>&1 | tee .superflow/release-gate/integration.log
+# Write to file first, then cat separately — avoids pipeline masking the test exit code.
+# A pipeline of `cmd | tee` captures tee's exit (always 0), hiding a failing test suite.
+timeout 300 npm run test:integration \
+  > .superflow/release-gate/integration.log 2>&1
 INTEGRATION_EXIT=$?
+cat .superflow/release-gate/integration.log   # stream to terminal for live visibility
 ```
 
 `INTEGRATION_EXIT=0` → `integration=pass`. Non-zero → `integration=fail`.
@@ -121,11 +125,14 @@ If Docker is absent (`readiness.integration=false`) → `integration=skipped` (n
 Tag-based execution: run the E2E suite and capture per-journey outcomes by `spec_tag`.
 
 ```bash
-# Use workers=1 for determinism at gate time (parallelism during dev is fine)
+# Use workers=1 for determinism at gate time (parallelism during dev is fine).
+# Same fix as integration: capture the Playwright exit code, not tee's.
 timeout 300 npx playwright test --workers=1 \
-  --reporter=json --output=.superflow/release-gate/pw-results.json \
-  2>&1 | tee .superflow/release-gate/e2e.log
+  --reporter=json \
+  --output-file=.superflow/release-gate/pw-results.json \
+  > .superflow/release-gate/e2e.log 2>&1
 E2E_EXIT=$?
+cat .superflow/release-gate/e2e.log   # stream for live visibility
 ```
 
 **Trace + artefact capture:**
@@ -145,33 +152,82 @@ Reference the `webapp-testing` skill for browser driving where it fits.
 
 ## Step 7 — Extract per-journey results + build `results.json`
 
-Parse `pw-results.json` to determine which journey `spec_tag`s passed or failed.
-Journey tags appear in test titles as `@<spec_tag>` (e.g. `"user can sign in @J1-login"`).
+### Playwright JSON reporter schema (FIX 5)
+
+Playwright JSON reporter (`--reporter=json`) has these key fields:
+- `spec.ok: bool` — `true` when the spec passed (all tests ran as `expectedStatus`). Use this; do NOT use `.tests[].status` (that field holds `expected|unexpected|flaky|skipped`, not `passed|failed`).
+- `spec.tags: [str]` — native tag array (Playwright ≥ 1.42), e.g. `["@J1-login"]` (note the `@` prefix in the JSON).
+- Suites are nested: `suite.suites[].specs[]` (file → describe → describe → spec). `.suites[].specs[]` is **not recursive** and misses nested describes. Recurse with `.. | objects | select(has("specs")) | .specs[]`.
+
+### Tag extraction (FIX 6)
+
+Prefer `spec.tags[]` (strip leading `@`); fall back to a regex capture from the spec title.
+The fallback regex uses `[A-Za-z][A-Za-z0-9_-]*` — permissive enough to preserve full stable
+IDs like `J2-checkoutV2` or `J1-sign_in` (the old `J[0-9]+-[a-z-]+` pattern truncated them).
 
 ```bash
-# Extract covered (passed) spec_tags
+# Covered: specs where ok=true
 E2E_COVERED=$(jq -c '
-  [.suites[].specs[] |
-    select(.tests[].status == "passed") |
-    .title |
-    capture("@(?P<tag>J[0-9]+-[a-z-]+)") |
-    .tag // empty]
+  [
+    .. | objects | select(has("specs")) | .specs[] |
+    select(.ok == true) |
+    (
+      if ((.tags // []) | length) > 0 then
+        .tags[] | ltrimstr("@")
+      else
+        .title | capture("@(?<tag>[A-Za-z][A-Za-z0-9_-]*)") | .tag // empty
+      end
+    )
+  ] | unique
 ' .superflow/release-gate/pw-results.json 2>/dev/null || echo "[]")
 
-# Extract failed spec_tags
+# Failed: specs where ok=false (or null/missing — defensive)
 E2E_FAILED=$(jq -c '
-  [.suites[].specs[] |
-    select(.tests[].status == "failed" or .tests[].status == "unexpected") |
-    .title |
-    capture("@(?P<tag>J[0-9]+-[a-z-]+)") |
-    .tag // empty]
+  [
+    .. | objects | select(has("specs")) | .specs[] |
+    select(.ok == false or .ok == null) |
+    (
+      if ((.tags // []) | length) > 0 then
+        .tags[] | ltrimstr("@")
+      else
+        .title | capture("@(?<tag>[A-Za-z][A-Za-z0-9_-]*)") | .tag // empty
+      end
+    )
+  ] | unique
 ' .superflow/release-gate/pw-results.json 2>/dev/null || echo "[]")
 ```
 
-Build `results.json` and pass it to `release-gate.sh`:
+**Proof (mini Playwright JSON sample):**
+```json
+{"suites":[{"title":"auth.spec.ts","suites":[{"title":"Login","specs":[
+  {"title":"user can sign in @J1-login","ok":true,"tags":["@J1-login"]},
+  {"title":"checkout flow @J2-checkout","ok":false,"tags":["@J2-checkout"]}
+]}]}]}
+```
+Running the covered jq above on this sample → `["J1-login"]`. A green suite now yields
+covered tags (A1 pass path is operable). Failed jq → `["J2-checkout"]`.
+
+### Determine `specs_ran` (FIX 7)
+
+`timeout` exit code 124 (SIGTERM) or 137 (SIGKILL from kill -9) means the process was killed
+before specs could finish — treat as `specs_ran=false` to avoid misleading evidence:
+
+```bash
+if [ "${E2E_EXIT}" -eq 124 ] || [ "${E2E_EXIT}" -eq 137 ]; then
+  SPECS_RAN=false   # timed out — evidence is incomplete
+elif [ "${E2E_EXIT}" -eq 0 ]; then
+  SPECS_RAN=true
+else
+  # Non-zero, non-timeout: Playwright itself ran but tests failed
+  SPECS_RAN=true
+fi
+```
+
+### Build `results.json`
+
 ```bash
 jq -cn \
-  --argjson specs_ran        "$( [ "${E2E_EXIT:-1}" -lt 125 ] && echo true || echo false )" \
+  --argjson specs_ran        "${SPECS_RAN}" \
   --arg     integration      "${INTEGRATION_RESULT:-skipped}" \
   --argjson e2e_covered_tags "${E2E_COVERED}" \
   --argjson e2e_failed_tags  "${E2E_FAILED}" \
@@ -185,17 +241,46 @@ jq -cn \
 
 ---
 
-## Step 8 — Compute + persist verdict
+## Step 8 — Build journeys.json + compute verdict (FIX 8)
 
-Extract journeys from the charter `test_strategy.journeys` block and pass to the gate helper:
+### Build `journeys.json` — NO yq (orchestrator emits JSON directly)
+
+`yq` is a FORBIDDEN dependency — only bash and jq are permitted. The orchestrator (the
+Phase-2 LLM) reads the charter file (short file, always allowed under Rule 11), extracts the
+`test_strategy.journeys` YAML block by reading it, and emits `journeys.json` as a direct
+JSON array — no YAML parser needed.
+
+**Orchestrator procedure:**
+
+1. Read the charter: `docs/superflow/specs/YYYY-MM-DD-<topic>-charter.md`
+2. From the charter's `test_strategy.journeys:` block, collect every journey's fields.
+3. Write `.superflow/release-gate/journeys.json` using `jq -n` inline — one object per journey:
 
 ```bash
-# Orchestrator extracts charter journeys as JSON (no YAML parsing in the helper)
-CHARTER_FILE="docs/superflow/specs/$(ls docs/superflow/specs/*-charter.md 2>/dev/null | head -1)"
-# journeys.json is a JSON array of {id,spec_tag,spec_path,spec_title,owning_sprint}
-# Build it from the charter's YAML block using yq or paste it inline as static JSON.
-# The release-gate helper receives only JSON — YAML stays in the orchestrator layer.
+# The orchestrator constructs this; each journey comes from the charter YAML it read.
+# Every journey MUST include spec_tag (non-empty string); if any is missing → gate FAILS.
+jq -cn '
+[
+  {"id":"J1-login",    "spec_tag":"J1-login",    "spec_path":"e2e/auth.spec.ts",
+   "spec_title":"user can sign in @J1-login",    "owning_sprint":2},
+  {"id":"J2-checkout", "spec_tag":"J2-checkout", "spec_path":"e2e/checkout.spec.ts",
+   "spec_title":"guest user completes checkout @J2-checkout", "owning_sprint":3}
+]
+' > .superflow/release-gate/journeys.json
+```
 
+For library and backend-only projects: write `[]` (empty array):
+```bash
+echo '[]' > .superflow/release-gate/journeys.json
+```
+
+If the charter has no `test_strategy` block (e.g. Phase 1 pre-dates A2), the orchestrator
+injects the journeys from memory/conversation context. If none exist, the gate FAILS for web
+(zero-journey guard, FIX 1), which surfaces the gap so the charter can be updated.
+
+### Call the gate helper
+
+```bash
 bash tools/release-gate.sh \
   --project-type "$(jq -r '.project_type' .superflow/test-env.json)" \
   --journeys     .superflow/release-gate/journeys.json \
