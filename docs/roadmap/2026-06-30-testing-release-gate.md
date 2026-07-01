@@ -92,8 +92,8 @@ Deep-research run: 6 angles → 27 sources → 128 claims → 25 adversarially v
 
 - [x] Roadmap approved
 - [x] Wave A — Phase 1 discovery + spec/charter (governance=standard, git=solo_single_pr; spec+plan passed 2-round dual-model review, vacuous-gate blocker closed; charter generated)
-- [ ] Wave A — Sprint A1 (Phase-0 detection)  ← in progress
-- [ ] Wave A — Sprint A2 (Test Strategy artifact)
+- [x] Wave A — Sprint A1 (Phase-0 detection) — DONE: product ACCEPTED + codex APPROVE (3 fix rounds); HEAD `564a120`
+- [ ] Wave A — Sprint A2 (Test Strategy artifact)  ← in progress (code `3676dec`; codex APPROVE + 5 tightening findings, product re-review in flight)
 - [ ] Wave A — Sprint A3 (Release Gate)
 - [ ] Wave A — Sprint A4 (wiring + docs)
 - [ ] Wave A — merged
@@ -101,5 +101,18 @@ Deep-research run: 6 angles → 27 sources → 128 claims → 25 adversarially v
 - [ ] Wave B — Sprint B1 (architecture reviewer + gate)
 - [ ] Wave B — Sprint B2 (wiring + docs)
 - [ ] Wave B — merged
+
+## 8. Skill reliability follow-ups (discovered during execution)
+
+These are Superflow-orchestration robustness fixes surfaced while running Wave A on the skill itself. They are NOT part of the Wave A testing feature — implement as a dedicated small slice (or fold into A4 only if the user opts in), so they don't pollute a feature sprint diff.
+
+1. **Reviewer hang: named background reviewer goes idle without delivering its verdict.**
+   - **Symptom (observed A1 + A2):** a product reviewer dispatched as a *named background* agent (`Agent(subagent_type: standard-product-reviewer, name: sprint-N-product-reviewer, run_in_background: true)`) emits repeated `idle_notification / available` pings but never sends its verdict fence, stalling the orchestrator that is waiting on it. A1 recovered after a `SendMessage` nudge; A2 never delivered and required a cold re-dispatch.
+   - **Root cause:** the verdict is delivered over the team mailbox, but a named+background agent can end its turn "idle" without proactively `SendMessage`-ing its final message to `main`. The orchestrator's wait then hangs indefinitely.
+   - **Mitigation (implement in `references/phase2/steps/review-unified.md` + enforcement Rule 3):**
+     a. **Prefer a reliable delivery channel.** Dispatch the Claude product reviewer **synchronously** (nameless `Agent()` *without* `run_in_background`) so the verdict returns directly as the tool result; reserve named+background dispatch only when genuine parallelism is required. The codex/bash technical channel (stdout → grep the fenced json) is already robust and should stay the reference pattern.
+     b. **Make delivery explicit in every reviewer prompt:** "Deliver your verdict as your FINAL message ending in the fenced ```json block; do NOT go idle without emitting it — `SendMessage` the full fence to `main`."
+     c. **Bounded-wait + escalation:** after ≤2 idle pings (or a short timeout) with no verdict, nudge once via `SendMessage`; if still nothing, **cold re-dispatch** a fresh reviewer. Rule 3 step 4 already allows cold re-dispatch "if the agent is gone" — broaden it to explicitly cover "idle without verdict," not just a dead agent.
+     d. **Optional hardening:** have both lenses write their verdict fence to a known file the orchestrator greps (mailbox-independent), mirroring how the codex channel already works.
 
 <!-- updated-by-superflow:2026-06-30 -->
