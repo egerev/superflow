@@ -11,12 +11,26 @@ persisted verdict. Phase 3 refuses merge unless `.superflow/release-gate/verdict
 
 ---
 
+## Journeys → Scenarios Handoff (end-to-end chain)
+
+This gate is the **receiving end** of the Phase 1 test strategy:
+
+1. **Phase 1** assigned each journey a `spec_tag` and `owning_sprint` (see `references/phase1-discovery.md` Step 13a).
+2. **Each owning sprint** authored the executable spec at `spec_path`, annotating the test with `spec_tag` (e.g. `@J1-login`). No other sprint authors that spec.
+3. **This gate (Step 8)** reads the charter's `test_strategy.journeys`, emits `journeys.json` keyed by `spec_tag`, runs Playwright, and checks that every journey appears in the covered (green) set.
+
+**Who authors what:** the owning sprint's implementer writes the spec. The gate only verifies it ran green. Ambiguity → fail fast (FAIL verdict surfaces the missing journey `spec_tag`).
+
+---
+
+---
+
 ## Step 1 — Assembly
 
 | Git workflow mode | Assembly action |
 |---|---|
 | `solo_single_pr` | Single branch — no-op; working tree is already the assembled app. |
-| `sprint_pr_queue` / `stacked_prs` / `parallel_wave_prs` | Merge all sprint branches onto an integration branch before booting. **NOT YET VALIDATED** for those modes — treat as a flag for A4 work. |
+| `sprint_pr_queue` / `stacked_prs` / `parallel_wave_prs` | Merge all sprint branches onto an integration branch before booting. **NOT YET VALIDATED** — the integration-branch assembly path was not exercised by the solo_single_pr Wave A run. The first real use of these modes with the release gate must validate and document this path. Flag any failures as a defect against this file. |
 | `trunk_based` | Same as `solo_single_pr`. |
 
 ---

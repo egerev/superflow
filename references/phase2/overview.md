@@ -120,11 +120,13 @@ load and execute `references/phase2/steps/release-gate.md` at this stage boundar
 
 ## Testcontainers Cleanup Discipline
 
-- **Ryuk gated on CI — implementer duty.** Testcontainers' Ryuk reaper must stay enabled locally;
-  `TESTCONTAINERS_RYUK_DISABLED=true` is set only when `process.env.CI === 'true'`. This hygiene
-  duty lives in the implementer agent definitions (`agents/*-implementer.md`) — that is what
-  Phase 2 actually dispatches. Never set the variable globally in shell profiles or `.env` —
-  stale containers accumulate silently.
+- **Ryuk enabled by default — two-case exception, implementer duty.** Testcontainers' Ryuk reaper
+  must stay enabled except in two cases: (a) `process.env.CI === 'true'` (CI environments), or
+  (b) `docker.ryuk_forced_disabled=true` in `.superflow/test-env.json` (rootless Podman detected
+  by Phase 0). In case (b), `tools/cleanup-testcontainers.sh` is a mandatory backstop before and
+  after integration tests. This hygiene duty lives in the implementer agent definitions
+  (`agents/*-implementer.md`) — that is what Phase 2 actually dispatches. Never set the variable
+  globally in shell profiles or `.env` — stale containers accumulate silently.
 - **After every integration test run** (`pnpm test:integration` or equivalent), the orchestrator
   runs ONLY the helper:
   ```bash

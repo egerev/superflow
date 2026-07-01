@@ -93,9 +93,9 @@ Deep-research run: 6 angles → 27 sources → 128 claims → 25 adversarially v
 - [x] Roadmap approved
 - [x] Wave A — Phase 1 discovery + spec/charter (governance=standard, git=solo_single_pr; spec+plan passed 2-round dual-model review, vacuous-gate blocker closed; charter generated)
 - [x] Wave A — Sprint A1 (Phase-0 detection) — DONE: product ACCEPTED + codex APPROVE (3 fix rounds); HEAD `564a120`
-- [ ] Wave A — Sprint A2 (Test Strategy artifact)  ← in progress (code `3676dec`; codex APPROVE + 5 tightening findings, product re-review in flight)
-- [ ] Wave A — Sprint A3 (Release Gate)
-- [ ] Wave A — Sprint A4 (wiring + docs)
+- [x] Wave A — Sprint A2 (Test Strategy artifact) — DONE: `spec_tag`/`owning_sprint`/`spec_path`/`spec_title` per-journey; per-sprint acceptance; level-convention consistency; HEAD `fc3efc2`
+- [x] Wave A — Sprint A3 (Release Gate) — DONE: `tools/release-gate.sh` verdict engine (exit 0=PASS/SKIPPED,1=FAIL); `references/phase2/steps/release-gate.md`; `phase_gates.release_gate` in `workflow.json`; enforcement Rule 14; ordering hooks in `overview.md`+`phase2-execution.md`; HEAD `a07600c`
+- [ ] Wave A — Sprint A4 (wiring + enforcement + docs) ← IN PROGRESS
 - [ ] Wave A — merged
 - [ ] Wave B — Phase 1 discovery + spec/charter
 - [ ] Wave B — Sprint B1 (architecture reviewer + gate)
