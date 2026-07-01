@@ -634,6 +634,8 @@ Use `project_type` and the readiness flags to determine which levels apply and w
 
 **Critical constraint — owning sprint assignment:** Every journey MUST be assigned to exactly one `owning_sprint`. That sprint's plan acceptance (from Step 10) must explicitly require authoring the journey's executable spec (`*.spec.ts` / `test_*.py`). A charter with an unowned journey — or a journey whose owning sprint has no spec-authoring acceptance clause — is incomplete and will cause the Phase 3 Release Gate to report FAIL vacuously.
 
+**MUST — validate before writing the charter file:** Verify every journey's `owning_sprint` is a positive integer (≥1) matching an existing sprint in the Step 10 plan. No journey may keep `owning_sprint: 0` (placeholder) or reference a non-existent sprint. If any remain, fix them now in Phase 1 — an unsubstituted placeholder will only surface as a very-late, expensive FAIL at the Phase 3 Release Gate.
+
 The computed `test_strategy` block is included in the charter YAML frontmatter (see template below) and a narrative "## Test Strategy" section is included in the charter body.
 
 **Charter structure** (YAML frontmatter + Markdown body):
@@ -651,11 +653,11 @@ governance_mode: "light|standard|critical"  # from Step 2 selection
 git_workflow_mode: "solo_single_pr|sprint_pr_queue|stacked_prs|parallel_wave_prs|trunk_based"  # from Step 2b selection
 use_workflows: true|false  # from Step 12 opt-in; allows saved /superflow-review and /superflow-wave workflows in Phase 2 (Claude runtime only)
 test_strategy:             # built in Step 13a; see prompts/test-strategy.md
-  levels:
+  levels:                  # always emit all three keys — see prompts/test-strategy.md for value conventions
     unit: "<runner + test directory — e.g. 'vitest (tests/unit/)'>"
-    integration: "<runner + Docker requirement — write 'N/A' for library/e2e-only>"
-    e2e: "<Playwright or Cypress + browser — omit field for library and backend-only>"
-  journeys:                # web projects only; [] for library and backend-only; ≥1 per major user flow
+    integration: "<runner + Docker — or 'N/A — library; no external services' if type-inactive; 'not configured — <install cmd>' if applicable but missing>"
+    e2e: "<Playwright or Cypress + browser — or 'N/A — library; no browser' / 'N/A — backend-only; no browser' if type-inactive>"
+  journeys:                # [] for library and backend-only; ≥1 per major user flow for web
     - id: "J1-<slug>"     # stable kebab ID — NEVER rename after assignment (Release Gate matches on this)
       title: "<Short journey name>"
       steps:
@@ -664,8 +666,9 @@ test_strategy:             # built in Step 13a; see prompts/test-strategy.md
         - "<Step 3>"
       expected_outcome: "<Observable result when all steps succeed>"
       spec_path: "<relative path — e.g. e2e/checkout.spec.ts>"
-      spec_title: "<describe/test title inside that file that covers this journey>"
-      owning_sprint: 0     # sprint number from Step 10 plan that must author spec_path
+      spec_title: "<test title including spec_tag annotation — e.g. 'user signs in @J1-login'>"
+      spec_tag: "J1-<slug>"  # equals the journey id; implementer annotates the spec with this tag; Release Gate matches per-journey coverage output by spec_tag
+      owning_sprint: 2     # positive integer (>=1) matching an existing sprint in the Step 10 plan — MUST NOT be 0
   coverage:                # library path only — omit for web and backend-only
     threshold: 80          # minimum line coverage %
     tool: "<vitest --coverage (v8) / pytest-cov>"
@@ -674,7 +677,7 @@ test_strategy:             # built in Step 13a; see prompts/test-strategy.md
       version: "<18>"
     - label: "<Node 20 LTS>"
       version: "<20>"
-  per_sprint_acceptance: "<Per-sprint evidence: unit sprints paste runner output; journey-owning sprints paste playwright test <spec_path> output confirming journey covered; library sprints paste coverage % >= threshold>"
+  per_sprint_acceptance: "<Per-sprint evidence: unit sprints paste runner output; journey-owning sprints paste playwright test <spec_path> output and confirm spec_tag in output; library sprints paste coverage % >= threshold>"
 ---
 ```
 
