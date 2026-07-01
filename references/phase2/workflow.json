@@ -76,6 +76,17 @@
     "cleanup_worktree": "ship-pr.md",
     "holistic_review_if_required": "holistic-review.md",
     "write_completion_report": "completion-report.md",
-    "frontend_testing": "frontend-testing.md"
+    "frontend_testing": "frontend-testing.md",
+    "release_gate": "release-gate.md"
+  },
+  "phase_gates": {
+    "release_gate": {
+      "id": "release_gate",
+      "when": "post-sprint-loop, post-holistic-review, pre-completion-report",
+      "step_file": "release-gate.md",
+      "mandatory_for": ["web", "backend-only"],
+      "skipped_for": ["library"],
+      "note": "Runs ONCE per Phase 2 run (not per sprint). Writes .superflow/release-gate/verdict.json. Phase 3 refuses merge unless verdict=PASS or SKIPPED."
+    }
   }
 }

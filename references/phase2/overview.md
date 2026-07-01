@@ -94,6 +94,30 @@ and `superflow-enforcement.md` — these are orchestration files, not source fil
 For everything else — code reading, test failure diagnosis, directory exploration — dispatch
 `deep-analyst` and take a <2k-token summary back.
 
+## Post-Sprint-Loop: Release Gate
+
+After ALL sprints are done and the optional Holistic Review completes, BEFORE the Completion
+Report and Phase 3:
+
+1. **Read `references/phase2/steps/release-gate.md`** — full stage instructions.
+2. **Run the release gate** (`phase_gates.release_gate` in `workflow.json`): boot the assembled
+   app, run integration + headless E2E, extract per-journey outcomes, call `tools/release-gate.sh`
+   to compute and persist the verdict.
+3. **`.superflow/release-gate/verdict.json` is the Phase 3 gate key.** Phase 3 refuses merge
+   unless `verdict=PASS` (or `verdict=SKIPPED` for library projects). FAIL → fix and re-run.
+4. **No-vacuous-pass invariant:** a web project with charter journeys and `specs_ran=false` →
+   verdict=FAIL regardless of other results. Zero execution is not zero failures.
+
+**Ordering (canonical):**
+```
+sprint loop → holistic review (if required) → RELEASE GATE → Completion Report → Phase 3
+```
+
+Declaring the gate in `workflow.json` alone is insufficient — the orchestrator must explicitly
+load and execute `references/phase2/steps/release-gate.md` at this stage boundary.
+
+---
+
 ## Testcontainers Cleanup Discipline
 
 - **Ryuk gated on CI — implementer duty.** Testcontainers' Ryuk reaper must stay enabled locally;
