@@ -99,16 +99,18 @@ _PROJECT_TYPE=""
 _JOURNEYS_FILE=""
 _RESULTS_FILE=""
 _EVIDENCE_DIR=""
+_EXPECTED_JOURNEY_COUNT=""   # optional: assert journeys.json length == N (charter parity)
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --project-type)  _PROJECT_TYPE="$2";  shift 2 ;;
-    --journeys)      _JOURNEYS_FILE="$2"; shift 2 ;;
-    --results)       _RESULTS_FILE="$2";  shift 2 ;;
-    --evidence-dir)  _EVIDENCE_DIR="$2";  shift 2 ;;
+    --project-type)            _PROJECT_TYPE="$2";            shift 2 ;;
+    --journeys)                _JOURNEYS_FILE="$2";           shift 2 ;;
+    --results)                 _RESULTS_FILE="$2";            shift 2 ;;
+    --evidence-dir)            _EVIDENCE_DIR="$2";            shift 2 ;;
+    --expected-journey-count)  _EXPECTED_JOURNEY_COUNT="$2";  shift 2 ;;
     *)
       printf 'release-gate: unknown flag: %s\n' "$1" >&2
-      printf 'Usage: release-gate.sh --project-type <type> --journeys <f> --results <f> [--evidence-dir <d>]\n' >&2
+      printf 'Usage: release-gate.sh --project-type <type> --journeys <f> --results <f> [--evidence-dir <d>] [--expected-journey-count <N>]\n' >&2
       exit 2
       ;;
   esac
@@ -128,6 +130,17 @@ case "${_PROJECT_TYPE}" in
     exit 2
     ;;
 esac
+
+# Validate --expected-journey-count is a non-negative integer when provided.
+if [ -n "${_EXPECTED_JOURNEY_COUNT}" ]; then
+  case "${_EXPECTED_JOURNEY_COUNT}" in
+    ''|*[!0-9]*)
+      printf 'release-gate: --expected-journey-count must be a non-negative integer (got: %s)\n' \
+        "${_EXPECTED_JOURNEY_COUNT}" >&2
+      exit 2
+      ;;
+  esac
+fi
 
 if [ ! -f "${_JOURNEYS_FILE}" ]; then
   printf 'release-gate: journeys file not found: %s\n' "${_JOURNEYS_FILE}" >&2
@@ -412,11 +425,26 @@ _compute_verdict_backend_only() {
 # ── Dispatch ───────────────────────────────────────────────────────────────────
 # Run input validation first; a malformed input must never produce PASS.
 if _validate_inputs; then
-  case "${_PROJECT_TYPE}" in
-    library)      _compute_verdict_library ;;
-    web)          _compute_verdict_web ;;
-    backend-only) _compute_verdict_backend_only ;;
-  esac
+  # ── Journeys ↔ charter parity check (FIX 2) ─────────────────────────────────
+  # When --expected-journey-count is supplied, assert journeys.json length matches
+  # the charter count. A mismatch means a journey was dropped during hand-
+  # transcription — fail closed rather than silently gate fewer journeys.
+  if [ -n "${_EXPECTED_JOURNEY_COUNT}" ]; then
+    _PARITY_ACTUAL=$(jq 'length' "${_JOURNEYS_FILE}")
+    if [ "${_PARITY_ACTUAL}" -ne "${_EXPECTED_JOURNEY_COUNT}" ]; then
+      _VERDICT="FAIL"
+      _REASON="journeys.json count ${_PARITY_ACTUAL} != charter journey count ${_EXPECTED_JOURNEY_COUNT} — transcription mismatch; re-read the charter test_strategy.journeys block and rebuild journeys.json"
+    fi
+  fi
+
+  # Only compute the project-type verdict if parity has not already failed.
+  if [ -z "${_VERDICT}" ]; then
+    case "${_PROJECT_TYPE}" in
+      library)      _compute_verdict_library ;;
+      web)          _compute_verdict_web ;;
+      backend-only) _compute_verdict_backend_only ;;
+    esac
+  fi
 else
   # Schema validation failed — fail closed. Reason surfaced in stderr by _validate_inputs.
   _VERDICT="FAIL"

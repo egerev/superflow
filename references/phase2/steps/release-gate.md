@@ -35,10 +35,27 @@ This gate is the **receiving end** of the Phase 1 test strategy:
 
 ---
 
+## Step 1b — Re-detect project shape (FIX 1)
+
+Before reading `project_type`, re-run the detector to refresh `.superflow/test-env.json`:
+
+```bash
+bash tools/detect-test-env.sh   # idempotent + read-only; overwrites .superflow/test-env.json
+```
+
+**Rationale:** `detect-test-env.sh` runs only at Phase 0. A project that changes shape
+mid-run (e.g. a `backend-only` API repo whose sprints added a React dashboard) would be gated
+by the stale Phase-0 type — producing a silent `PASS` for the web layer or a vacuous `SKIPPED`
+for a library-turned-web project. Re-detecting here means a `backend-only` charter with
+`journeys:[]` combined with a freshly detected `web` project_type hits the existing zero-journey
+FAIL guard (loud failure) instead of a silent stale-type PASS or SKIPPED.
+
+---
+
 ## Step 2 — Read `test-env.json`
 
 ```bash
-jq '.' .superflow/test-env.json   # re-read; project_type + readiness flags may have changed
+jq '.' .superflow/test-env.json   # read the freshly re-detected file from Step 1b
 ```
 
 Extract:
@@ -129,8 +146,20 @@ INTEGRATION_EXIT=$?
 cat .superflow/release-gate/integration.log   # stream to terminal for live visibility
 ```
 
-`INTEGRATION_EXIT=0` → `integration=pass`. Non-zero → `integration=fail`.
-If Docker is absent (`readiness.integration=false`) → `integration=skipped` (noted loudly).
+**Derive `INTEGRATION_RESULT` explicitly — fail-closed (FIX 3):**
+```bash
+# Docker absent → skipped (no integration layer); exit 0 → pass; anything else → fail.
+# The :-skipped default in results.json is REMOVED — an unset INTEGRATION_RESULT must
+# never silently become non-blocking (a failing web integration test + green E2E = PASS
+# is the exact false-PASS this derivation prevents).
+if [ "$(jq -r '.readiness.integration' .superflow/test-env.json)" = "false" ]; then
+  INTEGRATION_RESULT=skipped   # no integration layer for this project type
+elif [ "${INTEGRATION_EXIT}" -eq 0 ]; then
+  INTEGRATION_RESULT=pass
+else
+  INTEGRATION_RESULT=fail      # fail-closed: any non-zero exit → fail
+fi
+```
 
 ---
 
@@ -251,7 +280,7 @@ fi
 ```bash
 jq -cn \
   --argjson specs_ran        "${SPECS_RAN}" \
-  --arg     integration      "${INTEGRATION_RESULT:-skipped}" \
+  --arg     integration      "${INTEGRATION_RESULT}" \
   --argjson e2e_covered_tags "${E2E_COVERED}" \
   --argjson e2e_failed_tags  "${E2E_FAILED}" \
   --argjson browsers_present "$(jq '.readiness.e2e_tooling' .superflow/test-env.json)" \
@@ -303,14 +332,27 @@ injects the journeys from memory/conversation context. If none exist, the gate F
 
 ### Call the gate helper
 
+Before calling the helper, count the journeys in the charter and pass the count as
+`--expected-journey-count`. This guards against a journey dropped during hand-transcription
+(since yq is forbidden, the orchestrator copies journeys from YAML to JSON manually):
+
 ```bash
+# Count charter journeys — the orchestrator already has the charter in context.
+# Replace N with the actual count you see in test_strategy.journeys.
+CHARTER_JOURNEY_COUNT=N   # e.g. 2 if the charter lists J1-login and J2-checkout
+
 bash tools/release-gate.sh \
-  --project-type "$(jq -r '.project_type' .superflow/test-env.json)" \
-  --journeys     .superflow/release-gate/journeys.json \
-  --results      .superflow/release-gate/results.json \
-  --evidence-dir .superflow/release-gate/pw-artifacts \
+  --project-type            "$(jq -r '.project_type' .superflow/test-env.json)" \
+  --journeys                .superflow/release-gate/journeys.json \
+  --results                 .superflow/release-gate/results.json \
+  --evidence-dir            .superflow/release-gate/pw-artifacts \
+  --expected-journey-count  "${CHARTER_JOURNEY_COUNT}" \
   ; GATE_EXIT=$?
 ```
+
+If `journeys.json` has fewer entries than `CHARTER_JOURNEY_COUNT`, the gate immediately
+returns FAIL with reason `"journeys.json count X != charter journey count N — transcription
+mismatch"`. Fix by re-reading the charter and rebuilding `journeys.json` completely.
 
 The helper writes `.superflow/release-gate/verdict.json` atomically.
 
