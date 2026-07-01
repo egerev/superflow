@@ -1,7 +1,7 @@
 # Superflow — Claude Instructions
 
 ## Project Overview
-Superflow is a pure Markdown skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, Product Vision alignment, and git workflow selection, autonomous execution with a selected branch/PR strategy, and merge. v5.6.0, MIT License. Supports both **Claude Code** and **Codex CLI** as primary orchestrator (auto-detected at startup via `$CLAUDE_CODE_SESSION_ID`).
+Superflow is a pure Markdown skill that orchestrates a 4-phase dev workflow: onboarding, product discovery with expert panel brainstorming, Product Vision alignment, and git workflow selection, autonomous execution with a selected branch/PR strategy, and merge. v5.7.0, MIT License. Supports both **Claude Code** and **Codex CLI** as primary orchestrator (auto-detected at startup via `$CLAUDE_CODE_SESSION_ID`).
 
 ## Key Rules
 - All documentation output in English — user communication follows their language preference
@@ -37,7 +37,7 @@ SKILL.md (entry point, ~280 lines, 10-step startup checklist, auto-detects Claud
   │   ├── phase2/ (Run 3 — DAG-driven Phase 2; integration in Run 3 Sprint 2)
   │   │   ├── workflow.json (DAG: 9-cell governance×complexity decision matrix + 7 stages + step_files map)
   │   │   ├── overview.md (Phase 2 high-level context, wave analysis, model selection)
-  │   │   └── steps/ (10 step detail files: setup-reread, setup-worktree, impl-dispatch, review-unified, par-evidence, ship-pr, compaction-recovery, holistic-review, frontend-testing, completion-report)
+  │   │   └── steps/ (11 step detail files: setup-reread, setup-worktree, impl-dispatch, review-unified, par-evidence, ship-pr, compaction-recovery, holistic-review, frontend-testing, release-gate, completion-report)
   │   ├── phase3-merge.md (user-initiated merge, 3 stages)
   │   └── workflow-orchestration.md (single Workflow authority — opt-in policy, permission gates, limits, saved workflow specs, /goal watchdog, fallbacks)
   ├── prompts/
@@ -49,6 +49,7 @@ SKILL.md (entry point, ~280 lines, 10-step startup checklist, auto-detects Claud
   │   ├── llms-txt-writer.md (llms.txt generation)
   │   ├── claude-md-writer.md (CLAUDE.md generation)
   │   ├── testing-guidelines.md (TDD reference)
+  │   ├── test-strategy.md (design-time Test Strategy → charter test_strategy block)
   │   ├── security-audit.md (Claude security fallback for Phase 0)
   │   ├── claude/ (Claude secondary prompts for Codex runtime: audit, code-reviewer, product-reviewer)
   │   └── codex/ (Codex-specific prompts: code-reviewer, product-reviewer, audit)
@@ -60,10 +61,13 @@ SKILL.md (entry point, ~280 lines, 10-step startup checklist, auto-detects Claud
   │   ├── sf-emit.sh (JSONL event emission library)
   │   ├── verify-phase2-dag.sh (static DAG verifier)
   │   ├── measure-phase2-context.sh (context savings quantifier)
+  │   ├── detect-test-env.sh (Phase 0 test-infra probe → .superflow/test-env.json)
+  │   ├── release-gate.sh (Release Gate verdict engine → .superflow/release-gate/verdict.json)
   │   └── cleanup-testcontainers.sh (label-based testcontainers cleanup — only docker command in orchestrator budget)
   ├── templates/
   │   ├── superflow-state-schema.json (state file JSON Schema)
   │   ├── event-schema.json (event log JSON Schema — 21 event types)
+  │   ├── test-env.schema.json (JSON Schema for .superflow/test-env.json)
   │   ├── greenfield/ (stack scaffolding: nextjs.md, python.md, generic.md)
   │   └── ci/ (CI workflows: github-actions-node.yml, github-actions-python.yml)
   └── .github/workflows/ci.yml (repo CI: shellcheck, DAG verify, JSON validation, forbidden-token gate)
@@ -79,7 +83,7 @@ SKILL.md (entry point, ~280 lines, 10-step startup checklist, auto-detects Claud
 | File | Purpose |
 |------|---------|
 | `SKILL.md` | Entry point — startup checklist, provider detection, state management, phase routing |
-| `superflow-enforcement.md` | 13 hard rules, specialized 2-agent reviews, rationalization prevention, phase gates |
+| `superflow-enforcement.md` | 14 hard rules (Rule 14 = Release Gate), specialized 2-agent reviews, rationalization prevention, phase gates |
 | `references/phase0-onboarding.md` | Router — detection, recovery matrix, stage loading |
 | `references/phase0/stage1-detect.md` | Parallel preflight, auto-detection, confirmation |
 | `references/phase0/stage2-analysis.md` | 5 parallel agents, tiered model usage |
@@ -103,6 +107,11 @@ SKILL.md (entry point, ~280 lines, 10-step startup checklist, auto-detects Claud
 | `tools/verify-phase2-dag.sh` | Static DAG verifier — validates all 9 governance×complexity cells, 7-stage sequence, step_files coverage, and on-disk step file existence; exits 0 on full pass |
 | `tools/measure-phase2-context.sh` | Context savings quantifier — computes pre-Run-3 vs post-Run-3 per-turn token load using git history; outputs a one-line summary (Savings: 76.4%) |
 | `tools/cleanup-testcontainers.sh` | Testcontainers cleanup helper — label-based selection (`docker ps -aq --filter "label=org.testcontainers=true"`), optional ancestor filter, idempotent; the ONLY docker-touching command in the orchestrator's Rule 11 budget (37 lines) |
+| `tools/detect-test-env.sh` | Phase 0 test-infra probe (read-only, idempotent, atomic) — detects docker + runtime (Docker Desktop/Colima/Rancher/Podman; emits `DOCKER_HOST`/`TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE`, `ryuk_forced_disabled` for rootless Podman), node/python test runners, Playwright browser cache (real on-disk `ms-playwright` check, never installs), `with_deps_supported`, 3-way `project_type` classifier, and a readiness verdict + `missing[]`; writes `.superflow/test-env.json` (693 lines) |
+| `tools/release-gate.sh` | Release Gate verdict engine (pure bash + jq) — reads `project_type` + journeys + results JSON, checks per-journey coverage by `spec_tag` (no vacuous pass), strict fail-closed input validation; writes `.superflow/release-gate/verdict.json` (PASS/FAIL/SKIPPED; exit 0=PASS/SKIPPED, 1=FAIL) (456 lines) |
+| `templates/test-env.schema.json` | JSON Schema 2020-12 for `.superflow/test-env.json` (182 lines) |
+| `references/phase2/steps/release-gate.md` | Release Gate stage — assemble → boot app (Playwright `webServer`) → Testcontainers integration → headless Playwright E2E (`workers:1`, tagged by `spec_tag`) → evidence → verdict; runs post-sprint-loop / post-holistic, pre-Completion-Report (359 lines) |
+| `prompts/test-strategy.md` | Design-time Test Strategy prompt — builds the charter `test_strategy` block (levels; critical journeys each with `id`/`spec_tag`/`spec_path`/`spec_title`/`owning_sprint`; per-sprint acceptance; library path = coverage threshold + runtime matrix) (182 lines) |
 | `hooks/precompact-state-externalization.sh` | PreCompact hook — sources sf-emit, emits `compact.pre`/`compact.post` events with absolute path to the dump file |
 | `templates/event-schema.json` | JSON Schema 2020-12 for all event types — envelope fields + 21 per-type data schemas incl. `pr.fail`, additive evolution policy (549 lines) |
 | `.github/workflows/ci.yml` | Repo CI on push/PR to main — `shellcheck -S error` over `tools/*.sh hooks/*.sh`, `verify-phase2-dag.sh`, `jq empty` over tracked JSON, forbidden-token gate (stale Opus-4.7 model pin; the now-blocked Fable pin; Ryuk env var without the `TESTCONTAINERS_` prefix) (50 lines) |
@@ -126,10 +135,13 @@ SKILL.md (entry point, ~280 lines, 10-step startup checklist, auto-detects Claud
 - **Reviewer verdict contract**: every reviewer ends its final message with a fenced `json` block — `{"verdict": ..., "findings": [{severity, file, line, scenario, description}], "summary": ...}`. The orchestrator extracts the fence (awk → jq) and assembles `.par-evidence.json` mechanically — no prose parsing. Re-review goes to the SAME named background reviewer via SendMessage (cold re-dispatch as fallback).
 - **Workflow acceleration (hybrid, opt-in)**: Phase 2 may use saved multi-agent workflows for exactly two spots — `/superflow-review` (unified review fan-out) and `/superflow-wave` (parallel implementation wave). Gated on Claude runtime + `context.use_workflows=true` (recorded at Phase 1 Step 12 plan approval; "no-workflows" opts out; always false on Codex) + availability (CLI ≥ 2.1.154, not `disableWorkflows`/`CLAUDE_CODE_DISABLE_WORKFLOWS=1`); every other case falls back to the Agent-based v5.4.0 paths with no behavior change. Shipped scripts use ONLY the documented API surface (`agent`, `parallel`, `phase`, `log`, `args`) — never undocumented fields (`schema`, `agentType`, `isolation`, `resume-run-id`); structured data returns via the fenced-JSON verdict contract with fail-closed parsing; PAR evidence from this path records `provider: "workflow-review"`. At Phase 2 launch the orchestrator prints a ready-to-paste `/goal` watchdog suggestion (user-only command — the model cannot set it). Single authority: `references/workflow-orchestration.md`
 - **Deploy checksum sync**: SKILL.md startup (step 4) syncs deployed copies via `cmp -s` + overwrite-on-mismatch — `superflow-enforcement.md` → `~/.claude/rules/`, `agents/*.md` → `~/.claude/agents/`, and `workflows/*.js` → `~/.claude/workflows/` (Claude runtime); `codex/agents/*.toml` → `~/.codex/agents/` and `codex/AGENTS.md` → `~/.codex/AGENTS.md` (Codex runtime). Exception: `~/.codex/hooks.json` is installed only if missing, never overwritten (one-line warning asks to merge manually).
-- **Testcontainers canon**: the only env var is `TESTCONTAINERS_RYUK_DISABLED`, set exclusively when `process.env.CI === "true"` — the duty lives in `agents/*-implementer.md` definitions. Orchestrator cleanup runs ONLY `bash $SUPERFLOW_SKILL_ROOT/tools/cleanup-testcontainers.sh` (label-based `label=org.testcontainers=true`); name-regex matching and raw `docker` commands are forbidden.
+- **Testcontainers canon (Ryuk two-case)**: the only env var is `TESTCONTAINERS_RYUK_DISABLED`. Ryuk stays ENABLED by default; the var is set to `true` in exactly two cases — (a) `process.env.CI === "true"`, or (b) rootless Podman forces it (`docker.ryuk_forced_disabled=true` in `.superflow/test-env.json`, detected by Phase 0). In case (b), `tools/cleanup-testcontainers.sh` is a mandatory label-based backstop before and after integration tests. The duty lives in `agents/*-implementer.md` definitions (mirrored in `prompts/implementer.md`), reconciled with enforcement Test & Process Discipline §6 and `codex/AGENTS.md` Rule 14. Orchestrator cleanup runs ONLY `bash $SUPERFLOW_SKILL_ROOT/tools/cleanup-testcontainers.sh` (label-based `label=org.testcontainers=true`); name-regex matching and raw `docker` commands are forbidden.
 - **Heartbeat cadence**: Claude runtime checks heartbeat/`must_reread` at sprint boundaries, stage transitions, and immediately after compaction/summarization; Codex runtime keeps every-turn discipline (no PreCompact hook, 258K context).
 - **Codex model policy**: Codex subagents and Claude-runtime `codex exec` secondary calls use `gpt-5.5`; deep analyst/implementer/reviewer roles use `xhigh`, standard roles use `high`, and fast implementer uses `medium`. Codex-runtime Claude product/research secondary calls use `--effort xhigh` on `claude-opus-4-8` (Fable access is blocked).
 - **Per-PR docs gate**: every PR must run documentation update and separate documentation review before `gh pr create`. In per-sprint PR modes this happens every sprint; in `solo_single_pr` it happens before the final PR. `.par-evidence.json` must include `docs_update` (`UPDATED` or `UNCHANGED`) and `docs_review: PASS`; `llms.txt` is explicitly audited for every PR.
+- **Test-env detection (Phase 0)**: `tools/detect-test-env.sh` runs read-only / idempotent / atomic in Stage 1, writing `.superflow/test-env.json` (schema `templates/test-env.schema.json`). It detects docker + runtime, node/python test runners, Playwright browser presence (real on-disk `ms-playwright` cache check, never installs), `with_deps_supported`, and a 3-way `project_type` classifier (web / backend-only / library; ambiguous → web) plus a readiness verdict + `missing[]` + recommendations. Stage 3 surfaces it in the health report; `prompts/claude-md-writer.md` emits a `## Testing` recommendations section from it.
+- **Design-time Test Strategy (Phase 1 Step 13a)**: `prompts/test-strategy.md` builds the charter `test_strategy` block — levels; critical user journeys (each with stable `id`/`spec_tag`/`spec_path`/`spec_title`/`owning_sprint`); per-sprint acceptance; library path = coverage threshold + runtime-version matrix. Journeys are the P2→P3 contract: each becomes a Release Gate E2E scenario matched by `spec_tag`.
+- **Release Gate (Phase 2 → Phase 3)**: after the sprint loop + holistic review and before the Completion Report, the orchestrator runs the Release Gate (`references/phase2/steps/release-gate.md`, `phase_gates.release_gate` in `workflow.json`) — boot the assembled app (Playwright `webServer`), run Testcontainers integration + headless Playwright E2E (`workers:1`, tagged by `spec_tag`), then call `tools/release-gate.sh` to write `.superflow/release-gate/verdict.json`. Per-journey coverage is checked by stable `spec_tag`, never by count (no vacuous pass: a web project with journeys but zero executed specs → FAIL). Enforced by Rule 14 (Claude) / `codex/AGENTS.md` Rule 15 (Codex); Phase 3 merge is blocked unless `verdict=PASS` or `SKIPPED` (`SKIPPED` emitted ONLY for `project_type=library`; env-blocked runs emit FAIL). DAG verifier Check 7 validates the gate node (verifier 44/0).
 
 ## Known Issues & Tech Debt
 - Greenfield templates (nextjs.md, python.md) provide config files but not source file contents — LLM generates those
@@ -138,4 +150,4 @@ SKILL.md (entry point, ~280 lines, 10-step startup checklist, auto-detects Claud
 - **Codex no PreCompact/PostCompact**: compaction recovery relies on Stop hook dumps + SessionStart re-injection + self-referential rule in AGENTS.md. Less reliable than Claude's hook-based recovery.
 - **Codex context ~258K**: 4x smaller than Claude's 1M. Long Phase 2 runs (4+ sprints) require session-per-wave/session-per-sprint strategy or aggressive /compact usage.
 - **Per-event-type key allowlist**: `sf_emit` validates key names against an identifier regex and the event type against a global allowlist (21 types), but does not yet validate which keys are legal per event type. Practical injection is blocked; semantic key validation deferred to a future sprint.
-<!-- updated-by-superflow:2026-06-11 -->
+<!-- updated-by-superflow:2026-07-01 -->
