@@ -126,10 +126,12 @@ Tag-based execution: run the E2E suite and capture per-journey outcomes by `spec
 
 ```bash
 # Use workers=1 for determinism at gate time (parallelism during dev is fine).
-# Same fix as integration: capture the Playwright exit code, not tee's.
-timeout 300 npx playwright test --workers=1 \
-  --reporter=json \
-  --output-file=.superflow/release-gate/pw-results.json \
+# PLAYWRIGHT_JSON_OUTPUT_NAME directs JSON reporter output to a file.
+# NOTE: Playwright has NO --output-file flag — using it silently drops the flag
+# and leaves pw-results.json unwritten.  Use the env var instead.
+# Same redirect pattern as integration: file redirect preserves E2E_EXIT.
+PLAYWRIGHT_JSON_OUTPUT_NAME=.superflow/release-gate/pw-results.json \
+  timeout 300 npx playwright test --workers=1 --reporter=json \
   > .superflow/release-gate/e2e.log 2>&1
 E2E_EXIT=$?
 cat .superflow/release-gate/e2e.log   # stream for live visibility
@@ -164,6 +166,13 @@ Playwright JSON reporter (`--reporter=json`) has these key fields:
 Prefer `spec.tags[]` (strip leading `@`); fall back to a regex capture from the spec title.
 The fallback regex uses `[A-Za-z][A-Za-z0-9_-]*` — permissive enough to preserve full stable
 IDs like `J2-checkoutV2` or `J1-sign_in` (the old `J[0-9]+-[a-z-]+` pattern truncated them).
+
+**Constraint (FIX C):** the title-fallback regex `[A-Za-z][A-Za-z0-9_-]*` matches only
+alphanumeric, hyphen, and underscore characters. Charter `spec_tag` values containing `.`,
+`:`, `/`, or other punctuation (e.g. `J1.login/v2`) will NOT be matched by the title
+fallback and will be silently missed. If your spec_tags include those characters, native
+`spec.tags[]` (Playwright ≥ 1.42) is required. To ensure both extraction paths work, charter
+authors should use kebab-slug IDs (`J<N>-<slug>`, e.g. `J1-login`, `J2-checkout-v2`).
 
 ```bash
 # Covered: specs where ok=true
