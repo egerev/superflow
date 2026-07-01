@@ -126,14 +126,17 @@ Before merging any PR:
      && echo "Release gate: OK" \
      || { echo "BLOCKED: release gate verdict is not PASS/SKIPPED — run the gate first"; exit 1; }
    ```
-   Permitted values:
+   Permitted values — **only these two allow merge:**
    - `PASS` — all journeys covered green + integration passed (web/backend-only)
-   - `SKIPPED` — project is `library` (coverage threshold is the gate) OR environment blocked
-     the run (Docker/browsers absent) with an explicit recorded reason
+   - `SKIPPED` — **library projects ONLY** (`project_type=library`; coverage threshold is the
+     gate). The helper emits SKIPPED exclusively for libraries. An environment-blocked run
+     (Docker absent, browsers absent) emits `FAIL`, not SKIPPED — those block the merge.
+     There is no "environment-degraded SKIPPED" bypass.
 
-   If the file is absent or the verdict is `FAIL`, **STOP**. Fix the failing journeys or
+   If the file is absent, or the verdict is `FAIL`, **STOP**. Fix the failing journeys or
    integration tests in the current branch, re-run `bash tools/release-gate.sh`, wait for
-   `verdict=PASS`, then proceed.
+   `verdict=PASS`, then proceed. If the environment is blocking (no Docker, no browsers): install
+   the required tooling and re-run the gate; do not attempt to reclassify as SKIPPED.
 
    The verdict is also folded into `.par-evidence.json` as `"release_gate"` field:
    ```bash
