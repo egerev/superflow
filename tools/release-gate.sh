@@ -140,48 +140,83 @@ if [ ! -f "${_RESULTS_FILE}" ]; then
 fi
 
 # ── Read results manifest ──────────────────────────────────────────────────────
-_SPECS_RAN=$(      jq -r '.specs_ran          // false'    "${_RESULTS_FILE}")
-_INTEGRATION=$(    jq -r '.integration        // "skipped"' "${_RESULTS_FILE}")
-_BROWSERS_PRESENT=$(jq -r '.browsers_present  // false'    "${_RESULTS_FILE}")
-_DOCKER_PRESENT=$( jq -r '.docker_present     // false'    "${_RESULTS_FILE}")
-_E2E_COVERED=$(    jq -c '.e2e_covered_tags   // []'       "${_RESULTS_FILE}")
-_E2E_FAILED=$(     jq -c '.e2e_failed_tags    // []'       "${_RESULTS_FILE}")
+# IMPORTANT: Do NOT use jq // default here — jq's // treats boolean false as
+# "absent" and silently converts it to the default value, masking type errors
+# before _validate_inputs() runs (e.g. false → "skipped", false → []).
+# Use explicit if-has-not-null guards so validation (below) sees raw types.
+# A boolean false in a string/array field is passed through as-is and rejected
+# by _validate_inputs(); a genuinely absent/null key falls to the else-default.
+_SPECS_RAN=$(       jq -r 'if has("specs_ran")         and .specs_ran != null        then .specs_ran         else false    end' "${_RESULTS_FILE}")
+_INTEGRATION=$(     jq -r 'if has("integration")       and .integration != null      then .integration       else "skipped" end' "${_RESULTS_FILE}")
+_BROWSERS_PRESENT=$(jq -r 'if has("browsers_present")  and .browsers_present != null then .browsers_present  else false    end' "${_RESULTS_FILE}")
+_DOCKER_PRESENT=$(  jq -r 'if has("docker_present")    and .docker_present != null   then .docker_present    else false    end' "${_RESULTS_FILE}")
+_E2E_COVERED=$(     jq -c 'if has("e2e_covered_tags")  and .e2e_covered_tags != null then .e2e_covered_tags  else []       end' "${_RESULTS_FILE}")
+_E2E_FAILED=$(      jq -c 'if has("e2e_failed_tags")   and .e2e_failed_tags != null  then .e2e_failed_tags   else []       end' "${_RESULTS_FILE}")
 
-# ── Input schema validation (FIX 2) ───────────────────────────────────────────
-# Fail-closed: malformed JSON types must never produce a false PASS.
-# Any field with the wrong type → FAIL verdict (see dispatch section).
+# ── Input schema validation ────────────────────────────────────────────────────
+# All checks operate on the raw JSON files, not on the pre-read shell variables.
+# This is the only correct ordering: jq // in the read section above would mask
+# boolean false before the type check. The if-has-not-null reads above do NOT
+# mask (false passes through), so validation here will catch wrong-type values.
+# Order: array fields → string field → boolean fields → journey spec_tags.
+# First failure returns immediately; verdict set to FAIL in dispatch section.
 _validate_inputs() {
-  # journeys file must be a JSON array
+  local _vf _vtype _bad
+
+  # Array fields: if present and non-null, must be an array of strings.
+  # Checks run directly on the raw file — boolean false / integer / string are rejected.
+  for _vf in e2e_covered_tags e2e_failed_tags; do
+    if ! jq -e --arg f "${_vf}" '
+      if has($f) and (.[$f] != null)
+      then .[$f] | (type == "array") and all(.[]; type == "string")
+      else true end
+    ' "${_RESULTS_FILE}" >/dev/null 2>&1; then
+      _vtype=$(jq -r --arg f "${_vf}" '.[$f] | type' "${_RESULTS_FILE}" 2>/dev/null) \
+        || _vtype="?"
+      printf 'release-gate: results.%s must be a JSON array of strings (got %s)\n' \
+        "${_vf}" "${_vtype}" >&2
+      return 1
+    fi
+  done
+
+  # String field: integration — if present and non-null, must be a string.
+  if ! jq -e '
+    if has("integration") and .integration != null
+    then .integration | type == "string"
+    else true end
+  ' "${_RESULTS_FILE}" >/dev/null 2>&1; then
+    _vtype=$(jq -r '.integration | type' "${_RESULTS_FILE}" 2>/dev/null) || _vtype="?"
+    printf 'release-gate: results.integration must be a string (got %s)\n' "${_vtype}" >&2
+    return 1
+  fi
+
+  # Boolean fields: if present and non-null, must be a boolean.
+  for _vf in specs_ran browsers_present docker_present; do
+    if ! jq -e --arg f "${_vf}" '
+      if has($f) and (.[$f] != null)
+      then .[$f] | type == "boolean"
+      else true end
+    ' "${_RESULTS_FILE}" >/dev/null 2>&1; then
+      _vtype=$(jq -r --arg f "${_vf}" '.[$f] | type' "${_RESULTS_FILE}" 2>/dev/null) \
+        || _vtype="?"
+      printf 'release-gate: results.%s must be a boolean (got %s)\n' "${_vf}" "${_vtype}" >&2
+      return 1
+    fi
+  done
+
+  # Journeys file must be a JSON array
   if ! jq -e 'type == "array"' "${_JOURNEYS_FILE}" >/dev/null 2>&1; then
     printf 'release-gate: --journeys must be a JSON array\n' >&2
     return 1
   fi
 
   # Every journey element must have a non-empty string spec_tag
-  local _bad
   _bad=$(jq -r '
-    .[] | select(
-      (.spec_tag // "") | (type != "string" or length == 0)
-    ) | .id // "(unknown id)"
+    .[] | select(.spec_tag | type != "string" or length == 0) |
+    .id // "(unknown id)"
   ' "${_JOURNEYS_FILE}" 2>/dev/null) || _bad=""
   if [ -n "${_bad}" ]; then
     printf 'release-gate: journey(s) missing non-empty spec_tag: %s\n' "${_bad}" >&2
-    return 1
-  fi
-
-  # e2e_covered_tags must be a JSON array of strings (not a comma-joined string etc.)
-  if ! printf '%s' "${_E2E_COVERED}" | \
-       jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null 2>&1; then
-    printf 'release-gate: results.e2e_covered_tags must be a JSON array of strings (got type=%s)\n' \
-      "$(printf '%s' "${_E2E_COVERED}" | jq -r 'type' 2>/dev/null || echo '?')" >&2
-    return 1
-  fi
-
-  # e2e_failed_tags must be a JSON array of strings
-  if ! printf '%s' "${_E2E_FAILED}" | \
-       jq -e 'type == "array" and all(.[]; type == "string")' >/dev/null 2>&1; then
-    printf 'release-gate: results.e2e_failed_tags must be a JSON array of strings (got type=%s)\n' \
-      "$(printf '%s' "${_E2E_FAILED}" | jq -r 'type' 2>/dev/null || echo '?')" >&2
     return 1
   fi
 }
