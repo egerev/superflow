@@ -46,7 +46,7 @@ Deep-research run: 6 angles → 27 sources → 128 claims → 25 adversarially v
 **Apple Silicon / "Apple Docker":** only **Docker Desktop** is zero-config. **Colima / Rancher / Podman** need `export DOCKER_HOST=…` **and** `export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock` (Colima: `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock`; rootless Podman also `TESTCONTAINERS_RYUK_DISABLED=true`). Phase-0 must **detect the runtime and emit these exports**.
 
 **Cleanup / flake / determinism:**
-- **Ryuk** reaper auto-removes containers at process shutdown (incl. Python). *(Research finding; canon superseded in Sprint A4.)* Ryuk stays **ENABLED** except in two cases: (a) `CI===true` OR (b) rootless Podman forces it (`docker.ryuk_forced_disabled=true` in `test-env.json`); label-based `cleanup-testcontainers.sh` is the mandatory backstop in case (b). See `superflow-enforcement.md` Rule 6 and `codex/AGENTS.md` Rule 14 for the authoritative statement.
+- **Ryuk** reaper auto-removes containers at process shutdown (incl. Python). *(Research finding; canon superseded in Sprint A4.)* Ryuk stays **ENABLED** except in two cases: (a) `CI===true` OR (b) rootless Podman forces it (`docker.ryuk_forced_disabled=true` in `test-env.json`); label-based `cleanup-testcontainers.sh` is the mandatory backstop in case (b). See `superflow-enforcement.md` **Test & Process Discipline §6** and `codex/AGENTS.md` Rule 14 for the authoritative statement.
 - Autonomous runs: **`workers: 1`** (CI docs recommend 1 for stability/reproducibility); scale via **sharding**, not raw workers.
 - **Docker image pinning is HARD:** `mcr.microsoft.com/playwright:v<X>-noble` (Node) / `mcr.microsoft.com/playwright/python:v<X>-noble` (Python) — the tag MUST equal the project's Playwright version or browsers aren't found. The image bundles browsers+deps+Xvfb, NOT the `@playwright/test`/pip package (install separately at the same version).
 
@@ -115,4 +115,4 @@ These are Superflow-orchestration robustness fixes surfaced while running Wave A
      c. **Bounded-wait + escalation:** after ≤2 idle pings (or a short timeout) with no verdict, nudge once via `SendMessage`; if still nothing, **cold re-dispatch** a fresh reviewer. Rule 3 step 4 already allows cold re-dispatch "if the agent is gone" — broaden it to explicitly cover "idle without verdict," not just a dead agent.
      d. **Optional hardening:** have both lenses write their verdict fence to a known file the orchestrator greps (mailbox-independent), mirroring how the codex channel already works.
 
-<!-- updated-by-superflow:2026-06-30 -->
+<!-- updated-by-superflow:2026-07-01 -->
