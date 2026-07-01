@@ -20,11 +20,13 @@ If `.superflow/test-env.json` is absent, default `project_type=web`, all readine
 
 | `project_type` | Unit | Integration | E2E |
 |---|---|---|---|
-| `web` | always | when `readiness.integration=true` (`docker.present=true`) | when `readiness.e2e_tooling=true` |
+| `web` | always | when `readiness.integration=true` | when `readiness.e2e_tooling=true` |
 | `backend-only` | always | when `readiness.integration=true` | never |
 | `library` | always | never | never |
 
-For any missing layer (e.g. `e2e_tooling=false` on a web project), write "not yet configured — [install command from `readiness.recommendations`]" as the level value. Do NOT silently skip it; document the gap so implementers know what to install.
+**Always emit all three level keys** — never omit a key regardless of project type. Use these value conventions:
+- **Type-INACTIVE level** (e.g. `e2e` for library or backend-only; `integration` for library): value = `"N/A — <project_type>; <reason>"` — e.g. `"N/A — library; no browser"` or `"N/A — backend-only; no browser"`.
+- **Type-APPLICABLE but not-yet-configured level** (e.g. `e2e_tooling=false` on a web project): value = `"not configured — <install command from readiness.recommendations>"`.
 
 ---
 
@@ -47,24 +49,26 @@ A journey captures one complete user flow from the browser's perspective.
 ### Required journey fields
 
 ```yaml
-- id: "J1-checkout"               # stable kebab ID
-  title: "Guest user completes checkout"  # short imperative phrase
+- id: "J1-login"                  # stable kebab ID
+  title: "Registered user signs in"  # short imperative phrase
   steps:
-    - "Navigate to /shop, add one item to cart"
-    - "Click 'Checkout', fill in email and card details"
-    - "Click 'Place Order'"
-    - "Verify order confirmation page and reference number"
-  expected_outcome: "Order confirmation page shown with a valid order reference"
-  spec_path: "e2e/checkout.spec.ts"          # relative path from repo root
-  spec_title: "guest user can complete checkout"  # test/describe title inside that file
-  owning_sprint: 3                           # sprint from Step 10 that authors spec_path
+    - "Navigate to /login"
+    - "Enter valid email and password"
+    - "Click 'Sign in'"
+    - "Verify redirect to /dashboard"
+  expected_outcome: "User lands on /dashboard; nav shows their display name"
+  spec_path: "e2e/auth.spec.ts"              # relative path from repo root
+  spec_title: "registered user can sign in @J1-login"  # test title incl. spec_tag annotation
+  spec_tag: "J1-login"           # equals the journey id; implementer tags the spec with this value; Release Gate matches per-journey coverage by spec_tag
+  owning_sprint: 2               # positive integer (>=1) matching an existing sprint in the Step 10 plan
 ```
 
 - **`steps`**: 3–7 ordered plain-English browser actions. Each step should name what the user sees or does.
 - **`expected_outcome`**: one sentence; observable state after the last step.
 - **`spec_path`**: the file that will contain the E2E test; may not exist yet (it is created by `owning_sprint`).
-- **`spec_title`**: the `describe` block or `test` name inside `spec_path` that covers this journey. Used by the Release Gate to match coverage output.
-- **`owning_sprint`**: the sprint that **must** author `spec_path`. If no sprint in the plan implements this flow, the charter is incomplete — add a spec-authoring task to the plan before finalising.
+- **`spec_title`**: the `describe` block or `test` name inside `spec_path`. Include the `spec_tag` annotation in the title (e.g. `"user signs in @J1-login"`) so the Release Gate can grep per-journey coverage.
+- **`spec_tag`**: equals the journey `id`. The implementer annotates the executable spec with this tag (e.g. Playwright: `test('user signs in @J1-login', ...)` or a `@J1-login` describe tag). The Release Gate matches per-journey coverage output by `spec_tag` — never by position or test count.
+- **`owning_sprint`**: positive integer (≥1) matching an existing sprint in the Step 10 plan. That sprint **must** author `spec_path`. If no sprint in the plan implements this flow, the charter is incomplete — add a spec-authoring task to the plan before finalising.
 
 ### Sprint ownership rule
 
@@ -76,7 +80,7 @@ When two journeys share the same feature sprint, assign the same `owning_sprint`
 
 ## Step 3 — Library Path (library projects)
 
-Replace the `journeys` list with `coverage` and `runtime_matrix`:
+Set `journeys: []` (empty, always present) and add `coverage` and `runtime_matrix`:
 
 ```yaml
 coverage:
@@ -103,9 +107,8 @@ Write a single string that tells implementers exactly what evidence to paste at 
 **Web example:**
 ```
 Sprint 1 (unit): paste vitest output — all green, no skipped tests.
-Sprint 2 (integration): paste vitest output with Testcontainers Docker lines visible.
-Sprint 3 (journey J1-checkout): paste `playwright test e2e/checkout.spec.ts` output — 1 passed; confirm "J1-checkout" appears in the test title or tag.
-Sprint 3 (journey J2-login): paste `playwright test e2e/auth.spec.ts` output — 1 passed; confirm "J2-login" appears in the test title or tag.
+Sprint 2 (integration + journey J1-login): paste Testcontainers Docker lines + playwright test e2e/auth.spec.ts output — 1 passed; confirm spec_tag "J1-login" appears in the test output.
+Sprint 3 (journey J2-checkout): paste playwright test e2e/checkout.spec.ts output — 1 passed; confirm spec_tag "J2-checkout" appears in the test output.
 ```
 
 **Backend-only example:**
@@ -138,9 +141,10 @@ test_strategy:
         - "Enter valid email and password"
         - "Click 'Sign in'"
         - "Verify redirect to /dashboard"
-      expected_outcome: "User lands on /dashboard; nav shows their name"
+      expected_outcome: "User lands on /dashboard; nav shows their display name"
       spec_path: "e2e/auth.spec.ts"
-      spec_title: "registered user can sign in"
+      spec_title: "registered user can sign in @J1-login"
+      spec_tag: "J1-login"
       owning_sprint: 2
     - id: "J2-checkout"
       title: "Guest user completes checkout"
@@ -151,9 +155,10 @@ test_strategy:
         - "Verify order confirmation page"
       expected_outcome: "Order confirmation page shown with valid order reference"
       spec_path: "e2e/checkout.spec.ts"
-      spec_title: "guest user can complete checkout"
+      spec_title: "guest user can complete checkout @J2-checkout"
+      spec_tag: "J2-checkout"
       owning_sprint: 3
-  per_sprint_acceptance: "Sprint 1 (unit): paste vitest output — all green. Sprint 2 (integration + J1-login): paste Testcontainers startup lines + playwright test e2e/auth.spec.ts output — 1 passed. Sprint 3 (J2-checkout): paste playwright test e2e/checkout.spec.ts output — 1 passed."
+  per_sprint_acceptance: "Sprint 1 (unit): paste vitest output — all green. Sprint 2 (integration + J1-login): paste Testcontainers startup lines + playwright test e2e/auth.spec.ts output — 1 passed; confirm spec_tag 'J1-login' in output. Sprint 3 (J2-checkout): paste playwright test e2e/checkout.spec.ts output — 1 passed; confirm spec_tag 'J2-checkout' in output."
 ```
 
 ## Complete Example — Library Project
