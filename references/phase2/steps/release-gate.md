@@ -201,12 +201,16 @@ Reference the `webapp-testing` skill for browser driving where it fits.
 
 Playwright JSON reporter (`--reporter=json`) has these key fields:
 - `spec.ok: bool` — `true` when the spec passed (all tests ran as `expectedStatus`). Use this; do NOT use `.tests[].status` (that field holds `expected|unexpected|flaky|skipped`, not `passed|failed`).
-- `spec.tags: [str]` — native tag array (Playwright ≥ 1.42), e.g. `["@J1-login"]` (note the `@` prefix in the JSON).
+- `spec.tags: [str]` — native tag array (Playwright ≥ 1.42), e.g. `["J1-login"]` (no `@` prefix — real Playwright stores tags WITHOUT the `@` character).
 - Suites are nested: `suite.suites[].specs[]` (file → describe → describe → spec). `.suites[].specs[]` is **not recursive** and misses nested describes. Recurse with `.. | objects | select(has("specs")) | .specs[]`.
 
 ### Tag extraction (FIX 6)
 
-Prefer `spec.tags[]` (strip leading `@`); fall back to a regex capture from the spec title.
+Prefer `spec.tags[]`; fall back to a regex capture from the spec title. The `ltrimstr("@")` in
+the jq is **defensive** — real Playwright (≥ 1.42, verified on 1.61.1) stores tags WITHOUT the
+`@` prefix (e.g. `"J1-login"`, not `"@J1-login"`), so `ltrimstr` is a no-op on real output but
+handles any leading-`@` variant harmlessly. Do not annotate the test with `@` in the tag value;
+the `@` is only used in spec titles for human readability.
 The fallback regex uses `[A-Za-z][A-Za-z0-9_-]*` — permissive enough to preserve full stable
 IDs like `J2-checkoutV2` or `J1-sign_in` (the old `J[0-9]+-[a-z-]+` pattern truncated them).
 
@@ -252,8 +256,8 @@ E2E_FAILED=$(jq -c '
 **Proof (mini Playwright JSON sample):**
 ```json
 {"suites":[{"title":"auth.spec.ts","suites":[{"title":"Login","specs":[
-  {"title":"user can sign in @J1-login","ok":true,"tags":["@J1-login"]},
-  {"title":"checkout flow @J2-checkout","ok":false,"tags":["@J2-checkout"]}
+  {"title":"user can sign in @J1-login","ok":true,"tags":["J1-login"]},
+  {"title":"checkout flow @J2-checkout","ok":false,"tags":["J2-checkout"]}
 ]}]}]}
 ```
 Running the covered jq above on this sample → `["J1-login"]`. A green suite now yields
@@ -270,10 +274,25 @@ if [ "${E2E_EXIT}" -eq 124 ] || [ "${E2E_EXIT}" -eq 137 ]; then
 elif [ "${E2E_EXIT}" -eq 0 ]; then
   SPECS_RAN=true
 else
-  # Non-zero, non-timeout: Playwright itself ran but tests failed
+  # Non-zero, non-timeout: Playwright itself ran but tests failed or found no tests
   SPECS_RAN=true
 fi
 ```
+
+**Two independent no-vacuous-pass paths — both produce FAIL (verified on Playwright 1.61.1):**
+
+**(a) Timeout kill** — `timeout` kills Playwright with exit 124 (SIGTERM) or 137 (SIGKILL):
+`specs_ran=false` → the no-vacuous-pass guard in the gate fires ("specs_ran=false — per-journey
+coverage cannot be verified"). Evidence is incomplete; the gate does not trust partial results.
+
+**(b) Playwright runs but no spec covers the journey** — e.g. "No tests found" (Playwright
+exits with code **1**, not 124/137), or a spec ran without the journey's `spec_tag`:
+`SPECS_RAN=true`, but the journey's `spec_tag` is absent from `e2e_covered_tags` → the
+per-journey coverage check fires ("N journey(s) uncovered or failed"). The `specs_ran` guard
+is bypassed entirely; the coverage check is the active mechanism.
+
+A charter journey with no executing covering spec fails the gate regardless of which path
+fires. The two guards are complementary, not redundant.
 
 ### Build `results.json`
 
